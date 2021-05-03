@@ -1,13 +1,5 @@
 # TODOs remaining for improving QQ PR:
 
-* MigrationOnly woes
-    * Ok, so I have `getEntityFields` and then `getEntityFieldsDatabase`. Ths is
-      annoying. The code should *just work* for `MigrationOnly` fields - for
-      example, `fromPersistValues` possibly should *ignore* a potential
-      `PersistNull` , instead of conditionally ignoring it.
-* Apparently calling 'persistFieldDef' on a composite primary key. Maybe I
-  should defer that error to actual composite keys so natural single column keys
-  work fine.
 * Ugh. Okay, so `persistent` fully expects composite primary keys to Just Work
   with filter operators. This is bad. This means I can't just throw away the
   field defs. To be entirely proper, I could return a `NonEmpty FieldDef` from

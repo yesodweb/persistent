@@ -27,6 +27,7 @@ import Data.Monoid (Monoid(..), (<>))
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Foldable (toList)
+import Data.Typeable (Typeable)
 
 import Database.Persist hiding (updateField)
 import Database.Persist.Sql.Orphan.PersistStore (withRawQuery)
@@ -258,13 +259,14 @@ data FilterTablePrefix
     --
     -- @since 2.12.1.0
 
-filterClauseHelper :: (PersistEntity val)
-             => Maybe FilterTablePrefix -- ^ include table name or PostgresSQL EXCLUDED
-             -> Bool -- ^ include WHERE
-             -> SqlBackend
-             -> OrNull
-             -> [Filter val]
-             -> (Text, [PersistValue])
+filterClauseHelper
+    :: (PersistEntity val)
+    => Maybe FilterTablePrefix -- ^ include table name or PostgresSQL EXCLUDED
+    -> Bool -- ^ include WHERE
+    -> SqlBackend
+    -> OrNull
+    -> [Filter val]
+    -> (Text, [PersistValue])
 filterClauseHelper tablePrefix includeWhere conn orNull filters =
     (if not (T.null sql) && includeWhere
         then " WHERE " <> sql

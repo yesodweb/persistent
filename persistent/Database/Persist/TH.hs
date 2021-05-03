@@ -71,6 +71,7 @@ module Database.Persist.TH
 
 import Prelude hiding (concat, exp, splitAt, take, (++))
 
+import GHC.Stack (HasCallStack)
 import Data.Coerce
 import Control.Monad
 import Data.Aeson
@@ -1257,6 +1258,7 @@ mkFromPersistValues mps entDef
     | otherwise =
         fromValues entDef "fromPersistValues" entE
         $ fmap unboundFieldNameHS
+        $ filter isHaskellUnboundField
         $ getUnboundFieldDefs entDef
   where
     entName = unEntityNameHS $ getUnboundEntityNameHS entDef
@@ -1768,14 +1770,14 @@ stripIdFieldDef efth = efth
         bdy' =
             case bdy of
                 NormalB e ->
-                    NormalB $ AppE (ConE 'stripIdFieldImpl) e
+                    NormalB $ AppE (VarE 'stripIdFieldImpl) e
                 _ ->
                     bdy
 
 -- | @persistent@ used to assume that an Id was always a single field.
 --
 -- This method preserves as much backwards compatibility as possible.
-stripIdFieldImpl :: EntityIdDef -> FieldDef
+stripIdFieldImpl :: HasCallStack => EntityIdDef -> FieldDef
 stripIdFieldImpl eid =
     case eid of
         EntityIdField fd -> fd
@@ -1786,28 +1788,34 @@ stripIdFieldImpl eid =
                         [] ->
                             x
                         _ ->
-                            boom
+                            dummyFieldDef
   where
-    boom =
-        error $ mconcat
-            [ "Can't fetch a single field definition because there are "
-            , "multiple columns on the primary key."
-            , "\n    " show eid
-            ]
+    dummyFieldDef =
+        FieldDef
+            { fieldHaskell =
+                FieldNameHS "Id"
+            , fieldDB =
+                FieldNameDB "__composite_key_no_id__"
+            , fieldType =
+                FTTypeCon Nothing "__Composite_Key__"
+            , fieldSqlType =
+                SqlOther "Composite Key"
+            , fieldAttrs =
+                []
+            , fieldStrict =
+                False
+            , fieldReference =
+                NoReference
+            , fieldCascade =
+                noCascade
+            , fieldComments =
+                Nothing
+            , fieldGenerated =
+                Nothing
+            , fieldIsImplicitIdColumn =
+                False
+            }
 
--- uses:
---
--- * entityId entDef
---     * see mkField for what's needed from this
--- * entityFields entDef
---     * see mkField for what's needed from this
---
--- so, only needs:
---
--- data MkFields = MkFields
---     { mkFieldsId :: MkFieldDef
---     , mkFieldsFields :: [MkFieldDef]
---     }
 mkFields :: MkPersistSettings -> EntityMap -> UnboundEntityDef -> Q EntityFieldsTH
 mkFields mps entityMap entDef =
     EntityFieldsTH
@@ -2075,9 +2083,12 @@ persistFieldFromEntity mps entDef = do
             ]
         ]
   where
-    typ = genericDataType mps (entityHaskell (unboundEntityDef entDef)) backendT
-    entFields = getUnboundFieldDefs entDef
-    columnNames = fmap (unpack . unFieldNameHS . unboundFieldNameHS) entFields
+    typ =
+        genericDataType mps (entityHaskell (unboundEntityDef entDef)) backendT
+    entFields =
+        filter isHaskellUnboundField $ getUnboundFieldDefs entDef
+    columnNames =
+        fmap (unpack . unFieldNameHS . unboundFieldNameHS) entFields
 
 -- | Apply the given list of functions to the same @EntityDef@s.
 --

@@ -1,3 +1,5 @@
+{-# language ScopedTypeVariables #-}
+
 module Database.Persist.Sql.Util
     ( parseEntityValues
     , keyAndEntityColumnNames
@@ -175,7 +177,10 @@ parseEntityValues t vals =
                 Right key -> Right (Entity key xs')
 
 
-isIdField :: PersistEntity record => EntityField record typ -> Bool
+isIdField
+    :: forall record typ. (PersistEntity record)
+    => EntityField record typ
+    -> Bool
 isIdField f = fieldHaskell (persistFieldDef f) == FieldNameHS "Id"
 
 -- | Gets the 'FieldDef' for an 'Update'.
