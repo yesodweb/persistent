@@ -42,9 +42,10 @@ import Database.Persist.Sql.Util
 import Database.Persist.TH
 import TemplateTestImports
 
-import qualified Database.Persist.TH.SharedPrimaryKeySpec as SharedPrimaryKeySpec
-import qualified Database.Persist.TH.SharedPrimaryKeyImportedSpec as SharedPrimaryKeyImportedSpec
+import qualified Database.Persist.TH.KindEntitiesSpec as KindEntitiesSpec
 import qualified Database.Persist.TH.OverloadedLabelSpec as OverloadedLabelSpec
+import qualified Database.Persist.TH.SharedPrimaryKeyImportedSpec as SharedPrimaryKeyImportedSpec
+import qualified Database.Persist.TH.SharedPrimaryKeySpec as SharedPrimaryKeySpec
 
 share [mkPersist sqlSettings { mpsGeneric = False, mpsDeriveInstances = [''Generic] }, mkDeleteCascade sqlSettings { mpsGeneric = False }] [persistUpperCase|
 
@@ -131,6 +132,7 @@ instance Arbitrary Address where
 
 spec :: Spec
 spec = do
+    KindEntitiesSpec.spec
     OverloadedLabelSpec.spec
     SharedPrimaryKeySpec.spec
     SharedPrimaryKeyImportedSpec.spec
