@@ -46,6 +46,7 @@ import Control.Monad.Trans.Except (ExceptT, runExceptT)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT)
 import Control.Monad.Trans.Writer (runWriterT)
 
+import qualified Data.List.NonEmpty as NEL
 import Data.Acquire (Acquire, mkAcquire, with)
 import Data.Aeson
 import Data.Aeson.Types (modifyFailure)
@@ -177,9 +178,11 @@ prepare' conn sql = do
 -- | SQL code to be executed when inserting an entity.
 insertSql' :: EntityDef -> [PersistValue] -> InsertSqlResult
 insertSql' ent vals =
-    case entityPrimary ent of
-        Just _ -> ISRManyKeys sql vals
-        Nothing -> ISRInsertGet sql "SELECT LAST_INSERT_ID()"
+    case getEntityId ent of
+        EntityIdNaturalKey _ ->
+            ISRManyKeys sql vals
+        EntityIdField _ ->
+            ISRInsertGet sql "SELECT LAST_INSERT_ID()"
   where
     (fieldNames, placeholders) = unzip (Util.mkInsertPlaceholders ent escapeFT)
     sql = T.concat
@@ -370,7 +373,7 @@ migrate' connectInfo allDefs getter val = do
                     let refTarget =
                           addReference allDefs refConstraintName refTblName cname (crFieldCascade cRef)
 
-                    guard $ cname /= fieldDB (getEntityId val)
+                    guard $ Just cname /= fmap fieldDB (getEntityIdField val)
                     return $ AlterColumn name refTarget
 
 
@@ -455,22 +458,20 @@ addTable cols entity = AddTable $ concat
     ]
   where
     nonIdCols =
-        filter (\c -> cName c /= fieldDB (getEntityId entity) ) cols
+        filter (\c -> Just (cName c) /= fmap fieldDB (getEntityIdField entity) ) cols
     name =
         getEntityDBName entity
     idtxt =
-        case entityPrimary entity of
-            Just pdef ->
+        case getEntityId entity of
+            EntityIdNaturalKey pdef ->
                 concat
                     [ " PRIMARY KEY ("
                     , intercalate ","
-                  $ map (escapeF . fieldDB) $ compositeFields pdef
+                  $ map (escapeF . fieldDB) $ NEL.toList $ compositeFields pdef
                     , ")"
                     ]
-            Nothing ->
+            EntityIdField idField ->
                 let
-                    idField =
-                        getEntityId entity
                     defText =
                         defaultAttribute $ fieldAttrs idField
                     sType =
@@ -483,7 +484,7 @@ addTable cols entity = AddTable $ concat
                         findMaxLenOfField idField
                 in
                     concat
-                        [ escapeF $ fieldDB $ getEntityId entity
+                        [ escapeF $ fieldDB idField
                         , " " <> showSqlType sType maxlen False
                         , " NOT NULL"
                         , autoIncrementText
@@ -554,7 +555,7 @@ addReference allDefs fkeyname reftable cname fc =
     referencedColumns =
         fromMaybe errorMessage $ do
             entDef <- find ((== reftable) . getEntityDBName) allDefs
-            return $ map fieldDB $ getEntityKeyFields entDef
+            return $ map fieldDB $ NEL.toList $ getEntityKeyFields entDef
 
 data AlterColumn = Change Column
                  | Add' Column
@@ -585,7 +586,7 @@ data AlterDB = AddTable String
 
 
 udToPair :: UniqueDef -> (ConstraintNameDB, [FieldNameDB])
-udToPair ud = (uniqueDBName ud, map snd $ uniqueFields ud)
+udToPair ud = (uniqueDBName ud, map snd $ NEL.toList $ uniqueFields ud)
 
 ----------------------------------------------------------------------
 
@@ -922,7 +923,8 @@ findAlters edef allDefs col@(Column name isNull type_ def gen _defConstraintName
                     case (ref == ref', ref) of
                         (False, Just ColumnReference {crTableName=tname, crConstraintName=cname, crFieldCascade = cfc })
                             | tname /= getEntityDBName edef
-                            , unConstraintNameDB cname /= unFieldNameDB (fieldDB (getEntityId edef))
+                            , Just idField <- getEntityIdField edef
+                            , unConstraintNameDB cname /= unFieldNameDB (fieldDB idField)
                             ->
                             [addReference allDefs cname tname name cfc]
                         _ -> []
@@ -1536,7 +1538,7 @@ putManySql ent n = putManySql' fields ent n
 repsertManySql :: EntityDef -> Int -> Text
 repsertManySql ent n = putManySql' fields ent n
   where
-    fields = keyAndEntityFields ent
+    fields = NEL.toList $ keyAndEntityFields ent
 
 putManySql' :: [FieldDef] -> EntityDef -> Int -> Text
 putManySql' (filter isFieldNotGenerated -> fields) ent n = q

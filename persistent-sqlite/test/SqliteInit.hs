@@ -104,3 +104,4 @@ runConn f = do
 db :: SqlPersistT (LoggingT (ResourceT IO)) () -> Assertion
 db actions = do
     runResourceT $ runConn $ actions >> transactionUndo
+

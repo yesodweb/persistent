@@ -18,7 +18,7 @@ TwoField1 sql=two_field
     deriving Eq Show
 |]
 
-share [mkPersist sqlSettings { mpsGeneric = True }, mkMigrate "migrateAll2", mkDeleteCascade sqlSettings] [persistLowerCase|
+share [mkPersist sqlSettings { mpsGeneric = True }, mkMigrate "migrateAll2"] [persistLowerCase|
 TwoField
     field1 Int
     field2 T.Text
@@ -56,6 +56,7 @@ specsWith runDb mmigrate = describe "MigrationOnly field" $ do
             length fields `shouldBe` 3
         it "should have at one migration only field" $ do
             length (filter (not . isHaskellField) fields) `shouldBe` 1
+
     it "doesn't have the field in the Haskell entity" $ asIO $ runDb $ do
         sequence_ mmigrate
         sequence_ mmigrate

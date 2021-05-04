@@ -10,9 +10,9 @@ import Control.Monad.Trans.Reader (ask)
 import qualified Data.Conduit.List as CL
 import Data.Function (on)
 import Data.List (nubBy)
-import qualified Data.List.NonEmpty as NEL
 import Data.Monoid (mappend)
 import qualified Data.Text as T
+import Data.Foldable (toList)
 
 import Database.Persist
 import Database.Persist.Class.PersistUnique (defaultUpsertBy, defaultPutMany, persistUniqueKeyValues)
@@ -32,7 +32,7 @@ instance PersistUniqueWrite SqlBackend where
                             [] -> defaultUpsertBy uniqueKey record updates
                             _:_ -> do
                                 let upds = T.intercalate "," $ map mkUpdateText updates
-                                    sql = upsertSql t (NEL.fromList $ persistUniqueToFieldNames uniqueKey) upds
+                                    sql = upsertSql t (persistUniqueToFieldNames uniqueKey) upds
                                     vals = map toPersistValue (toPersistFields record)
                                         ++ map updatePersistValue updates
                                         ++ unqs uniqueKey
@@ -51,7 +51,7 @@ instance PersistUniqueWrite SqlBackend where
         rawExecute sql' vals
       where
         t = entityDef $ dummyFromUnique uniq
-        go = map snd . persistUniqueToFieldNames
+        go = toList . fmap snd . persistUniqueToFieldNames
         go' conn x = connEscapeFieldName conn x `mappend` "=?"
         sql conn =
             T.concat
@@ -88,7 +88,7 @@ instance PersistUniqueRead SqlBackend where
         let sql =
                 T.concat
                     [ "SELECT "
-                    , T.intercalate "," $ dbColumns conn t
+                    , T.intercalate "," $ toList $ dbColumns conn t
                     , " FROM "
                     , connEscapeTableName conn t
                     , " WHERE "
@@ -109,7 +109,7 @@ instance PersistUniqueRead SqlBackend where
             T.intercalate " AND " $ map (go conn) $ toFieldNames' uniq
         go conn x = connEscapeFieldName conn x `mappend` "=?"
         t = entityDef $ dummyFromUnique uniq
-        toFieldNames' = map snd . persistUniqueToFieldNames
+        toFieldNames' = toList . fmap snd . persistUniqueToFieldNames
 
 instance PersistUniqueRead SqlReadBackend where
     getBy uniq = withBaseBackend $ getBy uniq

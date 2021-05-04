@@ -27,8 +27,6 @@ module Database.Persist.Sql.Types.Internal
     , IsSqlBackend
     ) where
 
-import Data.List.NonEmpty (NonEmpty(..))
-import Control.Monad.Logger (LogSource, LogLevel, Loc)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT, ask)
 import Data.Monoid ((<>))

@@ -16,7 +16,7 @@ extra-source-files: ChangeLog.md README.md
 
 library
     build-depends:   
-        base                     >= 4.9       && < 5
+        base                     >= 4.11.1.0     && < 5
       , aeson                    >= 1.0
       , attoparsec
       , base64-bytestring
@@ -34,7 +34,7 @@ library
       , resourcet                >= 1.1.10
       , scientific
       , silently
-      , template-haskell         >= 2.11 && < 2.18
+      , template-haskell         >= 2.13 && < 2.18
       , text                     >= 1.2
       , th-lift-instances        >= 0.1.14    && < 0.2
       , time                     >= 1.6
@@ -54,6 +54,7 @@ library
         Database.Persist
         Database.Persist.Types
         Database.Persist.Names
+        Database.Persist.PersistValue
         Database.Persist.EntityDef
         Database.Persist.EntityDef.Internal
         Database.Persist.FieldDef
@@ -120,37 +121,36 @@ test-suite test
       , base64-bytestring
       , blaze-html
       , bytestring
+      , conduit
       , containers
+      , fast-logger
       , hspec         >= 2.4
       , http-api-data
+      , monad-logger
+      , mtl
       , path-pieces
       , persistent
+      , QuickCheck
+      , quickcheck-instances     >= 0.3
+      , resource-pool
+      , resourcet
       , scientific
       , shakespeare
+      , silently
+      , template-haskell         >= 2.4
       , text
+      , th-lift-instances
       , time
       , transformers
+      , unliftio
+      , unliftio-core
       , unordered-containers
       , vector
-      , QuickCheck
-        -- needed because of the `source-dirs: .`
-        -- TODO: factor the internal modules out so we can use them in tests
-        -- maybe in another package
-      , template-haskell         >= 2.4
-      , unliftio-core
-      , mtl
-      , resourcet
-      , conduit
-      , monad-logger
-      , fast-logger
-      , resource-pool
-      , unliftio
-      , silently
-      , th-lift-instances
 
     hs-source-dirs:
         test/
-    cpp-options: -DTEST
+
+    ghc-options: -Wall
 
     default-extensions: FlexibleContexts
                       , MultiParamTypeClasses
@@ -165,8 +165,14 @@ test-suite test
         Database.Persist.TH.SharedPrimaryKeyImportedSpec
         Database.Persist.TH.SharedPrimaryKeySpec
         Database.Persist.TH.MultiBlockSpec
+        Database.Persist.TH.ForeignRefSpec
+        Database.Persist.TH.JsonEncodingSpec
         Database.Persist.TH.MultiBlockSpec.Model
+        Database.Persist.TH.ToFromPersistValuesSpec
         Database.Persist.THSpec
+        Database.Persist.QuasiSpec
+        Database.Persist.ClassSpec
+        Database.Persist.PersistValueSpec
         TemplateTestImports
         Database.Persist.TH.SharedPrimaryKeySpec
         Database.Persist.TH.SharedPrimaryKeyImportedSpec

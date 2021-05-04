@@ -7,12 +7,11 @@ module CompositeTest where
 import qualified Data.Map as Map
 import Data.Maybe (isJust)
 
-import Database.Persist.TH (mkDeleteCascade)
 import Init
 
 
 -- mpsGeneric = False is due to a bug or at least lack of a feature in mkKeyTypeDec TH.hs
-share [mkPersist persistSettings { mpsGeneric = False }, mkMigrate "compositeMigrate", mkDeleteCascade persistSettings { mpsGeneric = False }] [persistLowerCase|
+share [mkPersist persistSettings { mpsGeneric = False }, mkMigrate "compositeMigrate"] [persistLowerCase|
   TestParent
       name  String maxlen=20
       name2 String maxlen=20
@@ -233,6 +232,8 @@ specsWith runDb = describe "composite" $
 
     it "RawSql Entity instance" $ runDb $ do
       key <- insert p1
+      Just x <- get key
+      x @== p1
       newp1 <- rawSql "SELECT ?? FROM test_parent LIMIT 1" []
       [Entity key p1] @== newp1
 

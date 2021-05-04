@@ -70,15 +70,26 @@
       facilitating a solution to your problem.
 * [#1255](https://github.com/yesodweb/persistent/pull/1255)
     * `mkPersist` now checks to see if an instance already exists for
-      `PersistEntity` for the inputs. This allows you to pass `EntityDef`s into
-      `mkPersist` which have been previously defined, which allows the foreign
-      field information to be generated more reliably across modules.
+      `PersistEntity` for the inputs.
 * [#1243](https://github.com/yesodweb/persistent/pull/1243)
     * Assorted cleanup of TH module
 * [1242](https://github.com/yesodweb/persistent/pull/1242)
     * Refactor setEmbedField to use do notation
 * [#1237](https://github.com/yesodweb/persistent/pull/1237)
     * Remove nonEmptyOrFail function from recent tests
+* [#1256](https://github.com/yesodweb/persistent/pull/1256)
+    * The QuasiQuoter has been refactored and improved.
+    * You can now use `mkPersistWith` to pass in a list of pre-existing
+      `EntityDef` to improve foreign key detection and splitting up models
+      across multiple modules.
+    * The `entityId` field now returns an `EntityIdDef`, which specifies what
+      the ID field actually is. This is a move to better support natural keys.
+    * Several types that had lists have been refactored to use nonempty lists to
+      better capture the semantics.
+    * `mkDeleteCascade` is deprecated. Please use the Cascade behavior directly
+      on fields.
+    * You can use `Key Foo` and `FooId` interchangeably in fields.
+    * Support for GHC < 8.4 dropped.
 
 ## 2.12.1.1
 

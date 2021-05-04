@@ -11,12 +11,14 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
+
 -- Strictly, this could go as low as GHC 8.6.1, which is when DerivingVia was
 -- introduced - this base version requires 8.6.5+
 #if MIN_VERSION_base(4,12,0)
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE UndecidableInstances #-}
 #endif
+
 -- | A sqlite backend for persistent.
 --
 -- Note: If you prepend @WAL=off @ to your connection string, it will disable
@@ -78,13 +80,13 @@ import qualified Data.HashMap.Lazy as HashMap
 import Data.Int (Int64)
 import Data.IORef
 import qualified Data.Map as Map
-import Data.Monoid ((<>))
 import Data.Pool (Pool)
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
 import Lens.Micro.TH (makeLenses)
 import UnliftIO.Resource (ResourceT, runResourceT)
+import Data.Foldable (toList)
 
 #if MIN_VERSION_base(4,12,0)
 import Database.Persist.Compatible
@@ -336,8 +338,8 @@ prepare' conn sql = do
 
 insertSql' :: EntityDef -> [PersistValue] -> InsertSqlResult
 insertSql' ent vals =
-    case entityPrimary ent of
-        Just _ ->
+    case getEntityId ent of
+        EntityIdNaturalKey _ ->
           ISRManyKeys sql vals
             where sql = T.concat
                     [ "INSERT INTO "
@@ -348,12 +350,12 @@ insertSql' ent vals =
                     , T.intercalate "," (map (const "?") cols)
                     , ")"
                     ]
-        Nothing ->
+        EntityIdField fd ->
           ISRInsertGet ins sel
             where
               sel = T.concat
                   [ "SELECT "
-                  , escapeF $ fieldDB (getEntityId ent)
+                  , escapeF $ fieldDB fd
                   , " FROM "
                   , escapeE $ getEntityDBName ent
                   , " WHERE _ROWID_=last_insert_rowid()"
@@ -375,7 +377,7 @@ insertSql' ent vals =
     notGenerated =
         isNothing . fieldGenerated
     cols =
-        filter notGenerated $ getEntityFieldsDatabase ent
+        filter notGenerated $ getEntityFields ent
 
 execute' :: Sqlite.Connection -> Sqlite.Statement -> [PersistValue] -> IO Int64
 execute' conn stmt vals = flip finally (liftIO $ Sqlite.reset conn stmt) $ do
@@ -570,25 +572,25 @@ mkCreateTable isTemp entity (cols, uniqs, fdefs) =
         , ")"
         ]
 
-    columns = case entityPrimary entity of
-        Just pdef ->
+    columns = case getEntityId entity of
+        EntityIdNaturalKey pdef ->
             [ T.drop 1 $ T.concat $ map (sqlColumn isTemp) cols
             , ", PRIMARY KEY "
             , "("
-            , T.intercalate "," $ map (escapeF . fieldDB) $ compositeFields pdef
+            , T.intercalate "," $ map (escapeF . fieldDB) $ toList $ compositeFields pdef
             , ")"
             ]
 
-        Nothing ->
-            [ escapeF $ fieldDB (getEntityId entity)
+        EntityIdField fd ->
+            [ escapeF $ fieldDB fd
             , " "
-            , showSqlType $ fieldSqlType $ getEntityId entity
+            , showSqlType $ fieldSqlType fd
             , " PRIMARY KEY"
-            , mayDefault $ defaultAttribute $ fieldAttrs $ getEntityId entity
+            , mayDefault $ defaultAttribute $ fieldAttrs fd
             , T.concat $ map (sqlColumn isTemp) nonIdCols
             ]
 
-    nonIdCols = filter (\c -> cName c /= fieldDB (getEntityId entity)) cols
+    nonIdCols = filter (\c -> Just (cName c) /= fmap fieldDB (getEntityIdField entity)) cols
 
 mayDefault :: Maybe Text -> Text
 mayDefault def = case def of
@@ -650,7 +652,7 @@ sqlUnique (UniqueDef _ cname cols _) = T.concat
     [ ",CONSTRAINT "
     , escapeC cname
     , " UNIQUE ("
-    , T.intercalate "," $ map (escapeF . snd) cols
+    , T.intercalate "," $ map (escapeF . snd) $ toList cols
     , ")"
     ]
 
@@ -672,16 +674,16 @@ escape s =
     go c = T.singleton c
 
 putManySql :: EntityDef -> Int -> Text
-putManySql ent n = putManySql' conflictColumns fields ent n
+putManySql ent n = putManySql' conflictColumns (toList fields) ent n
   where
     fields = getEntityFieldsDatabase ent
-    conflictColumns = concatMap (map (escapeF . snd) . uniqueFields) (getEntityUniques ent)
+    conflictColumns = concatMap (map (escapeF . snd) . toList . uniqueFields) (getEntityUniques ent)
 
 repsertManySql :: EntityDef -> Int -> Text
-repsertManySql ent n = putManySql' conflictColumns fields ent n
+repsertManySql ent n = putManySql' conflictColumns (toList fields) ent n
   where
     fields = keyAndEntityFields ent
-    conflictColumns = escapeF . fieldDB <$> getEntityKeyFields ent
+    conflictColumns = escapeF . fieldDB <$> toList (getEntityKeyFields ent)
 
 putManySql' :: [Text] -> [FieldDef] -> EntityDef -> Int -> Text
 putManySql' conflictColumns fields ent n = q
