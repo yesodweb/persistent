@@ -224,17 +224,146 @@ type Attr = Text
 -- @since 2.11.0.0
 data FieldAttr
     = FieldAttrMaybe
+    -- ^ The 'Maybe' keyword goes after the type. This indicates that the column
+    -- is nullable, and the generated Haskell code will have a @'Maybe'@ type
+    -- for it.
+    --
+    -- Example:
+    --
+    -- @
+    -- User
+    --     name Text Maybe
+    -- @
     | FieldAttrNullable
+    -- ^ This indicates that the column is nullable, but should not have
+    -- a 'Maybe' type. For this to work out, you need to ensure that the
+    -- 'PersistField' instance for the type in question can support
+    -- a 'PersistNull' value.
+    --
+    -- @
+    -- data What = NoWhat | Hello Text
+    --
+    -- instance PersistField What where
+    --     fromPersistValue PersistNull =
+    --         pure NoWhat
+    --     fromPersistValue pv =
+    --         Hello <$> fromPersistValue pv
+    --
+    -- instance PersistFieldSql What where
+    --     sqlType _ = SqlString
+    --
+    -- User
+    --     what What nullable
+    -- @
     | FieldAttrMigrationOnly
+    -- ^ This tag means that the column will not be present on the Haskell code,
+    -- but will not be removed from the database. Useful to deprecate fields in
+    -- phases.
+    --
+    -- You should set the column to be nullable in the database. Otherwise,
+    -- inserts won't have values.
+    --
+    -- @
+    -- User
+    --     oldName Text MigrationOnly
+    --     newName Text
+    -- @
     | FieldAttrSafeToRemove
+    -- ^ A @SafeToRemove@ attribute is not present on the Haskell datatype, and
+    -- the backend migrations should attempt to drop the column without
+    -- triggering any unsafe migration warnings.
+    --
+    -- Useful after you've used @MigrationOnly@ to remove a column from the
+    -- database in phases.
+    --
+    -- @
+    -- User
+    --     oldName Text SafeToRemove
+    --     newName Text
+    -- @
     | FieldAttrNoreference
+    -- ^ This attribute indicates that we should create a foreign key reference
+    -- from a column. By default, @persistent@ will try and create a foreign key
+    -- reference for a column if it can determine that the type of the column is
+    -- a @'Key' entity@ or an @EntityId@  and the @Entity@'s name was present in
+    -- 'mkPersist'.
+    --
+    -- This is useful if you want to use the explicit foreign key syntax.
+    --
+    -- @
+    -- Post
+    --     title    Text
+    --
+    -- Comment
+    --     postId   PostId      noreference
+    --     Foreign Post fk_comment_post postId
+    -- @
     | FieldAttrReference Text
+    -- ^ This is set to specify precisely the database table the column refers
+    -- to.
+    --
+    -- @
+    -- Post
+    --     title    Text
+    --
+    -- Comment
+    --     postId   PostId references="post"
+    -- @
+    --
+    -- You should not need this - @persistent@ should be capable of correctly
+    -- determining the target table's name. If you do need this, please file an
+    -- issue describing why.
     | FieldAttrConstraint Text
+    -- ^ Specify a name for the constraint on the foreign key reference for this
+    -- table.
+    --
+    -- @
+    -- Post
+    --     title    Text
+    --
+    -- Comment
+    --     postId   PostId constraint="my_cool_constraint_name"
+    -- @
     | FieldAttrDefault Text
+    -- ^ Specify the default value for a column.
+    --
+    -- @
+    -- User
+    --     createdAt    UTCTime     default="NOW()"
+    -- @
+    --
+    -- Note that a @default=@ attribute does not mean you can omit the value
+    -- while inserting.
     | FieldAttrSqltype Text
+    -- ^ Specify a custom SQL type for the column. Generally, you should define
+    -- a custom datatype with a custom 'PersistFieldSql' instance instead of
+    -- using this.
+    --
+    -- @
+    -- User
+    --     uuid     Text    sqltype="UUID"
+    -- @
     | FieldAttrMaxlen Integer
+    -- ^ Set a maximum length for a column. Useful for VARCHAR and indexes.
+    --
+    -- @
+    -- User
+    --     name     Text    maxlen=200
+    --
+    --     UniqueName name
+    -- @
     | FieldAttrSql Text
+    -- ^ Specify the database name of the column.
+    --
+    -- @
+    -- User
+    --     blarghle     Int     sql="b_l_a_r_g_h_l_e"
+    -- @
+    --
+    -- Useful for performing phased migrations, where one column is renamed to
+    -- another column over time.
     | FieldAttrOther Text
+    -- ^ A grab bag of random attributes that were unrecognized by the parser.
     deriving (Show, Eq, Read, Ord, Lift)
 
 -- | Parse raw field attributes into structured form. Any unrecognized
