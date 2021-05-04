@@ -84,21 +84,29 @@ parseFieldType t0 =
                 | isSpace c -> parse1 $ T.dropWhile isSpace t'
                 | c == '(' -> parseEnclosed ')' id t'
                 | c == '[' -> parseEnclosed ']' FTList t'
-                | isUpper c ->
-                    let (a, b) = T.break (\x -> isSpace x || x `elem` ("()[]"::String)) t
-                     in PSSuccess (getCon a) b
+                | isUpper c || c == '\'' ->
+                    let (a, b) = T.break (\x -> isSpace x || x `elem` ("()[]"::String)) t'
+                     in PSSuccess (parseFieldTypePiece c a) b
                 | otherwise -> PSFail $ show (c, t')
-    getCon t =
-        case T.breakOnEnd "." t of
-            (_, "") -> FTTypeCon Nothing t
-            ("", _) -> FTTypeCon Nothing t
-            (a, b) -> FTTypeCon (Just $ T.init a) b
+
     goMany front t =
         case parse1 t of
             PSSuccess x t' -> goMany (front . (x:)) t'
             PSFail err -> PSFail err
             PSDone -> PSSuccess (front []) t
             -- _ ->
+
+parseFieldTypePiece :: Char -> Text -> FieldType
+parseFieldTypePiece fstChar rest =
+    case fstChar of
+        '\'' ->
+            FTTypePromoted rest
+        _ ->
+            let t = T.cons fstChar rest
+             in case T.breakOnEnd "." t of
+                (_, "") -> FTTypeCon Nothing t
+                ("", _) -> FTTypeCon Nothing t
+                (a, b) -> FTTypeCon (Just $ T.init a) b
 
 data PersistSettings = PersistSettings
     { psToDBName :: !(Text -> Text)

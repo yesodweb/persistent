@@ -405,6 +405,28 @@ Notification
                 let [notificationForeignDef] = entityForeigns notification
                 foreignConstraintNameDBName notificationForeignDef `shouldBe` ConstraintNameDB "notification_fk_noti_user"
 
+        describe "ticked types" $ do
+            it "should be able to parse ticked types" $ do
+                let simplifyField field =
+                        (fieldHaskell field, fieldType field)
+                let tickedDefinition = [st|
+CustomerTransfer
+    customerId CustomerId
+    moneyAmount (MoneyAmount 'Customer 'Debit)
+    currencyCode CurrencyCode
+    uuid TransferUuid
+|]
+                let [customerTransfer] = parse lowerCaseSettings tickedDefinition
+                let expectedType =
+                        FTTypeCon Nothing "MoneyAmount" `FTApp` FTTypePromoted "Customer" `FTApp` FTTypePromoted "Debit"
+
+                (simplifyField <$> entityFields customerTransfer) `shouldBe`
+                    [ (FieldNameHS "customerId", FTTypeCon Nothing "CustomerId")
+                    , (FieldNameHS "moneyAmount", expectedType)
+                    , (FieldNameHS "currencyCode", FTTypeCon Nothing "CurrencyCode")
+                    , (FieldNameHS "uuid", FTTypeCon Nothing "TransferUuid")
+                    ]
+
     describe "parseFieldType" $ do
         it "simple types" $
             parseFieldType "FooBar" `shouldBe` Right (FTTypeCon Nothing "FooBar")
