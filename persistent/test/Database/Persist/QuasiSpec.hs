@@ -12,17 +12,13 @@ import Data.List.NonEmpty (NonEmpty(..), (<|))
 import qualified Data.List.NonEmpty as NEL
 import qualified Data.Map as Map
 import qualified Data.Text as T
-import Test.Hspec
-import Test.Hspec.QuickCheck
-import Test.QuickCheck
-#if !MIN_VERSION_base(4,11,0)
--- This can be removed when GHC < 8.2.2 isn't supported anymore
-import Data.Semigroup ((<>))
-#endif
 import Database.Persist.EntityDef.Internal
 import Database.Persist.Quasi
 import Database.Persist.Quasi.Internal
 import Database.Persist.Types
+import Test.Hspec
+import Test.Hspec.QuickCheck
+import Test.QuickCheck
 import Text.Shakespeare.Text (st)
 
 spec :: Spec

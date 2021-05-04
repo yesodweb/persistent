@@ -11,12 +11,14 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
+
 -- Strictly, this could go as low as GHC 8.6.1, which is when DerivingVia was
 -- introduced - this base version requires 8.6.5+
 #if MIN_VERSION_base(4,12,0)
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE UndecidableInstances #-}
 #endif
+
 -- | A sqlite backend for persistent.
 --
 -- Note: If you prepend @WAL=off @ to your connection string, it will disable
@@ -78,7 +80,6 @@ import qualified Data.HashMap.Lazy as HashMap
 import Data.Int (Int64)
 import Data.IORef
 import qualified Data.Map as Map
-import Data.Monoid ((<>))
 import Data.Pool (Pool)
 import Data.Text (Text)
 import qualified Data.Text as T

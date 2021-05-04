@@ -1,5 +1,4 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveLift #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE PatternSynonyms #-}
@@ -16,16 +15,12 @@ module Database.Persist.Types.Base
     , LiteralType(..)
     ) where
 
-import Data.List.NonEmpty (NonEmpty(..))
-import qualified Data.List.NonEmpty as NEL
 import Control.Exception (Exception)
 import Data.Char (isSpace)
+import Data.List.NonEmpty (NonEmpty(..))
+import qualified Data.List.NonEmpty as NEL
 import Data.Map (Map)
 import Data.Maybe (isNothing)
-#if !MIN_VERSION_base(4,11,0)
--- This can be removed when GHC < 8.2.2 isn't supported anymore
-import Data.Semigroup ((<>))
-#endif
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Word (Word32)

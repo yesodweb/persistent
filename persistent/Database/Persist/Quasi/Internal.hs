@@ -1,5 +1,4 @@
 {-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveLift #-}
 {-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE RankNTypes #-}
@@ -61,10 +60,6 @@ import qualified Data.List.NonEmpty as NEL
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe, listToMaybe, mapMaybe, maybeToList)
 import Data.Monoid (mappend)
-#if !MIN_VERSION_base(4,11,0)
--- This can be removed when GHC < 8.2.2 isn't supported anymore
-import Data.Semigroup ((<>))
-#endif
 import Data.Text (Text)
 import qualified Data.Text as T
 import Database.Persist.EntityDef.Internal
@@ -314,11 +309,17 @@ data LinesWithComments = LinesWithComments
     , lwcComments :: [Text]
     } deriving (Eq, Show)
 
--- TODO: drop this and use <> when 8.2 isn't supported anymore so the
--- monoid/semigroup nonsense isn't annoying
+instance Semigroup LinesWithComments where
+    a <> b =
+        LinesWithComments
+            { lwcLines =
+                foldr NEL.cons (lwcLines b) (lwcLines a)
+            , lwcComments =
+                lwcComments a `mappend` lwcComments b
+            }
+
 appendLwc :: LinesWithComments -> LinesWithComments -> LinesWithComments
-appendLwc a b =
-    LinesWithComments (foldr NEL.cons (lwcLines b) (lwcLines a)) (lwcComments a `mappend` lwcComments b)
+appendLwc = (<>)
 
 newLine :: Line -> LinesWithComments
 newLine l = LinesWithComments (pure l) []
