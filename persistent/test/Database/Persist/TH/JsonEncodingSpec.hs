@@ -14,8 +14,6 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-{-# OPTIONS_GHC -ddump-splices #-}
-
 module Database.Persist.TH.JsonEncodingSpec where
 
 import TemplateTestImports

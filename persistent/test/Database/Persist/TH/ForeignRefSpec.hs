@@ -171,7 +171,7 @@ spec = describe "ForeignRefSpec" $ do
                             fieldReference parentIdField `shouldBe`
                                 ForeignRef (EntityNameHS "ParentImplicit")
                     as ->
-                        fail . mconcat $
+                        error . mconcat $
                             [ "Expected one foreign reference on childDef, "
                             , "got: "
                             , show as
