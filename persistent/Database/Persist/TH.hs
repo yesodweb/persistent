@@ -350,7 +350,7 @@ mEmbedded _ (FTTypeCon Just{} _) =
 mEmbedded ents (FTTypeCon Nothing (EntityNameHS -> name)) =
     maybe (Left Nothing) Right $ M.lookup name ents
 mEmbedded ents (FTTypePromoted (EntityNameHS -> name)) =
-    maybe (Left Nothing) Right $ M.lookup name ents
+    Left Nothing
 mEmbedded ents (FTList x) =
     mEmbedded ents x
 mEmbedded ents (FTApp x y) =

@@ -1,16 +1,12 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DerivingStrategies #-}
--- {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
--- {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedLabels #-}
--- {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
--- {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Database.Persist.TH.KindEntitiesSpec where
@@ -31,12 +27,11 @@ CustomerTransfer
 
 spec :: Spec
 spec = describe "KindEntities" $ do
-    it "works" $ do
-        {-
-        let UserName = #name
-            OrganizationName = #name
-            DogName = #name
--}
+    it "should support DataKinds in entity definition" $ do
+        let mkTransfer :: CustomerId -> MoneyAmount 'CustomerOwned 'Debit -> CustomerTransfer
+            mkTransfer = CustomerTransfer
+            getAmount :: CustomerTransfer -> MoneyAmount 'CustomerOwned 'Debit
+            getAmount = customerTransferMoneyAmount
         compiles
 
 compiles :: Expectation

@@ -3,6 +3,7 @@
 
 module Database.Persist.TH.KindEntitiesSpecImports where
 
+import Data.Proxy
 import qualified Data.Text as T
 import TemplateTestImports
 
@@ -12,10 +13,10 @@ data AccountKind = Debit | Credit
 newtype MoneyAmount (a :: Owner) (b :: AccountKind) = MoneyAmount Rational
 
 instance PersistFieldSql (MoneyAmount a b) where
-    sqlType _ = SqlInt64
+    sqlType _ = sqlType (Proxy :: Proxy Rational)
 
 instance PersistField (MoneyAmount a b) where
-    toPersistValue (MoneyAmount n) = PersistRational n
-    fromPersistValue = \case
-      PersistRational n -> pure (MoneyAmount n)
-      x -> Left $ T.pack $ "Failed to read MoneyAmount: " ++ show x
+    toPersistValue (MoneyAmount n) =
+        toPersistValue n
+    fromPersistValue v =
+        MoneyAmount <$> fromPersistValue v
