@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2.12.1.2
+
 * [#1258](https://github.com/yesodweb/persistent/pull/1258)
     * Support promoted types in Quasi Quoter
 * [#1243](https://github.com/yesodweb/persistent/pull/1243)
