@@ -20,7 +20,6 @@ import qualified Data.Text as T
 
 import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
 import Database.Persist.EntityDef
-import Database.Persist.Quasi
 import Database.Persist.Sql.Types
 import Database.Persist.Types
 

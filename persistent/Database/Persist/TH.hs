@@ -390,9 +390,9 @@ liftAndFixKeys mps emEntities entityMap unboundEnt =
                     , withDbName parentFieldStore ffrTargetField
                     )
             fixForeignNullable =
-                all ((NotNullable /=) . isFieldNullable) foreignFieldNames
+                all ((NotNullable /=) . isForeignNullable) foreignFieldNames
               where
-                isFieldNullable fieldNameHS =
+                isForeignNullable fieldNameHS =
                     case getFieldDef fieldNameHS fieldStore of
                         Nothing ->
                             error "Field name not present in map"
