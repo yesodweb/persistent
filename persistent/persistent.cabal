@@ -167,6 +167,7 @@ test-suite test
         Database.Persist.TH.ImplicitIdColSpec
         Database.Persist.TH.JsonEncodingSpec
         Database.Persist.TH.MigrationOnlySpec
+        Database.Persist.TH.MaybeFieldDefsSpec
         Database.Persist.TH.MultiBlockSpec
         Database.Persist.TH.MultiBlockSpec.Model
         Database.Persist.TH.OverloadedLabelSpec

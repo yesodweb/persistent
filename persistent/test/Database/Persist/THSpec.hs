@@ -51,6 +51,7 @@ import qualified Database.Persist.TH.ForeignRefSpec as ForeignRefSpec
 import qualified Database.Persist.TH.ImplicitIdColSpec as ImplicitIdColSpec
 import qualified Database.Persist.TH.JsonEncodingSpec as JsonEncodingSpec
 import qualified Database.Persist.TH.KindEntitiesSpec as KindEntitiesSpec
+import qualified Database.Persist.TH.MaybeFieldDefsSpec as MaybeFieldDefsSpec
 import qualified Database.Persist.TH.MigrationOnlySpec as MigrationOnlySpec
 import qualified Database.Persist.TH.MultiBlockSpec as MultiBlockSpec
 import qualified Database.Persist.TH.OverloadedLabelSpec as OverloadedLabelSpec
@@ -61,6 +62,7 @@ import qualified Database.Persist.TH.KindEntitiesSpec as KindEntitiesSpec
 import qualified Database.Persist.TH.OverloadedLabelSpec as OverloadedLabelSpec
 import qualified Database.Persist.TH.SharedPrimaryKeyImportedSpec as SharedPrimaryKeyImportedSpec
 import qualified Database.Persist.TH.SharedPrimaryKeySpec as SharedPrimaryKeySpec
+import qualified Database.Persist.TH.ToFromPersistValuesSpec as ToFromPersistValuesSpec
 
 -- test to ensure we can have types ending in Id that don't trash the TH
 -- machinery
@@ -176,6 +178,7 @@ spec = describe "THSpec" $ do
     SharedPrimaryKeySpec.spec
     SharedPrimaryKeyImportedSpec.spec
     ImplicitIdColSpec.spec
+    MaybeFieldDefsSpec.spec
     MigrationOnlySpec.spec
     EmbedSpec.spec
     DiscoverEntitiesSpec.spec
