@@ -405,6 +405,7 @@ parseFieldAttrs = fmap $ \case
 data FieldType
     = FTTypeCon (Maybe Text) Text
     -- ^ Optional module and name.
+    | FTTypePromoted Text
     | FTApp FieldType FieldType
     | FTList FieldType
     deriving (Show, Eq, Read, Ord, Lift)

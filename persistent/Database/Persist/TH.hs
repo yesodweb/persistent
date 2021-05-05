@@ -714,6 +714,8 @@ mEmbedded _ (FTTypeCon Just{} _) =
     Left Nothing
 mEmbedded ents (FTTypeCon Nothing (EntityNameHS -> name)) =
     maybe (Left Nothing) (\_ -> Right name) $ M.lookup name ents
+mEmbedded ents (FTTypePromoted (EntityNameHS -> name)) =
+    Left Nothing
 mEmbedded ents (FTList x) =
     mEmbedded ents x
 mEmbedded _ (FTApp (FTTypeCon Nothing "Key") (FTTypeCon _ a)) =
@@ -2460,13 +2462,21 @@ maybeNullable :: UnboundFieldDef -> Bool
 maybeNullable fd = nullable (unboundFieldAttrs fd) == Nullable ByMaybeAttr
 
 ftToType :: FieldType -> Type
-ftToType (FTTypeCon Nothing t) = ConT $ mkName $ unpack t
--- This type is generated from the Quasi-Quoter.
--- Adding this special case avoids users needing to import Data.Int
-ftToType (FTTypeCon (Just "Data.Int") "Int64") = ConT ''Int64
-ftToType (FTTypeCon (Just m) t) = ConT $ mkName $ unpack $ concat [m, ".", t]
-ftToType (FTApp x y) = ftToType x `AppT` ftToType y
-ftToType (FTList x) = ListT `AppT` ftToType x
+ftToType = \case
+    FTTypeCon Nothing t ->
+        ConT $ mkName $ T.unpack t
+    -- This type is generated from the Quasi-Quoter.
+    -- Adding this special case avoids users needing to import Data.Int
+    FTTypeCon (Just "Data.Int") "Int64" ->
+        ConT ''Int64
+    FTTypeCon (Just m) t ->
+        ConT $ mkName $ unpack $ concat [m, ".", t]
+    FTTypePromoted t ->
+        PromotedT $ mkName $ T.unpack t
+    FTApp x y ->
+        ftToType x `AppT` ftToType y
+    FTList x ->
+        ListT `AppT` ftToType x
 
 infixr 5 ++
 (++) :: Monoid m => m -> m -> m
