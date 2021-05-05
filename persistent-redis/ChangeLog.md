@@ -1,4 +1,4 @@
-## 2.12.0.1 (unreleased)
+## 2.13.0.0
 
 * [#1123](https://github.com/yesodweb/persistent/pull/1223):
     * Changed the error message from trying to serialize a `PersistDbSpecific` value into `PersistLiteral_`.
