@@ -1,6 +1,6 @@
 # Changelog for persistent
 
-## 2.13.0.0 (unreleased)
+## 2.13.0.0
 
 * [#1244](https://github.com/yesodweb/persistent/pull/1244)
     * Implement config for customising the FK name
