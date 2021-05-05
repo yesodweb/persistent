@@ -55,6 +55,7 @@ import qualified Database.PostgreSQL.Simple.Transaction as PG
 import qualified Database.PostgreSQL.Simple.TypeInfo.Static as PS
 import qualified Database.PostgreSQL.Simple.Types as PG
 
+import Data.Proxy (Proxy(..))
 import qualified Data.List.NonEmpty as NEL
 import Control.Arrow
 import Control.Exception (Exception, throw, throwIO)
@@ -1860,11 +1861,7 @@ upsertManyWhere
 upsertManyWhere [] _ _ _ = return ()
 upsertManyWhere records fieldValues updates filters = do
     conn <- asks projectBackend
-    let uniqDef = -- onlyOneUniqueDef (Nothing :: Maybe record)
-            case getEntityUniques (entityDef (Nothing :: Maybe record)) of
-                [uniq] -> uniq
-                _ -> error "impossible due to OnlyOneUniqueKey constraint"
-            -- TODO: use onlyOneUniqueDef when it's exported
+    let uniqDef = onlyOneUniqueDef (Proxy :: Proxy record)
     uncurry rawExecute $
         mkBulkUpsertQuery records conn fieldValues updates filters uniqDef
 
