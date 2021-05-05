@@ -92,6 +92,7 @@ module Database.Persist.Class
     , PersistUniqueWrite (..)
     , OnlyOneUniqueKey (..)
     , AtLeastOneUniqueKey (..)
+    , onlyOneUniqueDef
     , NoUniqueKeysError
     , MultipleUniqueKeysError
     , getByValue

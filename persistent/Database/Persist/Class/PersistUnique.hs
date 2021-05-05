@@ -296,7 +296,7 @@ class PersistEntity record => OnlyOneUniqueKey record where
 -- | Given a proxy for a 'PersistEntity' record, this returns the sole
 -- 'UniqueDef' for that entity.
 --
--- @since TODO release me
+-- @since 2.13.0.0
 onlyOneUniqueDef
     :: (OnlyOneUniqueKey record, Monad proxy)
     => proxy record
