@@ -8,6 +8,8 @@ module Database.Persist.Sql.Internal
     ( mkColumns
     , defaultAttribute
     , BackendSpecificOverrides(..)
+    , getBackendSpecificForeignKeyName
+    , setBackendSpecificForeignKeyName
     , emptyBackendSpecificOverrides
     ) where
 
@@ -16,19 +18,48 @@ import Data.Monoid (mappend, mconcat)
 import Data.Text (Text)
 import qualified Data.Text as T
 
+import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
+import Database.Persist.EntityDef
 import Database.Persist.Quasi
 import Database.Persist.Sql.Types
 import Database.Persist.Types
-import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
 
--- | Record of functions to override the default behavior in 'mkColumns'.
--- It is recommended you initialize this with 'emptyBackendSpecificOverrides' and override the default values,
--- so that as new fields are added, your code still compiles.
+-- | Record of functions to override the default behavior in 'mkColumns'.  It is
+-- recommended you initialize this with 'emptyBackendSpecificOverrides' and
+-- override the default values, so that as new fields are added, your code still
+-- compiles.
+--
+-- For added safety, use the @getBackendSpecific*@ and @setBackendSpecific*@
+-- functions, as a breaking change to the record field labels won't be reflected
+-- in a major version bump of the library.
 --
 -- @since 2.11
 data BackendSpecificOverrides = BackendSpecificOverrides
     { backendSpecificForeignKeyName :: Maybe (EntityNameDB -> FieldNameDB -> ConstraintNameDB)
     }
+
+-- | If the override is defined, then this returns a function that accepts an
+-- entity name and field name and provides the 'ConstraintNameDB' for the
+-- foreign key constraint.
+--
+-- An abstract accessor for the 'BackendSpecificOverrides'
+--
+-- @since 2.13.0.0
+getBackendSpecificForeignKeyName
+    :: BackendSpecificOverrides
+    -> Maybe (EntityNameDB -> FieldNameDB -> ConstraintNameDB)
+getBackendSpecificForeignKeyName =
+    backendSpecificForeignKeyName
+
+-- | Set the backend's foreign key generation function to this value.
+--
+-- @since 2.13.0.0
+setBackendSpecificForeignKeyName
+    :: (EntityNameDB -> FieldNameDB -> ConstraintNameDB)
+    -> BackendSpecificOverrides
+    -> BackendSpecificOverrides
+setBackendSpecificForeignKeyName func bso =
+    bso { backendSpecificForeignKeyName = Just func }
 
 findMaybe :: (a -> Maybe b) -> [a] -> Maybe b
 findMaybe p = listToMaybe . mapMaybe p
@@ -51,15 +82,18 @@ mkColumns
     -> BackendSpecificOverrides
     -> ([Column], [UniqueDef], [ForeignDef])
 mkColumns allDefs t overrides =
-    (cols, entityUniques t, entityForeigns t)
+    (cols, getEntityUniques t, getEntityForeignDefs t)
   where
     cols :: [Column]
-    cols = map goId idCol `mappend` map go (entityFields t)
+    cols = map goId idCol `mappend` map go (getEntityFieldsDatabase t)
 
     idCol :: [FieldDef]
-    idCol = case entityPrimary t of
-        Just _ -> []
-        Nothing -> [entityId t]
+    idCol =
+        case getEntityId t of
+            EntityIdNaturalKey _ ->
+                []
+            EntityIdField fd ->
+                [fd]
 
     goId :: FieldDef -> Column
     goId fd =
@@ -100,14 +134,13 @@ mkColumns allDefs t overrides =
             }
 
     tableName :: EntityNameDB
-    tableName = entityDB t
-
+    tableName = getEntityDBName t
 
     go :: FieldDef -> Column
     go fd =
         Column
             { cName = fieldDB fd
-            , cNull = nullable (fieldAttrs fd) /= NotNullable || entitySum t
+            , cNull = nullable (fieldAttrs fd) /= NotNullable || isEntitySum t
             , cSqlType = fieldSqlType fd
             , cDefault = defaultAttribute $ fieldAttrs fd
             , cGenerated = fieldGenerated fd
@@ -145,7 +178,7 @@ mkColumns allDefs t overrides =
         -> [FieldAttr]
         -> Maybe (EntityNameDB, ConstraintNameDB) -- table name, constraint name
     ref c fe []
-        | ForeignRef f _ <- fe =
+        | ForeignRef f <- fe =
             Just (resolveTableName allDefs f, refNameFn tableName c)
         | otherwise = Nothing
     ref _ _ (FieldAttrNoreference:_) = Nothing
@@ -165,5 +198,5 @@ refName (EntityNameDB table) (FieldNameDB column) =
 resolveTableName :: [EntityDef] -> EntityNameHS -> EntityNameDB
 resolveTableName [] (EntityNameHS t) = error $ "Table not found: " `Data.Monoid.mappend` T.unpack t
 resolveTableName (e:es) hn
-    | entityHaskell e == hn = entityDB e
+    | getEntityHaskellName e == hn = getEntityDBName e
     | otherwise = resolveTableName es hn

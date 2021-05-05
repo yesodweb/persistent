@@ -1,5 +1,11 @@
 # Changelog for persistent-mysql
 
+## 2.13.0.0 (unreleased)
+
+* [#1225](https://github.com/yesodweb/persistent/pull/1225)
+    * Support `persistent-2.13` changes for SqlBackend being made internal.
+    * Remove the deprecated `SomeField` type and pattern.
+
 ## 2.12.1.0
 
 * Expose `openMySQLConn` for explicit reference to opened connection. [#1248](https://github.com/yesodweb/persistent/pull/1248)

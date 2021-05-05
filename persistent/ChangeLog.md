@@ -1,6 +1,76 @@
 # Changelog for persistent
 
-## Unreleased
+## 2.13.0.0 (unreleased)
+
+* [#1244](https://github.com/yesodweb/persistent/pull/1244)
+    * Implement config for customising the FK name
+* [#1252](https://github.com/yesodweb/persistent/pull/1252)
+    * `mkMigrate` now defers to `mkEntityDefList` and `migrateModels` instead of
+      fixing the foreign key references itself.
+    * `mkSave` was deprecated - the function did not fix foreign key references.
+      Please use `mkEntityDefList` instead.
+    * `EntityDef` will now include fields marked `MigrationOnly` and
+      `SafeToRemove`. Beforehand, those were filtered out, and `mkMigrate`
+      applied. The function `getEntityFields` wll only return fields defined on
+      the Haskell type - for all columns, see `getEntityFieldsDatabase`.
+* [#1225](https://github.com/yesodweb/persistent/pull/1225)
+    * The fields and constructor for `SqlBackend` are no longer exported by
+      default. They are available from an internal module,
+      `Database.Persist.Sql.Types.Internal`. Breaking changes from `Internal`
+      modules are not reflected in the major version. This will allow us to
+      release new functionality without breaking your code. It's recommended to
+      switch to using the smart constructor functions and setter functions that
+      are now exported from `Database.Persist.Sql` instead.
+    * A new API is available for constructing and using a `SqlBackend`, provided
+      in `Database.Persist.SqlBackend`. Instead of using the `SqlBackend`
+      directly, use `mkSqlBackend` and the datatype `MkSqlBackendArgs`. The
+      `MkSqlBackendArgs` record has the same field names as the `SqlBackend`, so
+      the translation is easy:
+      ```diff
+- SqlBackend
++ mkSqlBackend MkSqlBackendArgs
+    { connInsertSql = ...
+    , connCommit = ...
+    , connEscapeFieldName = ...
+    , connEscapeTableName = ...
+    , etc
+    }
+      ```
+      Some fields were omitted in `MkSqlBackendArgs`. These fields are
+      *optional* - they provide enhanced or backend-specific functionality. For
+      these, use the setter functions like `setConnUpsertSql`.
+    * Previously hidden modules are now exposed under the `Internal` namespace.
+    * The `connLimitOffset` function used to have a `Bool` parameter. This
+      parameter is unused and has been removed.
+* [#1234](https://github.com/yesodweb/persistent/pull/1234)
+    * You can now customize the default implied ID column. See the documentation
+      in `Database.Persist.ImplicitIdDef` for more details.
+    * Moved the various `Name` types into `Database.Persist.Names`
+    * Removed the `hasCompositeKey` function. See `hasCompositePrimaryKey` and
+      `hasNaturalKey` as replacements.
+    * The `EntityDef` constructor and field labels are not exported by default.
+      Get those from `Database.Persist.EntityDef.Internal`, but you should
+      migrate to the getters/setters in `Database.Persist.EntityDef` as you can.
+    * Added the `Database.Persist.FieldDef` and
+      `Database.Persist.FieldDef.Internal` modules.
+    * The `PersistSettings` type was made abstract. Please migrate to the
+      getters/setters defined in that `Database.Persist.Quasi`, or use
+      `Database.Persist.Quasi.Internal` if you don't mind the possibility of
+      breaking changes.
+    * Add the `runSqlCommand` function for running arbitrary SQL during
+      migrations.
+    * Add `migrateModels` function for a TH-free migration facility.
+* [#1253](https://github.com/yesodweb/persistent/pull/1253)
+    * Add `discoverEntities` to discover instances of the class and return their
+      entity definitions.
+* [#1250](https://github.com/yesodweb/persistent/pull/1250)
+    * The `mpsGeneric` function has been deprecated. If you need this
+      functionality, please comment with your needs on the GitHub issue tracker.
+      We may un-deprecate it, or we may provide a new and better means of
+      facilitating a solution to your problem.
+* [#1255](https://github.com/yesodweb/persistent/pull/1255)
+    * `mkPersist` now checks to see if an instance already exists for
+      `PersistEntity` for the inputs.
 
 ## 2.12.1.2
 
@@ -12,6 +82,19 @@
     * Refactor setEmbedField to use do notation
 * [#1237](https://github.com/yesodweb/persistent/pull/1237)
     * Remove nonEmptyOrFail function from recent tests
+* [#1256](https://github.com/yesodweb/persistent/pull/1256)
+    * The QuasiQuoter has been refactored and improved.
+    * You can now use `mkPersistWith` to pass in a list of pre-existing
+      `EntityDef` to improve foreign key detection and splitting up models
+      across multiple modules.
+    * The `entityId` field now returns an `EntityIdDef`, which specifies what
+      the ID field actually is. This is a move to better support natural keys.
+    * Several types that had lists have been refactored to use nonempty lists to
+      better capture the semantics.
+    * `mkDeleteCascade` is deprecated. Please use the Cascade behavior directly
+      on fields.
+    * You can use `Key Foo` and `FooId` interchangeably in fields.
+    * Support for GHC < 8.4 dropped.
 
 ## 2.12.1.1
 

@@ -1,16 +1,21 @@
 {-# LANGUAGE UndecidableInstances #-}
+
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
+
 module Recursive (specsWith, recursiveMigrate, cleanup) where
 
 import Init
 
 share [mkPersist sqlSettings { mpsGeneric = True }, mkMigrate "recursiveMigrate"] [persistLowerCase|
+
 SubType
   object [MenuObject]
   deriving Show Eq
+
 MenuObject
   sub SubType Maybe
   deriving Show Eq
+
 |]
 
 cleanup

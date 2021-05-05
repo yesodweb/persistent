@@ -18,10 +18,12 @@ import Data.Aeson
 import Data.Text (Text)
 import Data.Proxy
 
+import qualified Data.List.NonEmpty as NEL
 import Database.Persist.Sql
 import Database.Persist.TH
 import PersistTestPetType
 import PersistTestPetCollarType
+import Data.Foldable (toList)
 
 share
     [ mkPersist sqlSettings { mpsGeneric = True }
@@ -144,7 +146,7 @@ instance (PersistEntity a) => PersistEntity (ReverseFieldOrder a) where
 
     entityDef = revFields . entityDef . unRfoProxy
       where
-        revFields ed = ed { entityFields = reverse (entityFields ed) }
+        revFields = overEntityFields reverse
         unRfoProxy :: proxy (ReverseFieldOrder a) -> Proxy a
         unRfoProxy _ = Proxy
 
@@ -154,7 +156,7 @@ instance (PersistEntity a) => PersistEntity (ReverseFieldOrder a) where
     fromPersistValues = fmap RFO . fromPersistValues . reverse
 
     newtype Unique      (ReverseFieldOrder a)   = URFO  {unURFO  :: Unique      a  }
-    persistUniqueToFieldNames = reverse . persistUniqueToFieldNames . unURFO
+    persistUniqueToFieldNames = NEL.reverse . persistUniqueToFieldNames . unURFO
     persistUniqueToValues = reverse . persistUniqueToValues . unURFO
     persistUniqueKeys = map URFO . reverse . persistUniqueKeys . unRFO
 

@@ -11,12 +11,14 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
+
 -- Strictly, this could go as low as GHC 8.6.1, which is when DerivingVia was
 -- introduced - this base version requires 8.6.5+
 #if MIN_VERSION_base(4,12,0)
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE UndecidableInstances #-}
 #endif
+
 -- | A sqlite backend for persistent.
 --
 -- Note: If you prepend @WAL=off @ to your connection string, it will disable
@@ -78,18 +80,19 @@ import qualified Data.HashMap.Lazy as HashMap
 import Data.Int (Int64)
 import Data.IORef
 import qualified Data.Map as Map
-import Data.Monoid ((<>))
 import Data.Pool (Pool)
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
 import Lens.Micro.TH (makeLenses)
 import UnliftIO.Resource (ResourceT, runResourceT)
+import Data.Foldable (toList)
 
 #if MIN_VERSION_base(4,12,0)
 import Database.Persist.Compatible
 #endif
 import Database.Persist.Sql
+import Database.Persist.SqlBackend
 import qualified Database.Persist.Sql.Util as Util
 import qualified Database.Sqlite as Sqlite
 
@@ -267,28 +270,27 @@ wrapConnectionInfo connInfo conn logFunc = do
         Sqlite.finalize stmt
 
     smap <- newIORef $ Map.empty
-    return $ SqlBackend
-        { connPrepare = prepare' conn
-        , connStmtMap = smap
-        , connInsertSql = insertSql'
-        , connUpsertSql = Nothing
-        , connPutManySql = Just putManySql
-        , connInsertManySql = Nothing
-        , connClose = Sqlite.close conn
-        , connMigrateSql = migrate'
-        , connBegin = \f _ -> helper "BEGIN" f
-        , connCommit = helper "COMMIT"
-        , connRollback = ignoreExceptions . helper "ROLLBACK"
-        , connEscapeFieldName = escape . unFieldNameDB
-        , connEscapeTableName = escape . unEntityNameDB . entityDB
-        , connEscapeRawName = escape
-        , connNoLimit = "LIMIT -1"
-        , connRDBMS = "sqlite"
-        , connLimitOffset = decorateSQLWithLimitOffset "LIMIT -1"
-        , connLogFunc = logFunc
-        , connMaxParams = Just 999
-        , connRepsertManySql = Just repsertManySql
-        }
+    return $
+        setConnMaxParams 999 $
+        setConnPutManySql putManySql $
+        setConnRepsertManySql repsertManySql $
+        mkSqlBackend MkSqlBackendArgs
+            { connPrepare = prepare' conn
+            , connStmtMap = smap
+            , connInsertSql = insertSql'
+            , connClose = Sqlite.close conn
+            , connMigrateSql = migrate'
+            , connBegin = \f _ -> helper "BEGIN" f
+            , connCommit = helper "COMMIT"
+            , connRollback = ignoreExceptions . helper "ROLLBACK"
+            , connEscapeFieldName = escape . unFieldNameDB
+            , connEscapeTableName = escape . unEntityNameDB . getEntityDBName
+            , connEscapeRawName = escape
+            , connNoLimit = "LIMIT -1"
+            , connRDBMS = "sqlite"
+            , connLimitOffset = decorateSQLWithLimitOffset "LIMIT -1"
+            , connLogFunc = logFunc
+            }
   where
     helper t getter = do
         stmt <- getter t
@@ -336,31 +338,31 @@ prepare' conn sql = do
 
 insertSql' :: EntityDef -> [PersistValue] -> InsertSqlResult
 insertSql' ent vals =
-    case entityPrimary ent of
-        Just _ ->
+    case getEntityId ent of
+        EntityIdNaturalKey _ ->
           ISRManyKeys sql vals
             where sql = T.concat
                     [ "INSERT INTO "
-                    , escapeE $ entityDB ent
+                    , escapeE $ getEntityDBName ent
                     , "("
                     , T.intercalate "," $ map (escapeF . fieldDB) cols
                     , ") VALUES("
                     , T.intercalate "," (map (const "?") cols)
                     , ")"
                     ]
-        Nothing ->
+        EntityIdField fd ->
           ISRInsertGet ins sel
             where
               sel = T.concat
                   [ "SELECT "
-                  , escapeF $ fieldDB (entityId ent)
+                  , escapeF $ fieldDB fd
                   , " FROM "
-                  , escapeE $ entityDB ent
+                  , escapeE $ getEntityDBName ent
                   , " WHERE _ROWID_=last_insert_rowid()"
                   ]
               ins = T.concat
                   [ "INSERT INTO "
-                  , escapeE $ entityDB ent
+                  , escapeE $ getEntityDBName ent
                   , if null cols
                         then " VALUES(null)"
                         else T.concat
@@ -375,7 +377,7 @@ insertSql' ent vals =
     notGenerated =
         isNothing . fieldGenerated
     cols =
-        filter notGenerated $ entityFields ent
+        filter notGenerated $ getEntityFields ent
 
 execute' :: Sqlite.Connection -> Sqlite.Statement -> [PersistValue] -> IO Int64
 execute' conn stmt vals = flip finally (liftIO $ Sqlite.reset conn stmt) $ do
@@ -441,7 +443,7 @@ migrate' allDefs getter val = do
                     return $ Right sql
   where
     def = val
-    table = entityDB def
+    table = getEntityDBName def
     go = do
         x <- CL.head
         case x of
@@ -454,44 +456,42 @@ migrate' allDefs getter val = do
 -- with the difference that an actual database isn't needed for it.
 mockMigration :: Migration -> IO ()
 mockMigration mig = do
-  smap <- newIORef $ Map.empty
-  let sqlbackend = SqlBackend
-                   { connPrepare = \_ -> do
-                                     return Statement
-                                                { stmtFinalize = return ()
-                                                , stmtReset = return ()
-                                                , stmtExecute = undefined
-                                                , stmtQuery = \_ -> return $ return ()
-                                                }
-                   , connStmtMap = smap
-                   , connInsertSql = insertSql'
-                   , connInsertManySql = Nothing
-                   , connClose = undefined
-                   , connMigrateSql = migrate'
-                   , connBegin = \f _ -> helper "BEGIN" f
-                   , connCommit = helper "COMMIT"
-                   , connRollback = ignoreExceptions . helper "ROLLBACK"
-                   , connEscapeFieldName = escape . unFieldNameDB
-                   , connEscapeTableName = escape . unEntityNameDB . entityDB
-                   , connEscapeRawName = escape
-                   , connNoLimit = "LIMIT -1"
-                   , connRDBMS = "sqlite"
-                   , connLimitOffset = decorateSQLWithLimitOffset "LIMIT -1"
-                   , connLogFunc = undefined
-                   , connUpsertSql = undefined
-                   , connPutManySql = undefined
-                   , connMaxParams = Just 999
-                   , connRepsertManySql = Nothing
-                   }
-      result = runReaderT . runWriterT . runWriterT $ mig
-  resp <- result sqlbackend
-  mapM_ TIO.putStrLn $ map snd $ snd resp
-    where
-      helper t getter = do
-                      stmt <- getter t
-                      _ <- stmtExecute stmt []
-                      stmtReset stmt
-      ignoreExceptions = E.handle (\(_ :: E.SomeException) -> return ())
+    smap <- newIORef $ Map.empty
+    let sqlbackend =
+            setConnMaxParams 999 $
+            mkSqlBackend MkSqlBackendArgs
+                { connPrepare = \_ -> do
+                    return Statement
+                        { stmtFinalize = return ()
+                        , stmtReset = return ()
+                        , stmtExecute = undefined
+                        , stmtQuery = \_ -> return $ return ()
+                        }
+                , connStmtMap = smap
+                , connInsertSql = insertSql'
+                , connClose = undefined
+                , connMigrateSql = migrate'
+                , connBegin = \f _ -> helper "BEGIN" f
+                , connCommit = helper "COMMIT"
+                , connRollback = ignoreExceptions . helper "ROLLBACK"
+                , connEscapeFieldName = escape . unFieldNameDB
+                , connEscapeTableName = escape . unEntityNameDB . getEntityDBName
+                , connEscapeRawName = escape
+                , connNoLimit = "LIMIT -1"
+                , connRDBMS = "sqlite"
+                , connLimitOffset = decorateSQLWithLimitOffset "LIMIT -1"
+                , connLogFunc = undefined
+                }
+        result = runReaderT . runWriterT . runWriterT $ mig
+    resp <- result sqlbackend
+    mapM_ TIO.putStrLn $ map snd $ snd resp
+  where
+    helper t getter = do
+        stmt <- getter t
+        _ <- stmtExecute stmt []
+        stmtReset stmt
+    ignoreExceptions =
+        E.handle (\(_ :: E.SomeException) -> return ())
 
 -- | Check if a column name is listed as the "safe to remove" in the entity
 -- list.
@@ -499,7 +499,7 @@ safeToRemove :: EntityDef -> FieldNameDB -> Bool
 safeToRemove def (FieldNameDB colName)
     = any (elem FieldAttrSafeToRemove . fieldAttrs)
     $ filter ((== FieldNameDB colName) . fieldDB)
-    $ entityFields def
+    $ getEntityFieldsDatabase def
 
 getCopyTable :: [EntityDef]
              -> (Text -> IO Statement)
@@ -527,12 +527,12 @@ getCopyTable allDefs getter def = do
                 names <- getCols
                 return $ name : names
             Just y -> error $ "Invalid result from PRAGMA table_info: " ++ show y
-    table = entityDB def
+    table = getEntityDBName def
     tableTmp = EntityNameDB $ unEntityNameDB table <> "_backup"
     (cols, uniqs, fdef) = sqliteMkColumns allDefs def
     cols' = filter (not . safeToRemove def . cName) cols
     newSql = mkCreateTable False def (cols', uniqs, fdef)
-    tmpSql = mkCreateTable True def { entityDB = tableTmp } (cols', uniqs, [])
+    tmpSql = mkCreateTable True (setEntityDBName tableTmp def) (cols', uniqs, [])
     dropTmp = "DROP TABLE " <> escapeE tableTmp
     dropOld = "DROP TABLE " <> escapeE table
     copyToTemp common = T.concat
@@ -562,7 +562,7 @@ mkCreateTable isTemp entity (cols, uniqs, fdefs) =
         [ "CREATE"
         , if isTemp then " TEMP" else ""
         , " TABLE "
-        , escapeE $ entityDB entity
+        , escapeE $ getEntityDBName entity
         , "("
         ]
 
@@ -572,25 +572,25 @@ mkCreateTable isTemp entity (cols, uniqs, fdefs) =
         , ")"
         ]
 
-    columns = case entityPrimary entity of
-        Just pdef ->
+    columns = case getEntityId entity of
+        EntityIdNaturalKey pdef ->
             [ T.drop 1 $ T.concat $ map (sqlColumn isTemp) cols
             , ", PRIMARY KEY "
             , "("
-            , T.intercalate "," $ map (escapeF . fieldDB) $ compositeFields pdef
+            , T.intercalate "," $ map (escapeF . fieldDB) $ toList $ compositeFields pdef
             , ")"
             ]
 
-        Nothing ->
-            [ escapeF $ fieldDB (entityId entity)
+        EntityIdField fd ->
+            [ escapeF $ fieldDB fd
             , " "
-            , showSqlType $ fieldSqlType $ entityId entity
+            , showSqlType $ fieldSqlType fd
             , " PRIMARY KEY"
-            , mayDefault $ defaultAttribute $ fieldAttrs $ entityId entity
+            , mayDefault $ defaultAttribute $ fieldAttrs fd
             , T.concat $ map (sqlColumn isTemp) nonIdCols
             ]
 
-    nonIdCols = filter (\c -> cName c /= fieldDB (entityId entity)) cols
+    nonIdCols = filter (\c -> Just (cName c) /= fmap fieldDB (getEntityIdField entity)) cols
 
 mayDefault :: Maybe Text -> Text
 mayDefault def = case def of
@@ -652,7 +652,7 @@ sqlUnique (UniqueDef _ cname cols _) = T.concat
     [ ",CONSTRAINT "
     , escapeC cname
     , " UNIQUE ("
-    , T.intercalate "," $ map (escapeF . snd) cols
+    , T.intercalate "," $ map (escapeF . snd) $ toList cols
     , ")"
     ]
 
@@ -674,16 +674,16 @@ escape s =
     go c = T.singleton c
 
 putManySql :: EntityDef -> Int -> Text
-putManySql ent n = putManySql' conflictColumns fields ent n
+putManySql ent n = putManySql' conflictColumns (toList fields) ent n
   where
-    fields = entityFields ent
-    conflictColumns = concatMap (map (escapeF . snd) . uniqueFields) (entityUniques ent)
+    fields = getEntityFieldsDatabase ent
+    conflictColumns = concatMap (map (escapeF . snd) . toList . uniqueFields) (getEntityUniques ent)
 
 repsertManySql :: EntityDef -> Int -> Text
-repsertManySql ent n = putManySql' conflictColumns fields ent n
+repsertManySql ent n = putManySql' conflictColumns (toList fields) ent n
   where
     fields = keyAndEntityFields ent
-    conflictColumns = escapeF . fieldDB <$> entityKeyFields ent
+    conflictColumns = escapeF . fieldDB <$> toList (getEntityKeyFields ent)
 
 putManySql' :: [Text] -> [FieldDef] -> EntityDef -> Int -> Text
 putManySql' conflictColumns fields ent n = q
@@ -691,7 +691,7 @@ putManySql' conflictColumns fields ent n = q
     fieldDbToText = escapeF . fieldDB
     mkAssignment f = T.concat [f, "=EXCLUDED.", f]
 
-    table = escapeE . entityDB $ ent
+    table = escapeE . getEntityDBName $ ent
     columns = Util.commaSeparated $ map fieldDbToText fields
     placeholders = map (const "?") fields
     updates = map (mkAssignment . fieldDbToText) fields

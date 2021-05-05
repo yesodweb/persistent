@@ -1,5 +1,5 @@
 name:            persistent-mysql
-version:         2.12.1.0
+version:         2.13.0.0
 license:         MIT
 license-file:    LICENSE
 author:          Felipe Lessa <felipe.lessa@gmail.com>, Michael Snoyman
@@ -28,7 +28,7 @@ extra-source-files: ChangeLog.md
 
 library
     build-depends:   base             >= 4.9      && < 5
-                   , persistent       >= 2.12   && < 3
+                   , persistent       >= 2.13   && < 3
                    , aeson            >= 1.0
                    , blaze-builder
                    , bytestring       >= 0.10.8
@@ -54,28 +54,34 @@ test-suite test
     type:            exitcode-stdio-1.0
     main-is:         main.hs
     hs-source-dirs:  test
-    other-modules:   MyInit
-                     InsertDuplicateUpdate
-                     CustomConstraintTest
+    other-modules:   
+        MyInit
+        InsertDuplicateUpdate
+        CustomConstraintTest
+        ImplicitUuidSpec
     ghc-options:     -Wall
 
-    build-depends:   base             >= 4.9 && < 5
-                   , persistent
-                   , persistent-mysql
-                   , persistent-qq
-                   , persistent-test
-                   , bytestring
-                   , containers
-                   , fast-logger
-                   , hspec            >= 2.4
-                   , HUnit
-                   , monad-logger
-                   , mysql
-                   , QuickCheck
-                   , quickcheck-instances
-                   , resourcet
-                   , text
-                   , time
-                   , transformers
-                   , unliftio-core
+    build-depends:   
+        base             >= 4.9 && < 5
+      , aeson
+      , bytestring
+      , containers
+      , fast-logger
+      , hspec            >= 2.4
+      , http-api-data
+      , HUnit
+      , monad-logger
+      , mysql
+      , path-pieces
+      , persistent
+      , persistent-mysql
+      , persistent-qq
+      , persistent-test
+      , QuickCheck
+      , quickcheck-instances
+      , resourcet
+      , text
+      , time
+      , transformers
+      , unliftio-core
     default-language: Haskell2010

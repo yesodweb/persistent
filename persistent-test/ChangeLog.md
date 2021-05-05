@@ -1,5 +1,10 @@
 ## Unreleased changes
 
+## 2.13.0.0 (unreleased)
+
+* [#1225](https://github.com/yesodweb/persistent/pull/1225)
+    * Support `persistent-2.13` changes for SqlBackend being made internal.
+
 ## 2.12.0.0
 
 * Decomposed `HaskellName` into `ConstraintNameHS`, `EntityNameHS`, `FieldNameHS`. Decomposed `DBName` into `ConstraintNameDB`, `EntityNameDB`, `FieldNameDB` respectively. [#1174](https://github.com/yesodweb/persistent/pull/1174)

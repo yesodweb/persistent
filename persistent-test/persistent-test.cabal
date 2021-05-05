@@ -1,5 +1,5 @@
 name:            persistent-test
-version:         2.12.0.0
+version:         2.13.0.0
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -60,7 +60,6 @@ library
 
     build-depends: 
         base                     >= 4.9       && < 5
-      , persistent               >= 2.12      && < 2.13
       , aeson                    >= 1.0
       , blaze-html               >= 0.9
       , bytestring               >= 0.10
@@ -69,11 +68,13 @@ library
       , exceptions               >= 0.8
       , hspec                    >= 2.4
       , hspec-expectations
+      , http-api-data
       , HUnit
       , monad-control
       , monad-logger             >= 0.3.25
       , mtl
       , path-pieces              >= 0.2
+      , persistent               >= 2.13      && < 2.14
       , QuickCheck               >= 2.9
       , quickcheck-instances     >= 0.3
       , random                   >= 1.1

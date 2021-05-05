@@ -55,8 +55,7 @@ import Database.Persist.Types
 -- you must manually place a unique index on a field to have a uniqueness
 -- constraint.
 --
-class (PersistCore backend, PersistStoreRead backend) =>
-      PersistUniqueRead backend  where
+class PersistStoreRead backend => PersistUniqueRead backend  where
     -- | Get a record by unique key, if available. Returns also the identifier.
     --
     -- === __Example usage__
@@ -297,13 +296,13 @@ class PersistEntity record => OnlyOneUniqueKey record where
 -- | Given a proxy for a 'PersistEntity' record, this returns the sole
 -- 'UniqueDef' for that entity.
 --
--- @since TODO release me
+-- @since 2.13.0.0
 onlyOneUniqueDef
     :: (OnlyOneUniqueKey record, Monad proxy)
     => proxy record
     -> UniqueDef
 onlyOneUniqueDef prxy =
-    case entityUniques (entityDef prxy) of
+    case getEntityUniques (entityDef prxy) of
         [uniq] -> uniq
         _ -> error "impossible due to OnlyOneUniqueKey constraint"
 
@@ -352,7 +351,7 @@ atLeastOneUniqueDef
     => proxy record
     -> NonEmpty UniqueDef
 atLeastOneUniqueDef prxy =
-    case entityUniques (entityDef prxy) of
+    case getEntityUniques (entityDef prxy) of
         (x:xs) -> x :| xs
         _ ->
             error "impossible due to AtLeastOneUniqueKey record constraint"

@@ -1,3 +1,5 @@
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
@@ -18,6 +20,7 @@ module PgInit
     , module Control.Monad.Trans.Reader
     , module Control.Monad
     , module Database.Persist.Sql
+    , module Database.Persist.SqlBackend
     , module Database.Persist
     , module Database.Persist.Sql.Raw.QQ
     , module Init
@@ -27,12 +30,16 @@ module PgInit
     , BS.ByteString
     , Int32, Int64
     , liftIO
-    , mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase
+    , mkPersist, migrateModels, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase
+    , mkEntityDefList
+    , setImplicitIdDef
     , SomeException
     , Text
     , TestFn(..)
     , LoggingT
     , ResourceT
+    , UUID(..)
+    , sqlSettingsUuid
     ) where
 
 import Init
@@ -53,37 +60,54 @@ import Init
        , (==@)
        , (@/=)
        , (@==)
+       , UUID(..)
+       , sqlSettingsUuid
        )
 
 -- re-exports
 import Control.Exception (SomeException)
 import Control.Monad (forM_, liftM, replicateM, void, when)
 import Control.Monad.Trans.Reader
-import Data.Aeson (Value(..))
+import Data.Aeson (ToJSON, FromJSON, Value(..))
 import Database.Persist.Postgresql.JSON ()
 import Database.Persist.Sql.Raw.QQ
+import Database.Persist.SqlBackend
 import Database.Persist.TH
        ( MkPersistSettings(..)
        , mkMigrate
+       , migrateModels
        , mkPersist
        , persistLowerCase
        , persistUpperCase
        , share
        , sqlSettings
+       , setImplicitIdDef
+       , mkEntityDefList
        )
 import Test.Hspec
-       (Spec, afterAll_, before, beforeAll, describe, fdescribe, fit, it,
-       before_, SpecWith, Arg, hspec)
+       ( Arg
+       , Spec
+       , SpecWith
+       , afterAll_
+       , before
+       , beforeAll
+       , before_
+       , describe
+       , fdescribe
+       , fit
+       , hspec
+       , it
+       )
 import Test.Hspec.Expectations.Lifted
 import Test.QuickCheck.Instances ()
 import UnliftIO
+import qualified Data.Text.Encoding as TE
 
 -- testing
 import Test.HUnit (Assertion, assertBool, assertFailure, (@=?), (@?=))
 import Test.QuickCheck
 
 import Control.Monad (unless, (>=>))
-
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger
 import Control.Monad.Trans.Resource (ResourceT, runResourceT)

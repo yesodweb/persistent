@@ -1,12 +1,12 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+
 module Database.Persist.Sql.Util
     ( parseEntityValues
-    , entityColumnNames
     , keyAndEntityColumnNames
     , entityColumnCount
     , isIdField
-    , hasCompositeKey
-    , hasCompositePrimaryKey
     , hasNaturalKey
+    , hasCompositePrimaryKey
     , dbIdColumns
     , dbIdColumnsEsc
     , dbColumns
@@ -20,40 +20,46 @@ module Database.Persist.Sql.Util
     , mkInsertPlaceholders
     ) where
 
+import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.Maybe as Maybe
 import Data.Monoid ((<>))
 import Data.Text (Text, pack)
 import qualified Data.Text as T
 
-import Database.Persist (
-    Entity(Entity), EntityDef, EntityField, FieldNameHS(FieldNameHS)
-  , PersistEntity(..), PersistValue
-  , keyFromValues, fromPersistValues, fieldDB, entityId, entityPrimary
-  , entityFields, entityKeyFields, fieldHaskell, compositeFields, persistFieldDef
-  , keyAndEntityFields, toPersistValue, FieldNameDB, Update(..), PersistUpdate(..)
-  , FieldDef(..)
-  )
+import Database.Persist
+       ( Entity(Entity)
+       , EntityDef
+       , EntityField
+       , FieldDef(..)
+       , FieldNameDB
+       , FieldNameHS(FieldNameHS)
+       , PersistEntity(..)
+       , PersistUpdate(..)
+       , PersistValue
+       , Update(..)
+       , compositeFields
+       , entityPrimary
+       , fieldDB
+       , fieldHaskell
+       , fromPersistValues
+       , getEntityFields
+       , getEntityKeyFields
+       , keyAndEntityFields
+       , keyFromValues
+       , persistFieldDef
+       , toPersistValue
+       )
 
-import Database.Persist.Sql.Types (Sql, SqlBackend, connEscapeFieldName)
+import Database.Persist.Sql.Types (Sql)
+import Database.Persist.SqlBackend.Internal (SqlBackend(..))
 
-entityColumnNames :: EntityDef -> SqlBackend -> [Sql]
-entityColumnNames ent conn =
-     (if hasCompositeKey ent
-      then [] else [connEscapeFieldName conn . fieldDB $ entityId ent])
-  <> map (connEscapeFieldName conn . fieldDB) (entityFields ent)
-
-keyAndEntityColumnNames :: EntityDef -> SqlBackend -> [Sql]
-keyAndEntityColumnNames ent conn = map (connEscapeFieldName conn . fieldDB) (keyAndEntityFields ent)
+keyAndEntityColumnNames :: EntityDef -> SqlBackend -> NonEmpty Sql
+keyAndEntityColumnNames ent conn =
+    fmap (connEscapeFieldName conn . fieldDB) (keyAndEntityFields ent)
 
 entityColumnCount :: EntityDef -> Int
-entityColumnCount e = length (entityFields e)
-                    + if hasCompositeKey e then 0 else 1
-
-{-# DEPRECATED hasCompositeKey "hasCompositeKey is misleading - it returns True if the entity is defined with the Primary keyword. See issue #685 for discussion. \n If you want the same behavior, use 'hasNaturalKey'. If you want to know if the key has multiple fields, use 'hasCompositePrimaryKey'. This function will be removed in the next major version." #-}
--- | Deprecated as of 2.11. See 'hasNaturalKey' or 'hasCompositePrimaryKey'
--- for replacements.
-hasCompositeKey :: EntityDef -> Bool
-hasCompositeKey = Maybe.isJust . entityPrimary
+entityColumnCount e = length (getEntityFields e)
+                    + if hasNaturalKey e then 0 else 1
 
 -- | Returns 'True' if the entity has a natural key defined with the
 -- Primary keyword.
@@ -137,35 +143,33 @@ hasCompositePrimaryKey ed =
     case entityPrimary ed of
         Just cdef ->
             case compositeFields cdef of
-                (_ : _ : _) ->
+                (_ :| _ : _) ->
                     True
                 _ ->
                     False
         Nothing ->
             False
 
-dbIdColumns :: SqlBackend -> EntityDef -> [Text]
+dbIdColumns :: SqlBackend -> EntityDef -> NonEmpty Text
 dbIdColumns conn = dbIdColumnsEsc (connEscapeFieldName conn)
 
-dbIdColumnsEsc :: (FieldNameDB -> Text) -> EntityDef -> [Text]
-dbIdColumnsEsc esc t = map (esc . fieldDB) $ entityKeyFields t
+dbIdColumnsEsc :: (FieldNameDB -> Text) -> EntityDef -> NonEmpty Text
+dbIdColumnsEsc esc t = fmap (esc . fieldDB) $ getEntityKeyFields t
 
-dbColumns :: SqlBackend -> EntityDef -> [Text]
-dbColumns conn t = case entityPrimary t of
-    Just _  -> flds
-    Nothing -> escapeColumn (entityId t) : flds
+dbColumns :: SqlBackend -> EntityDef -> NonEmpty Text
+dbColumns conn =
+    fmap escapeColumn . keyAndEntityFields
   where
     escapeColumn = connEscapeFieldName conn . fieldDB
-    flds = map escapeColumn (entityFields t)
 
 parseEntityValues :: PersistEntity record
                   => EntityDef -> [PersistValue] -> Either Text (Entity record)
 parseEntityValues t vals =
     case entityPrimary t of
       Just pdef ->
-            let pks = map fieldHaskell $ compositeFields pdef
+            let pks = fmap fieldHaskell $ compositeFields pdef
                 keyvals = map snd . filter ((`elem` pks) . fst)
-                        $ zip (map fieldHaskell $ entityFields t) vals
+                        $ zip (map fieldHaskell $ getEntityFields t) vals
             in fromPersistValuesComposite' keyvals vals
       Nothing -> fromPersistValues' vals
   where
@@ -188,7 +192,10 @@ parseEntityValues t vals =
                 Right key -> Right (Entity key xs')
 
 
-isIdField :: PersistEntity record => EntityField record typ -> Bool
+isIdField
+    :: forall record typ. (PersistEntity record)
+    => EntityField record typ
+    -> Bool
 isIdField f = fieldHaskell (persistFieldDef f) == FieldNameHS "Id"
 
 -- | Gets the 'FieldDef' for an 'Update'.
@@ -236,7 +243,7 @@ mkInsertValues
     -> [PersistValue]
 mkInsertValues entity =
     Maybe.catMaybes
-        . zipWith redactGeneratedCol (entityFields . entityDef $ Just entity)
+        . zipWith redactGeneratedCol (getEntityFields . entityDef $ Just entity)
         . map toPersistValue
         $ toPersistFields entity
   where
@@ -258,7 +265,7 @@ mkInsertPlaceholders
     -- ^ An `escape` function
     -> [(Text, Text)]
 mkInsertPlaceholders ed escape =
-    Maybe.mapMaybe redactGeneratedCol (entityFields ed)
+    Maybe.mapMaybe redactGeneratedCol (getEntityFields ed)
   where
     redactGeneratedCol fd = case fieldGenerated fd of
         Nothing ->

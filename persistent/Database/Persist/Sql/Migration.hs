@@ -15,6 +15,7 @@ module Database.Persist.Sql.Migration
   , reportError
   , addMigrations
   , addMigration
+  , runSqlCommand
   ) where
 
 
@@ -31,6 +32,7 @@ import System.IO.Silently (hSilence)
 import GHC.Stack
 
 import Database.Persist.Sql.Types
+import Database.Persist.Sql.Types.Internal
 import Database.Persist.Sql.Raw
 import Database.Persist.Types
 import Database.Persist.Sql.Orphan.PersistStore()
@@ -208,3 +210,14 @@ addMigrations
     :: CautiousMigration
     -> Migration
 addMigrations = lift . tell
+
+-- | Run an action against the database during a migration. Can be useful for eg
+-- creating Postgres extensions:
+--
+-- @
+-- runSqlCommand $ 'rawExecute' "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";" []
+-- @
+--
+-- @since 2.13.0.0
+runSqlCommand :: SqlPersistT IO () -> Migration
+runSqlCommand = lift . lift

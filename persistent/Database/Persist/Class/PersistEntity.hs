@@ -1,15 +1,15 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE AllowAmbiguousTypes #-}
 
 module Database.Persist.Class.PersistEntity
     ( PersistEntity (..)
@@ -32,12 +32,22 @@ module Database.Persist.Class.PersistEntity
     , SymbolToField (..)
     ) where
 
-import Data.Aeson (ToJSON (..), withObject, FromJSON (..), fromJSON, object, (.:), (.=), Value (Object))
+import Data.Aeson
+       ( FromJSON(..)
+       , ToJSON(..)
+       , Value(Object)
+       , fromJSON
+       , object
+       , withObject
+       , (.:)
+       , (.=)
+       )
 import qualified Data.Aeson.Parser as AP
-import Data.Aeson.Types (Parser,Result(Error,Success))
 import Data.Aeson.Text (encodeToTextBuilder)
+import Data.Aeson.Types (Parser, Result(Error, Success))
 import Data.Attoparsec.ByteString (parseOnly)
 import qualified Data.HashMap.Strict as HM
+import Data.List.NonEmpty (NonEmpty(..))
 import Data.Maybe (isJust)
 import Data.Monoid (mappend)
 import Data.Text (Text)
@@ -50,6 +60,7 @@ import GHC.OverloadedLabels
 import GHC.TypeLits
 
 import Database.Persist.Class.PersistField
+import Database.Persist.Names
 import Database.Persist.Types.Base
 
 -- | Persistent serialized Haskell records to the database.
@@ -104,7 +115,7 @@ class ( PersistField (Key record), ToJSON (Key record), FromJSON (Key record)
     -- | A meta operation to retrieve all the 'Unique' keys.
     persistUniqueKeys :: record -> [Unique record]
     -- | A lower level operation.
-    persistUniqueToFieldNames :: Unique record -> [(FieldNameHS, FieldNameDB)]
+    persistUniqueToFieldNames :: Unique record -> NonEmpty (FieldNameHS, FieldNameDB)
     -- | A lower level operation.
     persistUniqueToValues :: Unique record -> [PersistValue]
 

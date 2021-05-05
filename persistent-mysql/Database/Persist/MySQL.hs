@@ -26,8 +26,6 @@ module Database.Persist.MySQL
     , insertOnDuplicateKeyUpdate
     , insertManyOnDuplicateKeyUpdate
     , HandleUpdateCollision
-    , pattern SomeField
-    , SomeField
     , copyField
     , copyUnlessNull
     , copyUnlessEmpty
@@ -48,6 +46,7 @@ import Control.Monad.Trans.Except (ExceptT, runExceptT)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT)
 import Control.Monad.Trans.Writer (runWriterT)
 
+import qualified Data.List.NonEmpty as NEL
 import Data.Acquire (Acquire, mkAcquire, with)
 import Data.Aeson
 import Data.Aeson.Types (modifyFailure)
@@ -73,6 +72,7 @@ import GHC.Stack
 import System.Environment (getEnvironment)
 
 import Database.Persist.Sql
+import Database.Persist.SqlBackend
 import Database.Persist.Sql.Types.Internal (makeIsolationLevelStatement)
 import qualified Database.Persist.Sql.Util as Util
 
@@ -87,39 +87,39 @@ import qualified Database.MySQL.Simple.Types as MySQL
 -- The pool is properly released after the action finishes using
 -- it.  Note that you should not use the given 'ConnectionPool'
 -- outside the action since it may be already been released.
-withMySQLPool :: (MonadLoggerIO m, MonadUnliftIO m)
-              => MySQL.ConnectInfo
-              -- ^ Connection information.
-              -> Int
-              -- ^ Number of connections to be kept open in the pool.
-              -> (Pool SqlBackend -> m a)
-              -- ^ Action to be executed that uses the connection pool.
-              -> m a
+withMySQLPool
+    :: (MonadLoggerIO m, MonadUnliftIO m)
+    => MySQL.ConnectInfo
+    -- ^ Connection information.
+    -> Int
+    -- ^ Number of connections to be kept open in the pool.
+    -> (Pool SqlBackend -> m a)
+    -- ^ Action to be executed that uses the connection pool.
+    -> m a
 withMySQLPool ci = withSqlPool $ open' ci
-
 
 -- | Create a MySQL connection pool.  Note that it's your
 -- responsibility to properly close the connection pool when
 -- unneeded.  Use 'withMySQLPool' for automatic resource control.
-createMySQLPool :: (MonadUnliftIO m, MonadLoggerIO m)
-                => MySQL.ConnectInfo
-                -- ^ Connection information.
-                -> Int
-                -- ^ Number of connections to be kept open in the pool.
-                -> m (Pool SqlBackend)
+createMySQLPool
+    :: (MonadUnliftIO m, MonadLoggerIO m)
+    => MySQL.ConnectInfo
+    -- ^ Connection information.
+    -> Int
+    -- ^ Number of connections to be kept open in the pool.
+    -> m (Pool SqlBackend)
 createMySQLPool ci = createSqlPool $ open' ci
-
 
 -- | Same as 'withMySQLPool', but instead of opening a pool
 -- of connections, only one connection is opened.
-withMySQLConn :: (MonadUnliftIO m, MonadLoggerIO m)
-              => MySQL.ConnectInfo
-              -- ^ Connection information.
-              -> (SqlBackend -> m a)
-              -- ^ Action to be executed that uses the connection.
-              -> m a
+withMySQLConn
+    :: (MonadUnliftIO m, MonadLoggerIO m)
+    => MySQL.ConnectInfo
+    -- ^ Connection information.
+    -> (SqlBackend -> m a)
+    -- ^ Action to be executed that uses the connection.
+    -> m a
 withMySQLConn = withSqlConn . open'
-
 
 -- | Open a connection to MySQL server, initialize the 'SqlBackend' and return
 -- their tuple
@@ -131,39 +131,36 @@ openMySQLConn ci logFunc = do
     MySQLBase.autocommit conn False -- disable autocommit!
     smap <- newIORef $ Map.empty
     let
-      backend = SqlBackend
-        { connPrepare    = prepare' conn
-        , connStmtMap    = smap
-        , connInsertSql  = insertSql'
-        , connInsertManySql = Nothing
-        , connUpsertSql = Nothing
-        , connPutManySql = Just putManySql
-        , connClose      = MySQL.close conn
-        , connMigrateSql = migrate' ci
-        , connBegin      = \_ mIsolation -> do
-            forM_ mIsolation $ \iso -> MySQL.execute_ conn (makeIsolationLevelStatement iso)
-            MySQL.execute_ conn "start transaction" >> return ()
-        , connCommit     = const $ MySQL.commit   conn
-        , connRollback   = const $ MySQL.rollback conn
-        , connEscapeFieldName = T.pack . escapeF
-        , connEscapeTableName = T.pack . escapeE . entityDB
-        , connEscapeRawName = T.pack . escapeDBName . T.unpack
-        , connNoLimit    = "LIMIT 18446744073709551615"
-        -- This noLimit is suggested by MySQL's own docs, see
-        -- <http://dev.mysql.com/doc/refman/5.5/en/select.html>
-        , connRDBMS      = "mysql"
-        , connLimitOffset = decorateSQLWithLimitOffset "LIMIT 18446744073709551615"
-        , connLogFunc    = logFunc
-        , connMaxParams = Nothing
-        , connRepsertManySql = Just repsertManySql
-        }
+        backend =
+            setConnPutManySql putManySql $
+            setConnRepsertManySql repsertManySql $
+            mkSqlBackend MkSqlBackendArgs
+                { connPrepare    = prepare' conn
+                , connStmtMap    = smap
+                , connInsertSql  = insertSql'
+                , connClose      = MySQL.close conn
+                , connMigrateSql = migrate' ci
+                , connBegin      = \_ mIsolation -> do
+                    forM_ mIsolation $ \iso -> MySQL.execute_ conn (makeIsolationLevelStatement iso)
+                    MySQL.execute_ conn "start transaction" >> return ()
+                , connCommit     = const $ MySQL.commit   conn
+                , connRollback   = const $ MySQL.rollback conn
+                , connEscapeFieldName = T.pack . escapeF
+                , connEscapeTableName = T.pack . escapeE . getEntityDBName
+                , connEscapeRawName = T.pack . escapeDBName . T.unpack
+                , connNoLimit    = "LIMIT 18446744073709551615"
+                -- This noLimit is suggested by MySQL's own docs, see
+                -- <http://dev.mysql.com/doc/refman/5.5/en/select.html>
+                , connRDBMS      = "mysql"
+                , connLimitOffset = decorateSQLWithLimitOffset "LIMIT 18446744073709551615"
+                , connLogFunc    = logFunc
+                }
     pure (conn, backend)
 
 
 -- | Internal function that opens a connection to the MySQL server.
 open' :: MySQL.ConnectInfo -> LogFunc -> IO SqlBackend
 open' ci logFunc = snd <$> openMySQLConn ci logFunc
-
 
 -- | Prepare a query.  We don't support prepared statements, but
 -- we'll do some client-side preprocessing here.
@@ -181,14 +178,16 @@ prepare' conn sql = do
 -- | SQL code to be executed when inserting an entity.
 insertSql' :: EntityDef -> [PersistValue] -> InsertSqlResult
 insertSql' ent vals =
-    case entityPrimary ent of
-        Just _ -> ISRManyKeys sql vals
-        Nothing -> ISRInsertGet sql "SELECT LAST_INSERT_ID()"
+    case getEntityId ent of
+        EntityIdNaturalKey _ ->
+            ISRManyKeys sql vals
+        EntityIdField _ ->
+            ISRInsertGet sql "SELECT LAST_INSERT_ID()"
   where
     (fieldNames, placeholders) = unzip (Util.mkInsertPlaceholders ent escapeFT)
     sql = T.concat
         [ "INSERT INTO "
-        , escapeET $ entityDB ent
+        , escapeET $ getEntityDBName ent
         , "("
         , T.intercalate "," fieldNames
         , ") VALUES("
@@ -353,7 +352,7 @@ migrate' :: MySQL.ConnectInfo
          -> EntityDef
          -> IO (Either [Text] [(Bool, Text)])
 migrate' connectInfo allDefs getter val = do
-    let name = entityDB val
+    let name = getEntityDBName val
     let (newcols, udefs, fdefs) = mysqlMkColumns allDefs val
     old <- getColumns connectInfo getter val newcols
     let udspair = map udToPair udefs
@@ -374,7 +373,7 @@ migrate' connectInfo allDefs getter val = do
                     let refTarget =
                           addReference allDefs refConstraintName refTblName cname (crFieldCascade cRef)
 
-                    guard $ cname /= fieldDB (entityId val)
+                    guard $ Just cname /= fmap fieldDB (getEntityIdField val)
                     return $ AlterColumn name refTarget
 
 
@@ -448,35 +447,58 @@ migrate' connectInfo allDefs getter val = do
 
 addTable :: [Column] -> EntityDef -> AlterDB
 addTable cols entity = AddTable $ concat
-           -- Lower case e: see Database.Persist.Sql.Migration
-           [ "CREATe TABLE "
-           , escapeE name
-           , "("
-           , idtxt
-           , if null nonIdCols then [] else ","
-           , intercalate "," $ map showColumn nonIdCols
-           , ")"
-           ]
-    where
-      nonIdCols =
-          filter (\c -> cName c /= fieldDB (entityId entity) ) cols
-      name = entityDB entity
-      idtxt = case entityPrimary entity of
-                Just pdef -> concat [" PRIMARY KEY (", intercalate "," $ map (escapeF . fieldDB) $ compositeFields pdef, ")"]
-                Nothing ->
-                  let defText = defaultAttribute $ fieldAttrs $ entityId entity
-                      sType = fieldSqlType $ entityId entity
-                      autoIncrementText = case (sType, defText) of
-                        (SqlInt64, Nothing) -> " AUTO_INCREMENT"
-                        _ -> ""
-                      maxlen = findMaxLenOfField (entityId entity)
-                  in concat
-                         [ escapeF $ fieldDB $ entityId entity
-                         , " " <> showSqlType sType maxlen False
-                         , " NOT NULL"
-                         , autoIncrementText
-                         , " PRIMARY KEY"
-                         ]
+    -- Lower case e: see Database.Persist.Sql.Migration
+    [ "CREATe TABLE "
+    , escapeE name
+    , "("
+    , idtxt
+    , if null nonIdCols then [] else ","
+    , intercalate "," $ map showColumn nonIdCols
+    , ")"
+    ]
+  where
+    nonIdCols =
+        filter (\c -> Just (cName c) /= fmap fieldDB (getEntityIdField entity) ) cols
+    name =
+        getEntityDBName entity
+    idtxt =
+        case getEntityId entity of
+            EntityIdNaturalKey pdef ->
+                concat
+                    [ " PRIMARY KEY ("
+                    , intercalate ","
+                  $ map (escapeF . fieldDB) $ NEL.toList $ compositeFields pdef
+                    , ")"
+                    ]
+            EntityIdField idField ->
+                let
+                    defText =
+                        defaultAttribute $ fieldAttrs idField
+                    sType =
+                        fieldSqlType idField
+                    autoIncrementText =
+                        case (sType, defText) of
+                            (SqlInt64, Nothing) -> " AUTO_INCREMENT"
+                            _ -> ""
+                    maxlen =
+                        findMaxLenOfField idField
+                in
+                    concat
+                        [ escapeF $ fieldDB idField
+                        , " " <> showSqlType sType maxlen False
+                        , " NOT NULL"
+                        , autoIncrementText
+                        , " PRIMARY KEY"
+                        , case defText of
+                            Nothing ->
+                                ""
+                            Just def ->
+                                concat
+                                    [ " DEFAULT ("
+                                    , T.unpack def
+                                    , ")"
+                                    ]
+                        ]
 
 -- | Find out the type of a column.
 findTypeOfColumn :: [EntityDef] -> EntityNameDB -> FieldNameDB -> (FieldNameDB, FieldType)
@@ -488,8 +510,8 @@ findTypeOfColumn allDefs name col =
         )
         ((,) col)
         $ do
-            entDef   <- find ((== name) . entityDB) allDefs
-            fieldDef <- find ((== col)  . fieldDB) (entityFields entDef)
+            entDef   <- find ((== name) . getEntityDBName) allDefs
+            fieldDef <- find ((== col)  . fieldDB) (getEntityFieldsDatabase entDef)
             return (fieldType fieldDef)
 
 -- | Find out the maxlen of a column (default to 200)
@@ -497,8 +519,8 @@ findMaxLenOfColumn :: [EntityDef] -> EntityNameDB -> FieldNameDB -> (FieldNameDB
 findMaxLenOfColumn allDefs name col =
    maybe (col, 200)
          ((,) col) $ do
-           entDef     <- find ((== name) . entityDB) allDefs
-           fieldDef   <- find ((== col) . fieldDB) (entityFields entDef)
+           entDef     <- find ((== name) . getEntityDBName) allDefs
+           fieldDef   <- find ((== col) . fieldDB) (getEntityFieldsDatabase entDef)
            findMaxLenOfField fieldDef
 
 -- | Find out the maxlen of a field
@@ -532,8 +554,8 @@ addReference allDefs fkeyname reftable cname fc =
             ++ " (allDefs = " ++ show allDefs ++ ")"
     referencedColumns =
         fromMaybe errorMessage $ do
-            entDef <- find ((== reftable) . entityDB) allDefs
-            return $ map fieldDB $ entityKeyFields entDef
+            entDef <- find ((== reftable) . getEntityDBName) allDefs
+            return $ map fieldDB $ NEL.toList $ getEntityKeyFields entDef
 
 data AlterColumn = Change Column
                  | Add' Column
@@ -564,7 +586,7 @@ data AlterDB = AddTable String
 
 
 udToPair :: UniqueDef -> (ConstraintNameDB, [FieldNameDB])
-udToPair ud = (uniqueDBName ud, map snd $ uniqueFields ud)
+udToPair ud = (uniqueDBName ud, map snd $ NEL.toList $ uniqueFields ud)
 
 ----------------------------------------------------------------------
 
@@ -621,15 +643,15 @@ getColumns connectInfo getter def cols = do
                 Nothing -> rs
                 (Just r) -> (unFieldNameDB $ cName c, r) : rs
     vals = [ PersistText $ pack $ MySQL.connectDatabase connectInfo
-           , PersistText $ unEntityNameDB $ entityDB def
-        --   , PersistText $ unDBName $ fieldDB $ entityId def
+           , PersistText $ unEntityNameDB $ getEntityDBName def
+        --   , PersistText $ unDBName $ fieldDB $ getEntityId def
            ]
 
     helperClmns = CL.mapM getIt .| CL.consume
         where
           getIt row = fmap (either Left (Right . Left)) .
                       liftIO .
-                      getColumn connectInfo getter (entityDB def) row $ ref
+                      getColumn connectInfo getter (getEntityDBName def) row $ ref
             where ref = case row of
                     (PersistText cname : _) -> (Map.lookup cname refMap)
                     _ -> Nothing
@@ -837,7 +859,7 @@ getAlters
 getAlters allDefs edef (c1, u1) (c2, u2) =
     (getAltersC c1 c2, getAltersU u1 u2)
   where
-    tblName = entityDB edef
+    tblName = getEntityDBName edef
     getAltersC [] old = concatMap dropColumn old
     getAltersC (new:news) old =
         let (alters, old') = findAlters edef allDefs new old
@@ -900,8 +922,9 @@ findAlters edef allDefs col@(Column name isNull type_ def gen _defConstraintName
                 refAdd  =
                     case (ref == ref', ref) of
                         (False, Just ColumnReference {crTableName=tname, crConstraintName=cname, crFieldCascade = cfc })
-                            | tname /= entityDB edef
-                            , unConstraintNameDB cname /= unFieldNameDB (fieldDB (entityId edef))
+                            | tname /= getEntityDBName edef
+                            , Just idField <- getEntityIdField edef
+                            , unConstraintNameDB cname /= unFieldNameDB (fieldDB idField)
                             ->
                             [addReference allDefs cname tname name cfc]
                         _ -> []
@@ -1211,7 +1234,7 @@ mockMigrate :: MySQL.ConnectInfo
          -> EntityDef
          -> IO (Either [Text] [(Bool, Text)])
 mockMigrate _connectInfo allDefs _getter val = do
-    let name = entityDB val
+    let name = getEntityDBName val
     let (newcols, udefs, fdefs) = mysqlMkColumns allDefs val
     let udspair = map udToPair udefs
     case () of
@@ -1255,37 +1278,34 @@ mockMigrate _connectInfo allDefs _getter val = do
 -- the actual database isn't already present in the system.
 mockMigration :: Migration -> IO ()
 mockMigration mig = do
-  smap <- newIORef $ Map.empty
-  let sqlbackend = SqlBackend { connPrepare = \_ -> do
-                                             return Statement
-                                                        { stmtFinalize = return ()
-                                                        , stmtReset = return ()
-                                                        , stmtExecute = undefined
-                                                        , stmtQuery = \_ -> return $ return ()
-                                                        },
-                             connInsertManySql = Nothing,
-                             connInsertSql = undefined,
-                             connStmtMap = smap,
-                             connClose = undefined,
-                             connMigrateSql = mockMigrate undefined,
-                             connBegin = undefined,
-                             connCommit = undefined,
-                             connRollback = undefined,
-                             connEscapeFieldName = T.pack . escapeDBName . T.unpack . unFieldNameDB,
-                             connEscapeTableName = T.pack . escapeDBName . T.unpack . unEntityNameDB . entityDB,
-                             connEscapeRawName = T.pack . escapeDBName . T.unpack,
-                             connNoLimit = undefined,
-                             connRDBMS = undefined,
-                             connLimitOffset = undefined,
-                             connLogFunc = undefined,
-                             connUpsertSql = undefined,
-                             connPutManySql = undefined,
-                             connMaxParams = Nothing,
-                             connRepsertManySql = Nothing
-                             }
-      result = runReaderT . runWriterT . runWriterT $ mig
-  resp <- result sqlbackend
-  mapM_ T.putStrLn $ map snd $ snd resp
+    smap <- newIORef $ Map.empty
+    let sqlbackend =
+            mkSqlBackend MkSqlBackendArgs
+                { connPrepare = \_ -> do
+                    return Statement
+                        { stmtFinalize = return ()
+                        , stmtReset = return ()
+                        , stmtExecute = undefined
+                        , stmtQuery = \_ -> return $ return ()
+                        }
+                , connInsertSql = undefined
+                , connStmtMap = smap
+                , connClose = undefined
+                , connMigrateSql = mockMigrate undefined
+                , connBegin = undefined
+                , connCommit = undefined
+                , connRollback = undefined
+                , connEscapeFieldName = T.pack . escapeDBName . T.unpack . unFieldNameDB
+                , connEscapeTableName = T.pack . escapeDBName . T.unpack . unEntityNameDB . getEntityDBName
+                , connEscapeRawName = T.pack . escapeDBName . T.unpack
+                , connNoLimit = undefined
+                , connRDBMS = undefined
+                , connLimitOffset = undefined
+                , connLogFunc = undefined
+                }
+        result = runReaderT . runWriterT . runWriterT $ mig
+    resp <- result sqlbackend
+    mapM_ T.putStrLn $ map snd $ snd resp
 
 -- | MySQL specific 'upsert_'. This will prevent multiple queries, when one will
 -- do. The record will be inserted into the database. In the event that the
@@ -1310,21 +1330,10 @@ insertOnDuplicateKeyUpdate record =
 --
 -- @since 2.8.0
 data HandleUpdateCollision record where
-  -- | Copy the field directly from the record.
-  CopyField :: EntityField record typ -> HandleUpdateCollision record
-  -- | Only copy the field if it is not equal to the provided value.
-  CopyUnlessEq :: PersistField typ => EntityField record typ -> typ -> HandleUpdateCollision record
-
--- | An alias for 'HandleUpdateCollision'. The type previously was only
--- used to copy a single value, but was expanded to be handle more complex
--- queries.
---
--- @since 2.6.2
-type SomeField = HandleUpdateCollision
-
-pattern SomeField :: EntityField record typ -> SomeField record
-pattern SomeField x = CopyField x
-{-# DEPRECATED SomeField "The type SomeField is deprecated. Use the type HandleUpdateCollision instead, and use the function copyField instead of the data constructor." #-}
+    -- | Copy the field directly from the record.
+    CopyField :: EntityField record typ -> HandleUpdateCollision record
+    -- | Only copy the field if it is not equal to the provided value.
+    CopyUnlessEq :: PersistField typ => EntityField record typ -> typ -> HandleUpdateCollision record
 
 -- | Copy the field into the database only if the value in the
 -- corresponding record is non-@NULL@.
@@ -1487,8 +1496,8 @@ mkBulkInsertQuery records fieldValues updates =
     firstField = case entityFieldNames of
         [] -> error "The entity you're trying to insert does not have any fields."
         (field:_) -> field
-    entityFieldNames = map fieldDbToText (entityFields entityDef')
-    tableName = T.pack . escapeE . entityDB $ entityDef'
+    entityFieldNames = map fieldDbToText (getEntityFieldsDatabase entityDef')
+    tableName = T.pack . escapeE . getEntityDBName $ entityDef'
     copyUnlessValues = map snd fieldsToMaybeCopy
     recordValues = concatMap (map toPersistValue . toPersistFields) records
     recordPlaceholders = Util.commaSeparated $ map (Util.parenWrapped . Util.commaSeparated . map (const "?") . toPersistFields) records
@@ -1524,12 +1533,12 @@ mkBulkInsertQuery records fieldValues updates =
 putManySql :: EntityDef -> Int -> Text
 putManySql ent n = putManySql' fields ent n
   where
-    fields = entityFields ent
+    fields = getEntityFieldsDatabase ent
 
 repsertManySql :: EntityDef -> Int -> Text
 repsertManySql ent n = putManySql' fields ent n
   where
-    fields = keyAndEntityFields ent
+    fields = NEL.toList $ keyAndEntityFields ent
 
 putManySql' :: [FieldDef] -> EntityDef -> Int -> Text
 putManySql' (filter isFieldNotGenerated -> fields) ent n = q
@@ -1537,7 +1546,7 @@ putManySql' (filter isFieldNotGenerated -> fields) ent n = q
     fieldDbToText = (T.pack . escapeF) . fieldDB
     mkAssignment f = T.concat [f, "=VALUES(", f, ")"]
 
-    table = (T.pack . escapeE) . entityDB $ ent
+    table = (T.pack . escapeE) . getEntityDBName $ ent
     columns = Util.commaSeparated $ map fieldDbToText fields
     placeholders = map (const "?") fields
     updates = map (mkAssignment . fieldDbToText) fields

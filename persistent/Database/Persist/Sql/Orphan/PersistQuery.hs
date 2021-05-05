@@ -3,6 +3,7 @@
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
+-- | TODO: delete this module and get it in with SqlBackend.Internal
 module Database.Persist.Sql.Orphan.PersistQuery
     ( deleteWhereCount
     , updateWhereCount
@@ -20,19 +21,27 @@ import Data.ByteString.Char8 (readInteger)
 import Data.Conduit
 import qualified Data.Conduit.List as CL
 import Data.Int (Int64)
-import Data.List (transpose, inits, find)
+import Data.List (find, inits, transpose)
 import Data.Maybe (isJust)
-import Data.Monoid (Monoid (..), (<>))
-import qualified Data.Text as T
+import Data.Monoid (Monoid(..), (<>))
 import Data.Text (Text)
+import qualified Data.Text as T
+import Data.Foldable (toList)
 
 import Database.Persist hiding (updateField)
-import Database.Persist.Sql.Util (
-    entityColumnNames, parseEntityValues, isIdField, updatePersistValue
-  , mkUpdateText, commaSeparated, dbIdColumns)
-import Database.Persist.Sql.Types
-import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Orphan.PersistStore (withRawQuery)
+import Database.Persist.Sql.Raw
+import Database.Persist.Sql.Types.Internal
+       (SqlBackend(..), SqlReadBackend, SqlWriteBackend)
+import Database.Persist.Sql.Util
+       ( commaSeparated
+       , dbIdColumns
+       , keyAndEntityColumnNames
+       , isIdField
+       , mkUpdateText
+       , parseEntityValues
+       , updatePersistValue
+       )
 
 -- orphaned instance for convenience of modularity
 instance PersistQueryRead SqlBackend where
@@ -91,9 +100,13 @@ instance PersistQueryRead SqlBackend where
       where
         (limit, offset, orders) = limitOffsetOrder opts
 
-        parse vals = case parseEntityValues t vals of
-                       Left s -> liftIO $ throwIO $ PersistMarshalError s
-                       Right row -> return row
+        parse vals =
+            case parseEntityValues t vals of
+                Left s ->
+                    liftIO $ throwIO $
+                        PersistMarshalError ("selectSourceRes: " <> s <> ", vals: " <> T.pack (show vals ))
+                Right row ->
+                    return row
         t = entityDef $ dummyFromFilts filts
         wher conn = if null filts
                     then ""
@@ -102,8 +115,8 @@ instance PersistQueryRead SqlBackend where
             case map (orderClause False conn) orders of
                 [] -> ""
                 ords -> " ORDER BY " <> T.intercalate "," ords
-        cols = commaSeparated . entityColumnNames t
-        sql conn = connLimitOffset conn (limit,offset) (not (null orders)) $ mconcat
+        cols = commaSeparated . toList . keyAndEntityColumnNames t
+        sql conn = connLimitOffset conn (limit,offset) $ mconcat
             [ "SELECT "
             , cols conn
             , " FROM "
@@ -118,13 +131,13 @@ instance PersistQueryRead SqlBackend where
         return $ fmap (.| CL.mapM parse) srcRes
       where
         t = entityDef $ dummyFromFilts filts
-        cols conn = T.intercalate "," $ dbIdColumns conn t
+        cols conn = T.intercalate "," $ toList $ dbIdColumns conn t
 
 
         wher conn = if null filts
                     then ""
                     else filterClause Nothing conn filts
-        sql conn = connLimitOffset conn (limit,offset) (not (null orders)) $ mconcat
+        sql conn = connLimitOffset conn (limit,offset) $ mconcat
             [ "SELECT "
             , cols conn
             , " FROM "
@@ -148,8 +161,8 @@ instance PersistQueryRead SqlBackend where
                            [PersistDouble x] -> return [PersistInt64 (truncate x)] -- oracle returns Double
                            _ -> return xs
                       Just pdef ->
-                           let pks = map fieldHaskell $ compositeFields pdef
-                               keyvals = map snd $ filter (\(a, _) -> let ret=isJust (find (== a) pks) in ret) $ zip (map fieldHaskell $ entityFields t) xs
+                           let pks = map fieldHaskell $ toList $ compositeFields pdef
+                               keyvals = map snd $ filter (\(a, _) -> let ret=isJust (find (== a) pks) in ret) $ zip (map fieldHaskell $ getEntityFields t) xs
                            in return keyvals
             case keyFromValues keyvals of
                 Right k -> return k
@@ -249,13 +262,14 @@ data FilterTablePrefix
     --
     -- @since 2.12.1.0
 
-filterClauseHelper :: (PersistEntity val)
-             => Maybe FilterTablePrefix -- ^ include table name or PostgresSQL EXCLUDED
-             -> Bool -- ^ include WHERE
-             -> SqlBackend
-             -> OrNull
-             -> [Filter val]
-             -> (Text, [PersistValue])
+filterClauseHelper
+    :: (PersistEntity val)
+    => Maybe FilterTablePrefix -- ^ include table name or PostgresSQL EXCLUDED
+    -> Bool -- ^ include WHERE
+    -> SqlBackend
+    -> OrNull
+    -> [Filter val]
+    -> (Text, [PersistValue])
 filterClauseHelper tablePrefix includeWhere conn orNull filters =
     (if not (T.null sql) && includeWhere
         then " WHERE " <> sql
@@ -277,85 +291,96 @@ filterClauseHelper tablePrefix includeWhere conn orNull filters =
     go (FilterOr fs)  = combine " OR " fs
     go (Filter field value pfilter) =
         let t = entityDef $ dummyFromFilts [Filter field value pfilter]
-        in case (isIdField field, entityPrimary t, allVals) of
-                 (True, Just pdef, PersistList ys:_) ->
-                    if length (compositeFields pdef) /= length ys
-                       then error $ "wrong number of entries in compositeFields vs PersistList allVals=" ++ show allVals
+        in
+            case (isIdField field, entityPrimary t, allVals) of
+                (True, Just pdef, PersistList ys:_) ->
+                    let cfields = toList $ compositeFields pdef in
+                    if length cfields /= length ys
+                    then error $ "wrong number of entries in compositeFields vs PersistList allVals=" ++ show allVals
                     else
-                      case (allVals, pfilter, isCompFilter pfilter) of
-                        ([PersistList xs], Eq, _) ->
-                           let sqlcl=T.intercalate " and " (map (\a -> connEscapeFieldName conn (fieldDB a) <> showSqlFilter pfilter <> "? ")  (compositeFields pdef))
-                           in (wrapSql sqlcl,xs)
-                        ([PersistList xs], Ne, _) ->
-                           let sqlcl=T.intercalate " or " (map (\a -> connEscapeFieldName conn (fieldDB a) <> showSqlFilter pfilter <> "? ")  (compositeFields pdef))
-                           in (wrapSql sqlcl,xs)
-                        (_, In, _) ->
-                           let xxs = transpose (map fromPersistList allVals)
-                               sqls=map (\(a,xs) -> connEscapeFieldName conn (fieldDB a) <> showSqlFilter pfilter <> "(" <> T.intercalate "," (replicate (length xs) " ?") <> ") ") (zip (compositeFields pdef) xxs)
-                           in (wrapSql (T.intercalate " and " (map wrapSql sqls)), concat xxs)
-                        (_, NotIn, _) ->
-                           let xxs = transpose (map fromPersistList allVals)
-                               sqls=map (\(a,xs) -> connEscapeFieldName conn (fieldDB a) <> showSqlFilter pfilter <> "(" <> T.intercalate "," (replicate (length xs) " ?") <> ") ") (zip (compositeFields pdef) xxs)
-                           in (wrapSql (T.intercalate " or " (map wrapSql sqls)), concat xxs)
-                        ([PersistList xs], _, True) ->
-                           let zs = tail (inits (compositeFields pdef))
-                               sql1 = map (\b -> wrapSql (T.intercalate " and " (map (\(i,a) -> sql2 (i==length b) a) (zip [1..] b)))) zs
-                               sql2 islast a = connEscapeFieldName conn (fieldDB a) <> (if islast then showSqlFilter pfilter else showSqlFilter Eq) <> "? "
-                               sqlcl = T.intercalate " or " sql1
-                           in (wrapSql sqlcl, concat (tail (inits xs)))
-                        (_, BackendSpecificFilter _, _) -> error "unhandled type BackendSpecificFilter for composite/non id primary keys"
-                        _ -> error $ "unhandled type/filter for composite/non id primary keys pfilter=" ++ show pfilter ++ " persistList="++show allVals
-                 (True, Just pdef, []) ->
-                     error $ "empty list given as filter value filter=" ++ show pfilter ++ " persistList=" ++ show allVals ++ " pdef=" ++ show pdef
-                 (True, Just pdef, _) ->
-                     error $ "unhandled error for composite/non id primary keys filter=" ++ show pfilter ++ " persistList=" ++ show allVals ++ " pdef=" ++ show pdef
+                        case (allVals, pfilter, isCompFilter pfilter) of
+                            ([PersistList xs], Eq, _) ->
+                                let
+                                    sqlcl =
+                                        T.intercalate " and "
+                                        (map (\a -> connEscapeFieldName conn (fieldDB a) <> showSqlFilter pfilter <> "? ")  cfields)
+                                in
+                                    (wrapSql sqlcl, xs)
+                            ([PersistList xs], Ne, _) ->
+                                let
+                                    sqlcl =
+                                        T.intercalate " or " (map (\a -> connEscapeFieldName conn (fieldDB a) <> showSqlFilter pfilter <> "? ")  cfields)
+                                in
+                                    (wrapSql sqlcl, xs)
+                            (_, In, _) ->
+                               let xxs = transpose (map fromPersistList allVals)
+                                   sqls=map (\(a,xs) -> connEscapeFieldName conn (fieldDB a) <> showSqlFilter pfilter <> "(" <> T.intercalate "," (replicate (length xs) " ?") <> ") ") (zip cfields xxs)
+                               in (wrapSql (T.intercalate " and " (map wrapSql sqls)), concat xxs)
+                            (_, NotIn, _) ->
+                                let
+                                    xxs = transpose (map fromPersistList allVals)
+                                    sqls = map (\(a,xs) -> connEscapeFieldName conn (fieldDB a) <> showSqlFilter pfilter <> "(" <> T.intercalate "," (replicate (length xs) " ?") <> ") ") (zip cfields xxs)
+                                in
+                                    (wrapSql (T.intercalate " or " (map wrapSql sqls)), concat xxs)
+                            ([PersistList xs], _, True) ->
+                               let zs = tail (inits (toList $ compositeFields pdef))
+                                   sql1 = map (\b -> wrapSql (T.intercalate " and " (map (\(i,a) -> sql2 (i==length b) a) (zip [1..] b)))) zs
+                                   sql2 islast a = connEscapeFieldName conn (fieldDB a) <> (if islast then showSqlFilter pfilter else showSqlFilter Eq) <> "? "
+                                   sqlcl = T.intercalate " or " sql1
+                               in (wrapSql sqlcl, concat (tail (inits xs)))
+                            (_, BackendSpecificFilter _, _) -> error "unhandled type BackendSpecificFilter for composite/non id primary keys"
+                            _ -> error $ "unhandled type/filter for composite/non id primary keys pfilter=" ++ show pfilter ++ " persistList="++show allVals
+                (True, Just pdef, []) ->
+                    error $ "empty list given as filter value filter=" ++ show pfilter ++ " persistList=" ++ show allVals ++ " pdef=" ++ show pdef
+                (True, Just pdef, _) ->
+                    error $ "unhandled error for composite/non id primary keys filter=" ++ show pfilter ++ " persistList=" ++ show allVals ++ " pdef=" ++ show pdef
 
-                 _ ->   case (isNull, pfilter, length notNullVals) of
-                            (True, Eq, _) -> (name <> " IS NULL", [])
-                            (True, Ne, _) -> (name <> " IS NOT NULL", [])
-                            (False, Ne, _) -> (T.concat
-                                [ "("
-                                , name
-                                , " IS NULL OR "
-                                , name
-                                , " <> "
-                                , qmarks
-                                , ")"
-                                ], notNullVals)
-                            -- We use 1=2 (and below 1=1) to avoid using TRUE and FALSE, since
-                            -- not all databases support those words directly.
-                            (_, In, 0) -> ("1=2" <> orNullSuffix, [])
-                            (False, In, _) -> (name <> " IN " <> qmarks <> orNullSuffix, allVals)
-                            (True, In, _) -> (T.concat
-                                [ "("
-                                , name
-                                , " IS NULL OR "
-                                , name
-                                , " IN "
-                                , qmarks
-                                , ")"
-                                ], notNullVals)
-                            (False, NotIn, 0) -> ("1=1", [])
-                            (True, NotIn, 0) -> (name <> " IS NOT NULL", [])
-                            (False, NotIn, _) -> (T.concat
-                                [ "("
-                                , name
-                                , " IS NULL OR "
-                                , name
-                                , " NOT IN "
-                                , qmarks
-                                , ")"
-                                ], notNullVals)
-                            (True, NotIn, _) -> (T.concat
-                                [ "("
-                                , name
-                                , " IS NOT NULL AND "
-                                , name
-                                , " NOT IN "
-                                , qmarks
-                                , ")"
-                                ], notNullVals)
-                            _ -> (name <> showSqlFilter pfilter <> "?" <> orNullSuffix, allVals)
+                _ ->   case (isNull, pfilter, length notNullVals) of
+                           (True, Eq, _) -> (name <> " IS NULL", [])
+                           (True, Ne, _) -> (name <> " IS NOT NULL", [])
+                           (False, Ne, _) -> (T.concat
+                               [ "("
+                               , name
+                               , " IS NULL OR "
+                               , name
+                               , " <> "
+                               , qmarks
+                               , ")"
+                               ], notNullVals)
+                           -- We use 1=2 (and below 1=1) to avoid using TRUE and FALSE, since
+                           -- not all databases support those words directly.
+                           (_, In, 0) -> ("1=2" <> orNullSuffix, [])
+                           (False, In, _) -> (name <> " IN " <> qmarks <> orNullSuffix, allVals)
+                           (True, In, _) -> (T.concat
+                               [ "("
+                               , name
+                               , " IS NULL OR "
+                               , name
+                               , " IN "
+                               , qmarks
+                               , ")"
+                               ], notNullVals)
+                           (False, NotIn, 0) -> ("1=1", [])
+                           (True, NotIn, 0) -> (name <> " IS NOT NULL", [])
+                           (False, NotIn, _) -> (T.concat
+                               [ "("
+                               , name
+                               , " IS NULL OR "
+                               , name
+                               , " NOT IN "
+                               , qmarks
+                               , ")"
+                               ], notNullVals)
+                           (True, NotIn, _) -> (T.concat
+                               [ "("
+                               , name
+                               , " IS NOT NULL AND "
+                               , name
+                               , " NOT IN "
+                               , qmarks
+                               , ")"
+                               ], notNullVals)
+                           _ -> (name <> showSqlFilter pfilter <> "?" <> orNullSuffix, allVals)
 
       where
         isCompFilter Lt = True
@@ -457,8 +482,12 @@ orderClause includeTable conn o =
         $ connEscapeFieldName conn (fieldName x)
 
 -- | Generates sql for limit and offset for postgres, sqlite and mysql.
-decorateSQLWithLimitOffset::Text -> (Int,Int) -> Bool -> Text -> Text
-decorateSQLWithLimitOffset nolimit (limit,offset) _ sql =
+decorateSQLWithLimitOffset
+    :: Text
+    -> (Int,Int)
+    -> Text
+    -> Text
+decorateSQLWithLimitOffset nolimit (limit,offset) sql =
     let
         lim = case (limit, offset) of
                 (0, 0) -> ""

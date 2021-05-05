@@ -84,21 +84,24 @@ _debugOn = False
 
 persistSettings :: MkPersistSettings
 persistSettings = sqlSettings { mpsGeneric = True }
+
 type BackendMonad = SqlBackend
 
 sqlite_database_file :: Text
 sqlite_database_file = "testdb.sqlite3"
+
 sqlite_database :: SqliteConnectionInfo
 sqlite_database = mkSqliteConnectionInfo sqlite_database_file
+
 runConn :: MonadUnliftIO m => SqlPersistT (LoggingT m) t -> m ()
 runConn f = do
-  travis <- liftIO isTravis
-  let debugPrint = not travis && _debugOn
-  let printDebug = if debugPrint then print . fromLogStr else void . return
-  flip runLoggingT (\_ _ _ s -> printDebug s) $ do
-    _<-withSqlitePoolInfo sqlite_database 1 $ runSqlPool f
-    return ()
+    travis <- liftIO isTravis
+    let debugPrint = not travis && _debugOn
+    let printDebug = if debugPrint then print . fromLogStr else void . return
+    void $ flip runLoggingT (\_ _ _ s -> printDebug s) $ do
+        withSqlitePoolInfo sqlite_database 1 $ runSqlPool f
 
 db :: SqlPersistT (LoggingT (ResourceT IO)) () -> Assertion
 db actions = do
-  runResourceT $ runConn $ actions >> transactionUndo
+    runResourceT $ runConn $ actions >> transactionUndo
+

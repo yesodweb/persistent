@@ -5,15 +5,13 @@ module TreeTest where
 
 import Init
 
-import Database.Persist.TH (mkDeleteCascade)
-
 
 -- mpsGeneric = False is due to a bug or at least lack of a feature in
 -- mkKeyTypeDec TH.hs
 share
     [ mkPersist persistSettings { mpsGeneric = False }
     , mkMigrate "treeMigrate"
-    , mkDeleteCascade persistSettings { mpsGeneric = False } ] [persistLowerCase|
+    ] [persistLowerCase|
   Tree sql=trees
       name    Text
       parent  Text Maybe
@@ -41,14 +39,14 @@ specsWith runDb = describe "tree" $ do
         gp <- getJust kgp
         treeFkparent gp @== Nothing
     describe "entityDef" $ do
-        let EntityDef{..} = entityDef (Proxy :: Proxy Tree)
+        let ed = entityDef (Proxy :: Proxy Tree)
         it "has the right haskell name" $ do
-            entityHaskell `shouldBe` EntityNameHS "Tree"
+            getEntityHaskellName ed `shouldBe` EntityNameHS "Tree"
         it "has the right DB name" $ do
-            entityDB `shouldBe` EntityNameDB "trees"
+            getEntityDBName ed `shouldBe` EntityNameDB "trees"
 
     describe "foreign ref" $ do
-        let [ForeignDef{..}] = entityForeigns (entityDef (Proxy :: Proxy Tree))
+        let [ForeignDef{..}] = getEntityForeignDefs (entityDef (Proxy :: Proxy Tree))
         it "has the right haskell name" $ do
             foreignRefTableHaskell `shouldBe`
                 EntityNameHS "Tree"
@@ -60,7 +58,7 @@ specsWith runDb = describe "tree" $ do
                 ConstraintNameHS "fkparent"
         it "has the right DB constraint name" $ do
             foreignConstraintNameDBName `shouldBe`
-                ConstraintNameDB "treesfkparent"
+                ConstraintNameDB "treefkparent"
         it "has the right fields" $ do
             foreignFields `shouldBe`
                 [ ( (FieldNameHS "parent", FieldNameDB "parent")
