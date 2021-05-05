@@ -57,6 +57,10 @@ import qualified Database.Persist.TH.OverloadedLabelSpec as OverloadedLabelSpec
 import qualified Database.Persist.TH.SharedPrimaryKeyImportedSpec as SharedPrimaryKeyImportedSpec
 import qualified Database.Persist.TH.SharedPrimaryKeySpec as SharedPrimaryKeySpec
 import qualified Database.Persist.TH.ToFromPersistValuesSpec as ToFromPersistValuesSpec
+import qualified Database.Persist.TH.KindEntitiesSpec as KindEntitiesSpec
+import qualified Database.Persist.TH.OverloadedLabelSpec as OverloadedLabelSpec
+import qualified Database.Persist.TH.SharedPrimaryKeyImportedSpec as SharedPrimaryKeyImportedSpec
+import qualified Database.Persist.TH.SharedPrimaryKeySpec as SharedPrimaryKeySpec
 
 -- test to ensure we can have types ending in Id that don't trash the TH
 -- machinery
@@ -167,6 +171,7 @@ instance Arbitrary Address where
 
 spec :: Spec
 spec = describe "THSpec" $ do
+spec = do
     KindEntitiesSpec.spec
     OverloadedLabelSpec.spec
     SharedPrimaryKeySpec.spec
