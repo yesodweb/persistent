@@ -171,7 +171,6 @@ instance Arbitrary Address where
 
 spec :: Spec
 spec = describe "THSpec" $ do
-spec = do
     KindEntitiesSpec.spec
     OverloadedLabelSpec.spec
     SharedPrimaryKeySpec.spec
