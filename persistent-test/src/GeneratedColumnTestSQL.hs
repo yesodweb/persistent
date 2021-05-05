@@ -6,7 +6,7 @@ module GeneratedColumnTestSQL (specsWith) where
 import Database.Persist.TH
 import Init
 
-share [mkPersist sqlSettings, mkMigrate "migrate1", mkDeleteCascade sqlSettings] [persistLowerCase|
+share [mkPersist sqlSettings, mkMigrate "migrate1"] [persistLowerCase|
 GenTest sql=gen_test
   fieldOne Text Maybe
   fieldTwo Text Maybe
@@ -18,7 +18,7 @@ MigrateTestV1 sql=gen_migrate_test
   cromulence Int generated=5
 |]
 
-share [mkPersist sqlSettings, mkMigrate "migrate2", mkDeleteCascade sqlSettings] [persistLowerCase|
+share [mkPersist sqlSettings, mkMigrate "migrate2"] [persistLowerCase|
 MigrateTestV2 sql=gen_migrate_test
   sickness Int generated=3
   cromulence Int

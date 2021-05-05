@@ -1,5 +1,4 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveLift #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE PatternSynonyms #-}
@@ -11,43 +10,25 @@
 module Database.Persist.Types.Base
     ( module Database.Persist.Types.Base
     -- * Re-exports
-    , PersistValue(.., PersistLiteral, PersistLiteralEscaped, PersistDbSpecific)
+    , PersistValue(..)
+    , fromPersistValueText
     , LiteralType(..)
     ) where
 
-import Control.Arrow (second)
 import Control.Exception (Exception)
-import qualified Data.Aeson as A
-import Data.Bits (shiftL, shiftR)
-import Data.ByteString (ByteString, foldl')
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Base64 as B64
-import qualified Data.ByteString.Char8 as BS8
 import Data.Char (isSpace)
-import qualified Data.HashMap.Strict as HM
-import Data.Int (Int64)
+import Data.List.NonEmpty (NonEmpty(..))
+import qualified Data.List.NonEmpty as NEL
 import Data.Map (Map)
 import Data.Maybe (isNothing)
-#if !MIN_VERSION_base(4,11,0)
--- This can be removed when GHC < 8.2.2 isn't supported anymore
-import Data.Semigroup ((<>))
-#endif
-import qualified Data.Scientific
 import Data.Text (Text)
 import qualified Data.Text as T
-import qualified Data.Text.Encoding as TE
-import Data.Text.Encoding.Error (lenientDecode)
-import Data.Time (Day, TimeOfDay, UTCTime)
-import qualified Data.Vector as V
 import Data.Word (Word32)
 import Language.Haskell.TH.Syntax (Lift(..))
-import Numeric (readHex, showHex)
 import Web.HttpApiData
        ( FromHttpApiData(..)
        , ToHttpApiData(..)
        , parseBoundedTextData
-       , parseUrlPieceMaybe
-       , readTextData
        , showTextData
        )
 import Web.PathPieces (PathPiece(..))
@@ -56,6 +37,7 @@ import Web.PathPieces (PathPiece(..))
 import Instances.TH.Lift ()
 
 import Database.Persist.Names
+import Database.Persist.PersistValue
 
 -- | A 'Checkmark' should be used as a field type whenever a
 -- uniqueness constraint should guarantee that a certain kind of
@@ -143,7 +125,7 @@ data EntityDef = EntityDef
     -- ^ The name of the entity as Haskell understands it.
     , entityDB      :: !EntityNameDB
     -- ^ The name of the database table corresponding to the entity.
-    , entityId      :: !FieldDef
+    , entityId      :: !EntityIdDef
     -- ^ The entity's primary key or identifier.
     , entityAttrs   :: ![Attr]
     -- ^ The @persistent@ entity syntax allows you to add arbitrary 'Attr's
@@ -170,29 +152,64 @@ data EntityDef = EntityDef
     }
     deriving (Show, Eq, Read, Ord, Lift)
 
-entitiesPrimary :: EntityDef -> Maybe [FieldDef]
-entitiesPrimary t = case fieldReference primaryField of
-    CompositeRef c -> Just $ compositeFields c
-    ForeignRef _ _ -> Just [primaryField]
-    _ -> Nothing
-  where
-    primaryField = entityId t
+-- | The definition for the entity's primary key ID.
+--
+-- @since 2.13.0.0
+data EntityIdDef
+    = EntityIdField !FieldDef
+    -- ^ The entity has a single key column, and it is a surrogate key - that
+    -- is, you can't go from @rec -> Key rec@.
+    --
+    -- @since 2.13.0.0
+    | EntityIdNaturalKey !CompositeDef
+    -- ^ The entity has a natural key. This means you can write @rec -> Key rec@
+    -- because all the key fields are present on the datatype.
+    --
+    -- A natural key can have one or more columns.
+    --
+    -- @since 2.13.0.0
+    deriving (Show, Eq, Read, Ord, Lift)
+
+-- | Return the @['FieldDef']@ for the entity keys.
+entitiesPrimary :: EntityDef -> NonEmpty FieldDef
+entitiesPrimary t =
+    case entityId t of
+        EntityIdNaturalKey fds ->
+            compositeFields fds
+        EntityIdField fd ->
+            pure fd
 
 entityPrimary :: EntityDef -> Maybe CompositeDef
-entityPrimary t = case fieldReference (entityId t) of
-    CompositeRef c -> Just c
-    _ -> Nothing
+entityPrimary t =
+    case entityId t of
+        EntityIdNaturalKey c ->
+            Just c
+        _ ->
+            Nothing
 
-entityKeyFields :: EntityDef -> [FieldDef]
-entityKeyFields ent =
-    maybe [entityId ent] compositeFields $ entityPrimary ent
+entityKeyFields :: EntityDef -> NonEmpty FieldDef
+entityKeyFields =
+    entitiesPrimary
 
-keyAndEntityFields :: EntityDef -> [FieldDef]
+-- | Returns a 'NonEmpty' list of 'FieldDef' that correspond with the key
+-- columns for an 'EntityDef'.
+keyAndEntityFields :: EntityDef -> NonEmpty FieldDef
 keyAndEntityFields ent =
-  case entityPrimary ent of
-    Nothing -> entityId ent : entityFields ent
-    Just _  -> entityFields ent
-
+    case entityId ent of
+        EntityIdField fd ->
+            fd :| fields
+        EntityIdNaturalKey _ ->
+            case NEL.nonEmpty fields of
+                Nothing ->
+                    error $ mconcat
+                        [ "persistent internal guarantee failed: entity is "
+                        , "defined with an entityId = EntityIdNaturalKey, "
+                        , "but somehow doesn't have any entity fields."
+                        ]
+                Just xs ->
+                    xs
+  where
+    fields = filter isHaskellField $ entityFields ent
 
 type ExtraLine = [Text]
 
@@ -207,16 +224,146 @@ type Attr = Text
 -- @since 2.11.0.0
 data FieldAttr
     = FieldAttrMaybe
+    -- ^ The 'Maybe' keyword goes after the type. This indicates that the column
+    -- is nullable, and the generated Haskell code will have a @'Maybe'@ type
+    -- for it.
+    --
+    -- Example:
+    --
+    -- @
+    -- User
+    --     name Text Maybe
+    -- @
     | FieldAttrNullable
+    -- ^ This indicates that the column is nullable, but should not have
+    -- a 'Maybe' type. For this to work out, you need to ensure that the
+    -- 'PersistField' instance for the type in question can support
+    -- a 'PersistNull' value.
+    --
+    -- @
+    -- data What = NoWhat | Hello Text
+    --
+    -- instance PersistField What where
+    --     fromPersistValue PersistNull =
+    --         pure NoWhat
+    --     fromPersistValue pv =
+    --         Hello <$> fromPersistValue pv
+    --
+    -- instance PersistFieldSql What where
+    --     sqlType _ = SqlString
+    --
+    -- User
+    --     what What nullable
+    -- @
     | FieldAttrMigrationOnly
+    -- ^ This tag means that the column will not be present on the Haskell code,
+    -- but will not be removed from the database. Useful to deprecate fields in
+    -- phases.
+    --
+    -- You should set the column to be nullable in the database. Otherwise,
+    -- inserts won't have values.
+    --
+    -- @
+    -- User
+    --     oldName Text MigrationOnly
+    --     newName Text
+    -- @
     | FieldAttrSafeToRemove
+    -- ^ A @SafeToRemove@ attribute is not present on the Haskell datatype, and
+    -- the backend migrations should attempt to drop the column without
+    -- triggering any unsafe migration warnings.
+    --
+    -- Useful after you've used @MigrationOnly@ to remove a column from the
+    -- database in phases.
+    --
+    -- @
+    -- User
+    --     oldName Text SafeToRemove
+    --     newName Text
+    -- @
     | FieldAttrNoreference
+    -- ^ This attribute indicates that we should create a foreign key reference
+    -- from a column. By default, @persistent@ will try and create a foreign key
+    -- reference for a column if it can determine that the type of the column is
+    -- a @'Key' entity@ or an @EntityId@  and the @Entity@'s name was present in
+    -- 'mkPersist'.
+    --
+    -- This is useful if you want to use the explicit foreign key syntax.
+    --
+    -- @
+    -- Post
+    --     title    Text
+    --
+    -- Comment
+    --     postId   PostId      noreference
+    --     Foreign Post fk_comment_post postId
+    -- @
     | FieldAttrReference Text
+    -- ^ This is set to specify precisely the database table the column refers
+    -- to.
+    --
+    -- @
+    -- Post
+    --     title    Text
+    --
+    -- Comment
+    --     postId   PostId references="post"
+    -- @
+    --
+    -- You should not need this - @persistent@ should be capable of correctly
+    -- determining the target table's name. If you do need this, please file an
+    -- issue describing why.
     | FieldAttrConstraint Text
+    -- ^ Specify a name for the constraint on the foreign key reference for this
+    -- table.
+    --
+    -- @
+    -- Post
+    --     title    Text
+    --
+    -- Comment
+    --     postId   PostId constraint="my_cool_constraint_name"
+    -- @
     | FieldAttrDefault Text
+    -- ^ Specify the default value for a column.
+    --
+    -- @
+    -- User
+    --     createdAt    UTCTime     default="NOW()"
+    -- @
+    --
+    -- Note that a @default=@ attribute does not mean you can omit the value
+    -- while inserting.
     | FieldAttrSqltype Text
+    -- ^ Specify a custom SQL type for the column. Generally, you should define
+    -- a custom datatype with a custom 'PersistFieldSql' instance instead of
+    -- using this.
+    --
+    -- @
+    -- User
+    --     uuid     Text    sqltype="UUID"
+    -- @
     | FieldAttrMaxlen Integer
+    -- ^ Set a maximum length for a column. Useful for VARCHAR and indexes.
+    --
+    -- @
+    -- User
+    --     name     Text    maxlen=200
+    --
+    --     UniqueName name
+    -- @
+    | FieldAttrSql Text
+    -- ^ Specify the database name of the column.
+    --
+    -- @
+    -- User
+    --     blarghle     Int     sql="b_l_a_r_g_h_l_e"
+    -- @
+    --
+    -- Useful for performing phased migrations, where one column is renamed to
+    -- another column over time.
     | FieldAttrOther Text
+    -- ^ A grab bag of random attributes that were unrecognized by the parser.
     deriving (Show, Eq, Read, Ord, Lift)
 
 -- | Parse raw field attributes into structured form. Any unrecognized
@@ -239,6 +386,8 @@ parseFieldAttrs = fmap $ \case
         | Just x <- T.stripPrefix "maxlen=" raw -> case reads (T.unpack x) of
             [(n, s)] | all isSpace s -> FieldAttrMaxlen n
             _ -> error $ "Could not parse maxlen field with value " <> show raw
+        | Just x <- T.stripPrefix "sql=" raw ->
+            FieldAttrSql x
         | otherwise -> FieldAttrOther raw
 
 -- | A 'FieldType' describes a field parsed from the QuasiQuoter and is
@@ -268,14 +417,16 @@ isFieldNotGenerated = isNothing . fieldGenerated
 -- 1) composite (to fields that exist in the record)
 -- 2) single field
 -- 3) embedded
-data ReferenceDef = NoReference
-                  | ForeignRef !EntityNameHS !FieldType
-                    -- ^ A ForeignRef has a late binding to the EntityDef it references via name and has the Haskell type of the foreign key in the form of FieldType
-                  | EmbedRef EmbedEntityDef
-                  | CompositeRef CompositeDef
-                  | SelfReference
-                    -- ^ A SelfReference stops an immediate cycle which causes non-termination at compile-time (issue #311).
-                  deriving (Show, Eq, Read, Ord, Lift)
+data ReferenceDef
+    = NoReference
+    | ForeignRef !EntityNameHS
+    -- ^ A ForeignRef has a late binding to the EntityDef it references via name
+    -- and has the Haskell type of the foreign key in the form of FieldType
+    | EmbedRef EntityNameHS
+    | CompositeRef CompositeDef
+    | SelfReference
+    -- ^ A SelfReference stops an immediate cycle which causes non-termination at compile-time (issue #311).
+    deriving (Show, Eq, Read, Ord, Lift)
 
 -- | An EmbedEntityDef is the same as an EntityDef
 -- But it is only used for fieldReference
@@ -290,12 +441,11 @@ data EmbedEntityDef = EmbedEntityDef
 -- so it only has data needed for embedding
 data EmbedFieldDef = EmbedFieldDef
     { emFieldDB    :: FieldNameDB
-    , emFieldEmbed :: Maybe EmbedEntityDef
-    , emFieldCycle :: Maybe EntityNameHS
-    -- ^ 'emFieldEmbed' can create a cycle (issue #311)
-    -- when a cycle is detected, 'emFieldEmbed' will be Nothing
-    -- and 'emFieldCycle' will be Just
+    , emFieldEmbed :: Maybe (Either SelfEmbed EntityNameHS)
     }
+    deriving (Show, Eq, Read, Ord, Lift)
+
+data SelfEmbed = SelfEmbed
     deriving (Show, Eq, Read, Ord, Lift)
 
 -- | Returns 'True' if the 'FieldDef' does not have a 'MigrationOnly' or
@@ -324,12 +474,9 @@ toEmbedEntityDef ent = embDef
                 fieldDB field
             , emFieldEmbed =
                 case fieldReference field of
-                    EmbedRef em -> Just em
-                    SelfReference -> Just embDef
-                    _ -> Nothing
-            , emFieldCycle =
-                case fieldReference field of
-                    SelfReference -> Just $ entityHaskell ent
+                    EmbedRef em ->
+                        Just $ Right em
+                    SelfReference -> Just $ Left SelfEmbed
                     _ -> Nothing
             }
 
@@ -357,13 +504,13 @@ toEmbedEntityDef ent = embDef
 data UniqueDef = UniqueDef
     { uniqueHaskell :: !ConstraintNameHS
     , uniqueDBName  :: !ConstraintNameDB
-    , uniqueFields  :: ![(FieldNameHS, FieldNameDB)]
+    , uniqueFields  :: !(NonEmpty (FieldNameHS, FieldNameDB))
     , uniqueAttrs   :: ![Attr]
     }
     deriving (Show, Eq, Read, Ord, Lift)
 
 data CompositeDef = CompositeDef
-    { compositeFields  :: ![FieldDef]
+    { compositeFields  :: !(NonEmpty FieldDef)
     , compositeAttrs   :: ![Attr]
     }
     deriving (Show, Eq, Read, Ord, Lift)
@@ -451,221 +598,6 @@ data PersistException
     deriving Show
 
 instance Exception PersistException
-
--- | A raw value which can be stored in any backend and can be marshalled to
--- and from a 'PersistField'.
-data PersistValue
-    = PersistText Text
-    | PersistByteString ByteString
-    | PersistInt64 Int64
-    | PersistDouble Double
-    | PersistRational Rational
-    | PersistBool Bool
-    | PersistDay Day
-    | PersistTimeOfDay TimeOfDay
-    | PersistUTCTime UTCTime
-    | PersistNull
-    | PersistList [PersistValue]
-    | PersistMap [(Text, PersistValue)]
-    | PersistObjectId ByteString -- ^ Intended especially for MongoDB backend
-    | PersistArray [PersistValue] -- ^ Intended especially for PostgreSQL backend for text arrays
-    | PersistLiteral_ LiteralType ByteString
-    -- ^ This constructor is used to specify some raw literal value for the
-    -- backend. The 'LiteralType' value specifies how the value should be
-    -- escaped. This can be used to make special, custom types avaialable
-    -- in the back end.
-    --
-    -- @since 2.12.0.0
-    deriving (Show, Read, Eq, Ord)
-
--- | A type that determines how a backend should handle the literal.
---
--- @since 2.12.0.0
-data LiteralType
-    = Escaped
-    -- ^ The accompanying value will be escaped before inserting into the
-    -- database. This is the correct default choice to use.
-    --
-    -- @since 2.12.0.0
-    | Unescaped
-    -- ^ The accompanying value will not be escaped when inserting into the
-    -- database. This is potentially dangerous - use this with care.
-    --
-    -- @since 2.12.0.0
-    | DbSpecific
-    -- ^ The 'DbSpecific' constructor corresponds to the legacy
-    -- 'PersistDbSpecific' constructor. We need to keep this around because
-    -- old databases may have serialized JSON representations that
-    -- reference this. We don't want to break the ability of a database to
-    -- load rows.
-    --
-    -- @since 2.12.0.0
-    deriving (Show, Read, Eq, Ord)
-
--- | This pattern synonym used to be a data constructor for the
--- 'PersistValue' type. It was changed to be a pattern so that JSON-encoded
--- database values could be parsed into their corresponding values. You
--- should not use this, and instead prefer to pattern match on
--- `PersistLiteral_` directly.
---
--- If you use this, it will overlap a patern match on the 'PersistLiteral_,
--- 'PersistLiteral', and 'PersistLiteralEscaped' patterns. If you need to
--- disambiguate between these constructors, pattern match on
--- 'PersistLiteral_' directly.
---
--- @since 2.12.0.0
-pattern PersistDbSpecific :: ByteString -> PersistValue
-pattern PersistDbSpecific bs <- PersistLiteral_ _ bs where
-    PersistDbSpecific bs = PersistLiteral_ DbSpecific bs
-
--- | This pattern synonym used to be a data constructor on 'PersistValue',
--- but was changed into a catch-all pattern synonym to allow backwards
--- compatiblity with database types. See the documentation on
--- 'PersistDbSpecific' for more details.
---
--- @since 2.12.0.0
-pattern PersistLiteralEscaped :: ByteString -> PersistValue
-pattern PersistLiteralEscaped bs <- PersistLiteral_ _ bs where
-    PersistLiteralEscaped bs = PersistLiteral_ Escaped bs
-
--- | This pattern synonym used to be a data constructor on 'PersistValue',
--- but was changed into a catch-all pattern synonym to allow backwards
--- compatiblity with database types. See the documentation on
--- 'PersistDbSpecific' for more details.
---
--- @since 2.12.0.0
-pattern PersistLiteral :: ByteString -> PersistValue
-pattern PersistLiteral bs <- PersistLiteral_ _ bs where
-    PersistLiteral bs = PersistLiteral_ Unescaped bs
-
-{-# DEPRECATED PersistDbSpecific "Deprecated since 2.11 because of inconsistent escaping behavior across backends. The Postgres backend escapes these values, while the MySQL backend does not. If you are using this, please switch to 'PersistLiteral_' and provide a relevant 'LiteralType' for your conversion." #-}
-
-instance ToHttpApiData PersistValue where
-    toUrlPiece val =
-        case fromPersistValueText val of
-            Left  e -> error $ T.unpack e
-            Right y -> y
-
-instance FromHttpApiData PersistValue where
-    parseUrlPiece input =
-          PersistInt64 <$> parseUrlPiece input
-      <!> PersistList  <$> readTextData input
-      <!> PersistText  <$> return input
-      where
-        infixl 3 <!>
-        Left _ <!> y = y
-        x      <!> _ = x
-
-instance PathPiece PersistValue where
-  toPathPiece   = toUrlPiece
-  fromPathPiece = parseUrlPieceMaybe
-
-fromPersistValueText :: PersistValue -> Either Text Text
-fromPersistValueText (PersistText s) = Right s
-fromPersistValueText (PersistByteString bs) =
-    Right $ TE.decodeUtf8With lenientDecode bs
-fromPersistValueText (PersistInt64 i) = Right $ T.pack $ show i
-fromPersistValueText (PersistDouble d) = Right $ T.pack $ show d
-fromPersistValueText (PersistRational r) = Right $ T.pack $ show r
-fromPersistValueText (PersistDay d) = Right $ T.pack $ show d
-fromPersistValueText (PersistTimeOfDay d) = Right $ T.pack $ show d
-fromPersistValueText (PersistUTCTime d) = Right $ T.pack $ show d
-fromPersistValueText PersistNull = Left "Unexpected null"
-fromPersistValueText (PersistBool b) = Right $ T.pack $ show b
-fromPersistValueText (PersistList _) = Left "Cannot convert PersistList to Text"
-fromPersistValueText (PersistMap _) = Left "Cannot convert PersistMap to Text"
-fromPersistValueText (PersistObjectId _) = Left "Cannot convert PersistObjectId to Text"
-fromPersistValueText (PersistArray _) = Left "Cannot convert PersistArray to Text"
-fromPersistValueText (PersistLiteral_ _ _) = Left "Cannot convert PersistLiteral to Text"
-
-instance A.ToJSON PersistValue where
-    toJSON (PersistText t) = A.String $ T.cons 's' t
-    toJSON (PersistByteString b) = A.String $ T.cons 'b' $ TE.decodeUtf8 $ B64.encode b
-    toJSON (PersistInt64 i) = A.Number $ fromIntegral i
-    toJSON (PersistDouble d) = A.Number $ Data.Scientific.fromFloatDigits d
-    toJSON (PersistRational r) = A.String $ T.pack $ 'r' : show r
-    toJSON (PersistBool b) = A.Bool b
-    toJSON (PersistTimeOfDay t) = A.String $ T.pack $ 't' : show t
-    toJSON (PersistUTCTime u) = A.String $ T.pack $ 'u' : show u
-    toJSON (PersistDay d) = A.String $ T.pack $ 'd' : show d
-    toJSON PersistNull = A.Null
-    toJSON (PersistList l) = A.Array $ V.fromList $ map A.toJSON l
-    toJSON (PersistMap m) = A.object $ map (second A.toJSON) m
-    toJSON (PersistLiteral_ litTy b) =
-        let encoded = TE.decodeUtf8 $ B64.encode b
-            prefix =
-                case litTy of
-                    DbSpecific -> 'p'
-                    Unescaped -> 'l'
-                    Escaped -> 'e'
-         in
-            A.String $ T.cons prefix encoded
-    toJSON (PersistArray a) = A.Array $ V.fromList $ map A.toJSON a
-    toJSON (PersistObjectId o) =
-      A.toJSON $ showChar 'o' $ showHexLen 8 (bs2i four) $ showHexLen 16 (bs2i eight) ""
-        where
-         (four, eight) = BS8.splitAt 4 o
-
-         -- taken from crypto-api
-         bs2i :: ByteString -> Integer
-         bs2i bs = foldl' (\i b -> (i `shiftL` 8) + fromIntegral b) 0 bs
-         {-# INLINE bs2i #-}
-
-         -- showHex of n padded with leading zeros if necessary to fill d digits
-         -- taken from Data.BSON
-         showHexLen :: (Show n, Integral n) => Int -> n -> ShowS
-         showHexLen d n = showString (replicate (d - sigDigits n) '0') . showHex n  where
-             sigDigits 0 = 1
-             sigDigits n' = truncate (logBase (16 :: Double) $ fromIntegral n') + 1
-
-instance A.FromJSON PersistValue where
-    parseJSON (A.String t0) =
-        case T.uncons t0 of
-            Nothing -> fail "Null string"
-            Just ('p', t) -> either (\_ -> fail "Invalid base64") (return . PersistDbSpecific)
-                           $ B64.decode $ TE.encodeUtf8 t
-            Just ('l', t) -> either (\_ -> fail "Invalid base64") (return . PersistLiteral)
-                           $ B64.decode $ TE.encodeUtf8 t
-            Just ('e', t) -> either (\_ -> fail "Invalid base64") (return . PersistLiteralEscaped)
-                           $ B64.decode $ TE.encodeUtf8 t
-            Just ('s', t) -> return $ PersistText t
-            Just ('b', t) -> either (\_ -> fail "Invalid base64") (return . PersistByteString)
-                           $ B64.decode $ TE.encodeUtf8 t
-            Just ('t', t) -> PersistTimeOfDay <$> readMay t
-            Just ('u', t) -> PersistUTCTime <$> readMay t
-            Just ('d', t) -> PersistDay <$> readMay t
-            Just ('r', t) -> PersistRational <$> readMay t
-            Just ('o', t) -> maybe
-                (fail "Invalid base64")
-                (return . PersistObjectId . i2bs (8 * 12) . fst)
-                $ headMay $ readHex $ T.unpack t
-            Just (c, _) -> fail $ "Unknown prefix: " ++ [c]
-      where
-        headMay []    = Nothing
-        headMay (x:_) = Just x
-        readMay t =
-            case reads $ T.unpack t of
-                (x, _):_ -> return x
-                [] -> fail "Could not read"
-
-        -- taken from crypto-api
-        -- |@i2bs bitLen i@ converts @i@ to a 'ByteString' of @bitLen@ bits (must be a multiple of 8).
-        i2bs :: Int -> Integer -> BS.ByteString
-        i2bs l i = BS.unfoldr (\l' -> if l' < 0 then Nothing else Just (fromIntegral (i `shiftR` l'), l' - 8)) (l-8)
-        {-# INLINE i2bs #-}
-
-
-    parseJSON (A.Number n) = return $
-        if fromInteger (floor n) == n
-            then PersistInt64 $ floor n
-            else PersistDouble $ fromRational $ toRational n
-    parseJSON (A.Bool b) = return $ PersistBool b
-    parseJSON A.Null = return PersistNull
-    parseJSON (A.Array a) = fmap PersistList (mapM A.parseJSON $ V.toList a)
-    parseJSON (A.Object o) =
-        fmap PersistMap $ mapM go $ HM.toList o
-      where
-        go (k, v) = (,) k <$> A.parseJSON v
 
 -- | A SQL data type. Naming attempts to reflect the underlying Haskell
 -- datatypes, eg SqlString instead of SqlVarchar. Different SQL databases may

@@ -42,7 +42,7 @@ implicitUuidMigrate = do
 wipe :: IO ()
 wipe = db $ do
     rawExecute "DROP TABLE IF EXISTS with_def_uuid;" []
-    runMigration implicitUuidMigrate
+    void $ runMigrationSilent implicitUuidMigrate
 
 itDb :: String -> SqlPersistT (LoggingT (ResourceT IO)) a -> SpecWith (Arg (IO ()))
 itDb msg action = it msg $ db $ void action
@@ -57,11 +57,9 @@ spec = describe "ImplicitUuidSpec" $ before_ wipe $ do
             let withDefUuidKey = WithDefUuidKey (UUID "Hello")
             pass
     describe "getEntityId" $ do
-        let idField = getEntityId (entityDef (Proxy @WithDefUuid))
+        let Just idField = getEntityIdField (entityDef (Proxy @WithDefUuid))
         it "has a SqlString SqlType" $ asIO $ do
             fieldSqlType idField `shouldBe` SqlString
-        it "has a UUID type" $ asIO $ do
-            fieldType idField `shouldBe` fieldTypeFromTypeable @UUID
         it "is an implicit ID column" $ asIO $ do
             fieldIsImplicitIdColumn idField `shouldBe` True
 

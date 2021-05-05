@@ -14,6 +14,7 @@ module Database.Persist.EntityDef
     , getEntityForeignDefs
     , getEntityUniques
     , getEntityId
+    , getEntityIdField
     , getEntityKeyFields
     , getEntityComments
     , getEntityExtra
@@ -23,20 +24,23 @@ module Database.Persist.EntityDef
     , keyAndEntityFields
      -- * Setters
     , setEntityId
+    , setEntityIdDef
     , setEntityDBName
     , overEntityFields
+      -- * Related Types
+    , EntityIdDef(..)
     ) where
 
 import Data.Text (Text)
 import Data.Map (Map)
+import Data.List.NonEmpty (NonEmpty)
 
 import Database.Persist.EntityDef.Internal
-import Database.Persist.FieldDef (isHaskellField)
+import Database.Persist.FieldDef
 
 import Database.Persist.Types.Base
     ( UniqueDef
     , ForeignDef
-    , FieldDef
     , entityKeyFields
     )
 import Database.Persist.Names
@@ -131,18 +135,44 @@ isEntitySum = entitySum
 -- @since 2.13.0.0
 getEntityId
     :: EntityDef
-    -> FieldDef
+    -> EntityIdDef
 getEntityId = entityId
 
+-- |
+--
+-- @since 2.13.0.0
+getEntityIdField :: EntityDef -> Maybe FieldDef
+getEntityIdField ed =
+    case getEntityId ed of
+        EntityIdField fd ->
+            pure fd
+        _ ->
+            Nothing
+
+-- | Set an 'entityId' to be the given 'FieldDef'.
+--
+-- @since 2.13.0.0
 setEntityId
     :: FieldDef
     -> EntityDef
     -> EntityDef
-setEntityId fd ed = ed { entityId = fd }
+setEntityId fd = setEntityIdDef (EntityIdField fd)
 
+-- |
+--
+-- @since 2.13.0.0
+setEntityIdDef
+    :: EntityIdDef
+    -> EntityDef
+    -> EntityDef
+setEntityIdDef i ed = ed { entityId = i }
+
+-- |
+--
+-- @since 2.13.0.0
 getEntityKeyFields
     :: EntityDef
-    -> [FieldDef]
+    -> NonEmpty FieldDef
 getEntityKeyFields = entityKeyFields
 
 -- | TODO

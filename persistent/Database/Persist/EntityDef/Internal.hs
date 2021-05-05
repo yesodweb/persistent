@@ -12,6 +12,7 @@ module Database.Persist.EntityDef.Internal
     , entitiesPrimary
     , keyAndEntityFields
     , toEmbedEntityDef
+    , EntityIdDef(..)
     ) where
 
 import Database.Persist.Types.Base

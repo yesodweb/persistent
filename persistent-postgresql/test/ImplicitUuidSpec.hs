@@ -58,11 +58,9 @@ spec = describe "ImplicitUuidSpec" $ before_ wipe $ do
             let withDefUuidKey = WithDefUuidKey (UUID "Hello")
             pass
     describe "getEntityId" $ do
-        let idField = getEntityId (entityDef (Proxy @WithDefUuid))
+        let Just idField = getEntityIdField (entityDef (Proxy @WithDefUuid))
         it "has a UUID SqlType" $ asIO $ do
             fieldSqlType idField `shouldBe` SqlOther "UUID"
-        it "has a UUID type" $ asIO $ do
-            fieldType idField `shouldBe` fieldTypeFromTypeable @UUID
         it "is an implicit ID column" $ asIO $ do
             fieldIsImplicitIdColumn idField `shouldBe` True
 

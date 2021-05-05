@@ -114,7 +114,9 @@ test-suite test
     type:            exitcode-stdio-1.0
     main-is:         main.hs
     hs-source-dirs:  test
-    other-modules:   SqliteInit
+    other-modules:   
+        SqliteInit
+        Database.Persist.Sqlite.CompositeSpec
     ghc-options:     -Wall
 
     build-depends:   base >= 4.9 && < 5

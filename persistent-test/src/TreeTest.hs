@@ -5,15 +5,13 @@ module TreeTest where
 
 import Init
 
-import Database.Persist.TH (mkDeleteCascade)
-
 
 -- mpsGeneric = False is due to a bug or at least lack of a feature in
 -- mkKeyTypeDec TH.hs
 share
     [ mkPersist persistSettings { mpsGeneric = False }
     , mkMigrate "treeMigrate"
-    , mkDeleteCascade persistSettings { mpsGeneric = False } ] [persistLowerCase|
+    ] [persistLowerCase|
   Tree sql=trees
       name    Text
       parent  Text Maybe
@@ -60,7 +58,7 @@ specsWith runDb = describe "tree" $ do
                 ConstraintNameHS "fkparent"
         it "has the right DB constraint name" $ do
             foreignConstraintNameDBName `shouldBe`
-                ConstraintNameDB "treesfkparent"
+                ConstraintNameDB "treefkparent"
         it "has the right fields" $ do
             foreignFields `shouldBe`
                 [ ( (FieldNameHS "parent", FieldNameDB "parent")

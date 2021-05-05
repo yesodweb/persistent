@@ -22,7 +22,7 @@ import TemplateTestImports
 import Database.Persist.TH.MultiBlockSpec.Model
 
 share
-    [ mkPersist sqlSettings . mappend importDefList
+    [ mkPersistWith sqlSettings importDefList
     ]
     [persistLowerCase|
 
@@ -41,8 +41,7 @@ MBBar
     thingAuto ThingAutoId
     profile MBDogId
 
-    -- TODO: make the QQ not care about this table being missing
-    -- Foreign MBCompositePrimary bar_to_comp name age
+    Foreign MBCompositePrimary bar_to_comp name age
 |]
 
 spec :: Spec
@@ -60,25 +59,21 @@ spec = describe "MultiBlockSpec" $ do
                     `shouldBe`
                         ForeignRef
                             (EntityNameHS "User")
-                            (FTTypeCon (Just "Data.Int") "Int64")
 
             it "Primary key reference works" $ do
                 fieldReference profileRef
                     `shouldBe`
                         ForeignRef
                             (EntityNameHS "MBDog")
-                            (FTTypeCon (Just "Data.Int") "Int64")
 
             it "Thing ref works (same block)" $ do
                 fieldReference thingRef
                     `shouldBe`
                         ForeignRef
                             (EntityNameHS "Thing")
-                            (FTTypeCon (Just "Data.Int") "Int64")
 
             it "ThingAuto ref works (same block)" $ do
                 fieldReference thingAutoRef
                     `shouldBe`
                         ForeignRef
                             (EntityNameHS "ThingAuto")
-                            (FTTypeCon (Just "Data.Int") "Int64")

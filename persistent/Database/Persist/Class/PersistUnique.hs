@@ -39,7 +39,6 @@ import GHC.TypeLits (ErrorMessage(..))
 import Database.Persist.Class.PersistEntity
 import Database.Persist.Class.PersistStore
 import Database.Persist.Types
-import Database.Persist.EntityDef
 
 -- | Queries against 'Unique' keys (other than the id 'Key').
 --

@@ -45,17 +45,24 @@ import Database.Persist.Sql.Util
 import Database.Persist.TH
 import TemplateTestImports
 
-import qualified Database.Persist.TH.MultiBlockSpec as MultiBlockSpec
 import qualified Database.Persist.TH.DiscoverEntitiesSpec as DiscoverEntitiesSpec
-import qualified Database.Persist.TH.ImplicitIdColSpec as ImplicitIdColSpec
-import qualified Database.Persist.TH.MigrationOnlySpec as MigrationOnlySpec
 import qualified Database.Persist.TH.EmbedSpec as EmbedSpec
+import qualified Database.Persist.TH.ForeignRefSpec as ForeignRefSpec
+import qualified Database.Persist.TH.ImplicitIdColSpec as ImplicitIdColSpec
+import qualified Database.Persist.TH.JsonEncodingSpec as JsonEncodingSpec
 import qualified Database.Persist.TH.KindEntitiesSpec as KindEntitiesSpec
+import qualified Database.Persist.TH.MigrationOnlySpec as MigrationOnlySpec
+import qualified Database.Persist.TH.MultiBlockSpec as MultiBlockSpec
 import qualified Database.Persist.TH.OverloadedLabelSpec as OverloadedLabelSpec
 import qualified Database.Persist.TH.SharedPrimaryKeyImportedSpec as SharedPrimaryKeyImportedSpec
 import qualified Database.Persist.TH.SharedPrimaryKeySpec as SharedPrimaryKeySpec
+import qualified Database.Persist.TH.ToFromPersistValuesSpec as ToFromPersistValuesSpec
 
-share [mkPersist sqlSettings { mpsGeneric = False, mpsDeriveInstances = [''Generic] }, mkDeleteCascade sqlSettings { mpsGeneric = False }] [persistUpperCase|
+-- test to ensure we can have types ending in Id that don't trash the TH
+-- machinery
+type TextId = Text
+
+share [mkPersist sqlSettings { mpsGeneric = False, mpsDeriveInstances = [''Generic] }] [persistUpperCase|
 
 Person json
     name Text
@@ -105,7 +112,7 @@ HasCustomSqlId
     name String
 
 SharedPrimaryKey
-    Id (Key HasDefaultId)
+    Id HasDefaultIdId
     name String
 
 SharedPrimaryKeyWithCascade
@@ -115,6 +122,21 @@ SharedPrimaryKeyWithCascade
 SharedPrimaryKeyWithCascadeAndCustomName
     Id (Key HasDefaultId) OnDeleteCascade sql=my_id
     name String
+
+Top
+    name Text
+
+Middle
+    top TopId
+    Primary top
+
+Bottom
+    middle MiddleId
+    Primary middle
+
+-- Test that a field can be named Key
+KeyTable
+    key Text
 
 |]
 
@@ -154,8 +176,11 @@ spec = describe "THSpec" $ do
     EmbedSpec.spec
     DiscoverEntitiesSpec.spec
     MultiBlockSpec.spec
+    ForeignRefSpec.spec
+    ToFromPersistValuesSpec.spec
+    JsonEncodingSpec.spec
     describe "TestDefaultKeyCol" $ do
-        let FieldDef{..} =
+        let EntityIdField FieldDef{..} =
                 entityId (entityDef (Proxy @TestDefaultKeyCol))
         it "should be a BackendKey SqlBackend" $ do
             -- the purpose of this test is to verify that a custom Id column of
@@ -164,11 +189,11 @@ spec = describe "THSpec" $ do
             -- >     Id ModelNameId
             --
             -- should behave like an implicit id column.
-            TestDefaultKeyColKey (SqlBackendKey 32)
+            (TestDefaultKeyColKey (SqlBackendKey 32) :: Key TestDefaultKeyCol)
                 `shouldBe`
-                    toSqlKey 32
+                    (toSqlKey 32 :: Key TestDefaultKeyCol)
     describe "HasDefaultId" $ do
-        let FieldDef{..} =
+        let EntityIdField FieldDef{..} =
                 entityId (entityDef (Proxy @HasDefaultId))
         it "should have usual db name" $ do
             fieldDB `shouldBe` FieldNameDB "id"
@@ -182,23 +207,23 @@ spec = describe "THSpec" $ do
             fieldType `shouldBe` FTTypeCon Nothing "HasDefaultIdId"
 
     describe "HasCustomSqlId" $ do
-        let FieldDef{..} =
+        let EntityIdField FieldDef{..} =
                 entityId (entityDef (Proxy @HasCustomSqlId))
         it "should have custom db name" $ do
             fieldDB `shouldBe` FieldNameDB "my_id"
         it "should have usual haskell name" $ do
-            fieldHaskell `shouldBe` FieldNameHS "id"
+            fieldHaskell `shouldBe` FieldNameHS "Id"
         it "should have correct underlying sql type" $ do
             fieldSqlType `shouldBe` SqlString
         it "should have correct haskell type" $ do
             fieldType `shouldBe` FTTypeCon Nothing "String"
     describe "HasIdDef" $ do
-        let FieldDef{..} =
+        let EntityIdField FieldDef{..} =
                 entityId (entityDef (Proxy @HasIdDef))
         it "should have usual db name" $ do
             fieldDB `shouldBe` FieldNameDB "id"
         it "should have usual haskell name" $ do
-            fieldHaskell `shouldBe` FieldNameHS "id"
+            fieldHaskell `shouldBe` FieldNameHS "Id"
         it "should have correct underlying sql type" $ do
             fieldSqlType `shouldBe` SqlInt64
         it "should have correct haskell type" $ do
@@ -206,16 +231,18 @@ spec = describe "THSpec" $ do
 
     describe "SharedPrimaryKey" $ do
         let sharedDef = entityDef (Proxy @SharedPrimaryKey)
-            FieldDef{..} =
+            EntityIdField FieldDef{..} =
                 entityId sharedDef
         it "should have usual db name" $ do
             fieldDB `shouldBe` FieldNameDB "id"
         it "should have usual haskell name" $ do
-            fieldHaskell `shouldBe` FieldNameHS "id"
+            fieldHaskell `shouldBe` FieldNameHS "Id"
         it "should have correct underlying sql type" $ do
             fieldSqlType `shouldBe` SqlInt64
+        it "should have correct underlying (as reported by sqltype)" $ do
+            fieldSqlType `shouldBe` sqlType (Proxy :: Proxy HasDefaultIdId)
         it "should have correct haskell type" $ do
-            fieldType `shouldBe` FTApp (FTTypeCon Nothing "Key") (FTTypeCon Nothing "HasDefaultId")
+            fieldType `shouldBe` (FTTypeCon Nothing "HasDefaultIdId")
         it "should have correct sql type from PersistFieldSql" $ do
             sqlType (Proxy @SharedPrimaryKeyId)
                 `shouldBe`
@@ -229,18 +256,13 @@ spec = describe "THSpec" $ do
                 `shouldBe`
                     SharedPrimaryKeyKey (toSqlKey 3)
 
-        it "is a newtype" $ do
-            pkNewtype sqlSettings sharedDef
-                `shouldBe`
-                    True
-
     describe "SharedPrimaryKeyWithCascade" $ do
-        let FieldDef{..} =
+        let EntityIdField FieldDef{..} =
                 entityId (entityDef (Proxy @SharedPrimaryKeyWithCascade))
         it "should have usual db name" $ do
             fieldDB `shouldBe` FieldNameDB "id"
         it "should have usual haskell name" $ do
-            fieldHaskell `shouldBe` FieldNameHS "id"
+            fieldHaskell `shouldBe` FieldNameHS "Id"
         it "should have correct underlying sql type" $ do
             fieldSqlType `shouldBe` SqlInt64
         it "should have correct haskell type" $ do
@@ -271,13 +293,13 @@ spec = describe "THSpec" $ do
                             { entityHaskell = EntityNameHS "HasSimpleCascadeRef"
                             , entityDB = EntityNameDB "HasSimpleCascadeRef"
                             , entityId =
-                                FieldDef
+                                EntityIdField FieldDef
                                     { fieldHaskell = FieldNameHS "Id"
                                     , fieldDB = FieldNameDB "id"
                                     , fieldType = FTTypeCon Nothing "HasSimpleCascadeRefId"
                                     , fieldSqlType = SqlInt64
                                     , fieldReference =
-                                        ForeignRef (EntityNameHS "HasSimpleCascadeRef") (FTTypeCon (Just "Data.Int") "Int64")
+                                        NoReference
                                     , fieldAttrs = []
                                     , fieldStrict = True
                                     , fieldComments = Nothing
@@ -297,7 +319,6 @@ spec = describe "THSpec" $ do
                                     , fieldReference =
                                         ForeignRef
                                             (EntityNameHS "Person")
-                                            (FTTypeCon (Just "Data.Int") "Int64")
                                     , fieldCascade =
                                         FieldCascade { fcOnUpdate = Nothing, fcOnDelete = Just Cascade }
                                     , fieldComments = Nothing
