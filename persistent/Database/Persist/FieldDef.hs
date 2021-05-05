@@ -10,6 +10,7 @@ module Database.Persist.FieldDef
     , addFieldAttr
       -- ** Helpers
     , isFieldNullable
+    , isFieldMaybe
     , isFieldNotGenerated
     , isHaskellField
       -- * 'FieldCascade'
@@ -24,6 +25,7 @@ import Database.Persist.FieldDef.Internal
 
 import Database.Persist.Types.Base
        ( FieldAttr(..)
+       , FieldType(..)
        , IsNullable(..)
        , fieldAttrsContainsNullable
        , isHaskellField
@@ -53,3 +55,14 @@ addFieldAttr fa = overFieldAttrs (fa :)
 isFieldNullable :: FieldDef -> IsNullable
 isFieldNullable =
     fieldAttrsContainsNullable . fieldAttrs
+
+-- | Check if the field is `Maybe a`
+--
+-- @since 2.13.0.0
+isFieldMaybe :: FieldDef -> Bool
+isFieldMaybe field =
+    case fieldType field of
+        FTApp (FTTypeCon _ "Maybe") _ ->
+            True
+        _ ->
+            False

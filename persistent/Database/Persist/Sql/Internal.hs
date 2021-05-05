@@ -143,7 +143,7 @@ mkColumns allDefs t overrides =
             , cNull =
                 case isFieldNullable fd of
                     Nullable _ -> True
-                    NotNullable -> isEntitySum t
+                    NotNullable -> isFieldMaybe fd || isEntitySum t
             , cSqlType = fieldSqlType fd
             , cDefault = defaultAttribute $ fieldAttrs fd
             , cGenerated = fieldGenerated fd
