@@ -43,6 +43,11 @@ JsonEncoding2 json
     blood Text
     Primary name blood
     deriving Show Eq
+
+JsonEncMigrationOnly json
+    name Text
+    age  Int
+    foo  Text MigrationOnly
 |]
 
 instance Arbitrary JsonEncoding where

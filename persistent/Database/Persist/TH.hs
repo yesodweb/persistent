@@ -2484,7 +2484,7 @@ infixr 5 ++
 
 mkJSON :: MkPersistSettings -> UnboundEntityDef -> Q [Dec]
 mkJSON _ def | ("json" `notElem` entityAttrs (unboundEntityDef def)) = return []
-mkJSON mps def = do
+mkJSON mps (fixEntityDef -> def) = do
     requireExtensions [[FlexibleInstances]]
     pureE <- [|pure|]
     apE' <- [|(<*>)|]
