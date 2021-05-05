@@ -366,6 +366,36 @@ Notification
     Foreign User fk_noti_user sentToFirst sentToSecond References emailFirst emailSecond
 @
 
+= Nullable Fields
+
+As illustrated in the example at the beginning of this page, we are able to represent nullable
+fields by including 'Maybe' at the end of the type declaration:
+
+> TableName
+>     fieldName      FieldType
+>     otherField     String
+>     nullableField  Int       Maybe
+
+Alternatively we can specify the keyword nullable:
+
+> TableName
+>     fieldName      FieldType
+>     otherField     String
+>     nullableField  Int       nullable
+
+However the difference here is in the first instance the Haskell type will be 'Maybe Int',
+but in the second it will be 'Int'.
+
+If you wish to define your Maybe types in a way that is similar to the actual Haskell
+definition, you can define 'Maybe Int' like so:
+
+> TableName
+>     fieldName      FieldType
+>     otherField     String
+>     nullableField  (Maybe Int)
+
+However, note, the field _must_ be enclosed in parenthesis.
+
 = Documentation Comments
 
 The quasiquoter supports ordinary comments with @--@ and @#@.
