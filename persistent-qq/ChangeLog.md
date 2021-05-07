@@ -2,7 +2,7 @@
 
 ## 2.12.0.1
 
-* Support GHC 9. []()
+* Support GHC 9. [#1265](https://github.com/yesodweb/persistent/pull/1265)
 
 ## 2.12.0.0
 
