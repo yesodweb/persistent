@@ -1959,7 +1959,7 @@ mkPlainTV
     -> TyVarBndr
 mkPlainTV = PlainTV
 
-mkPlainTV
+mkForallTV
     :: Name
     -> TyVarBndr
 mkForallTV = mkPlainTV
