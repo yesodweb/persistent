@@ -174,6 +174,10 @@ instance NFData Pat where
 #if MIN_VERSION_template_haskell(2,17,0)
 instance NFData a => NFData (TyVarBndr a) where
 
+instance NFData Specificity
+instance NFData Bytes where
+    rnf !_ = ()
+
 #else
 instance NFData TyVarBndr where
 
@@ -189,10 +193,6 @@ instance NFData Exp where
 
 
 instance NFData Lit where
-
-instance NFData Specificity
-instance NFData Bytes where
-    rnf !_ = ()
 
 instance NFData OccName where
 
