@@ -189,8 +189,7 @@ benchmark persistent-th-bench
     build-depends:    base
                     , persistent
                     , criterion
-                    , deepseq
-                    , deepseq-generics
+                    , deepseq >= 1.4
                     , file-embed
                     , text
                     , template-haskell
