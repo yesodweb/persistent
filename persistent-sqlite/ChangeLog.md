@@ -1,5 +1,10 @@
 # Changelog for persistent-sqlite
 
+## 2.13.0.1
+
+* [#1265](https://github.com/yesodweb/persistent/pull/1265)
+    * Support GHC 9
+
 ## 2.13.0.0
 
 * [#1225](https://github.com/yesodweb/persistent/pull/1225)
