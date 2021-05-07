@@ -218,7 +218,7 @@ instance (PersistEntity a) => PersistEntity (ReverseFieldOrder a) where
     persistUniqueKeys = fmap URFO . reverse . persistUniqueKeys . unRFO
 
     persistIdField = error "ReverseFieldOrder.persistIdField"
-    fieldLens = error "ReverseFieldOrder.fieldLens"
+    fieldLens x = error "ReverseFieldOrder.fieldLens"
 
 cleanDB
     :: (MonadIO m, PersistQuery backend, PersistStoreWrite (BaseBackend backend))

@@ -7,3 +7,23 @@ packages:
   persistent-postgresql
   persistent-redis
   persistent-qq
+
+source-repository-package
+    type: git
+    location: https://github.com/parsonsmatt/mysql-simple
+    tag: 37f0a397cdac3ba96ea6ff4b77a8185c0af6643a
+
+source-repository-package
+    type: git
+    location: https://github.com/parsonsmatt/hedis
+    tag: bb3f9e2c38027633d9ccc98e071fb1838a237376
+
+source-repository-package
+    type: git
+    location: https://github.com/parsonsmatt/hs-memory
+    tag: 21e8720739b45dbee4faa1470db243ec9f487e44
+
+source-repository-package
+    type: git
+    location: https://github.com/amesgen/cryptonite
+    tag: c5b2630ac396ad2d14ee1ed5d216907acaf2e79e
