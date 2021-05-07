@@ -22,7 +22,6 @@ module Database.Persist.Sql.Util
 
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.Maybe as Maybe
-import Data.Monoid ((<>))
 import Data.Text (Text, pack)
 import qualified Data.Text as T
 

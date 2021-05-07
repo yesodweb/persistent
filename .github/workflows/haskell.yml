@@ -51,6 +51,7 @@ jobs:
           - "8.6.5"
           - "8.8.4"
           - "8.10.3"
+          - "9.0"
 
     env:
       CONFIG: "--enable-tests"

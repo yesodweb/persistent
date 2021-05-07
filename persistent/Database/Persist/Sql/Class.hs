@@ -22,7 +22,6 @@ import Data.Int
 import qualified Data.IntMap as IM
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
-import Data.Monoid ((<>))
 import Data.Proxy (Proxy(..))
 import qualified Data.Set as S
 import Data.Text (Text, intercalate, pack)

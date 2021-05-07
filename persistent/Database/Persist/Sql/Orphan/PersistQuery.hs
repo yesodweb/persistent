@@ -23,7 +23,7 @@ import qualified Data.Conduit.List as CL
 import Data.Int (Int64)
 import Data.List (find, inits, transpose)
 import Data.Maybe (isJust)
-import Data.Monoid (Monoid(..), (<>))
+import Data.Monoid (Monoid(..))
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Foldable (toList)
