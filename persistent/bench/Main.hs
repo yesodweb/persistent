@@ -170,8 +170,10 @@ instance NFData ModName where
 
 instance NFData Pat where
 
+#if MIN_VERSION_template_haskell(2,16,0)
 instance NFData Bytes where
     rnf !_ = ()
+#endif
 
 #if MIN_VERSION_template_haskell(2,17,0)
 instance NFData a => NFData (TyVarBndr a) where
