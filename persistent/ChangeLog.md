@@ -1,5 +1,10 @@
 # Changelog for persistent
 
+## 2.13.0.1
+
+* [#1268](https://github.com/yesodweb/persistent/pull/1268)
+    * Show `keyFromValues` error
+
 ## 2.13.0.0
 
 * [#1244](https://github.com/yesodweb/persistent/pull/1244)
