@@ -23,7 +23,7 @@ module Database.Persist.Sql.Util
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.Maybe as Maybe
 import Data.Monoid ((<>))
-import Data.Text (Text, pack)
+import Data.Text (Text, pack, unpack)
 import qualified Data.Text as T
 
 import Database.Persist
@@ -188,7 +188,7 @@ parseEntityValues t vals =
         case fromPersistValues xs of
             Left e -> Left e
             Right xs' -> case keyFromValues keyvals of
-                Left _ -> error "fromPersistValuesComposite': keyFromValues failed"
+                Left err -> error $ "fromPersistValuesComposite': keyFromValues failed with error: " <> unpack err
                 Right key -> Right (Entity key xs')
 
 
