@@ -1,29 +1,29 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE DataKinds, FlexibleInstances #-}
-{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
 import PgInit
 
 import Data.Aeson
 import qualified Data.ByteString as BS
-import Data.IntMap (IntMap)
 import Data.Fixed
+import Data.IntMap (IntMap)
 import qualified Data.Text as T
 import Data.Time
 import Test.QuickCheck
 
-import qualified ImplicitUuidSpec
 import qualified ArrayAggTest
 import qualified CompositeTest
-import qualified ForeignKey
+import qualified CustomConstraintTest
 import qualified CustomPersistFieldTest
 import qualified CustomPrimaryKeyReferenceTest
 import qualified DataTypeTest
@@ -31,17 +31,23 @@ import qualified EmbedOrderTest
 import qualified EmbedTest
 import qualified EmptyEntityTest
 import qualified EquivalentTypeTestPostgres
+import qualified ForeignKey
+import qualified GeneratedColumnTestSQL
 import qualified HtmlTest
+import qualified ImplicitUuidSpec
 import qualified JSONTest
 import qualified LargeNumberTest
+import qualified LongIdentifierTest
 import qualified MaxLenTest
+import qualified MaybeFieldDefsTest
 import qualified MigrationColumnLengthTest
-import qualified MigrationTest
 import qualified MigrationOnlyTest
-import qualified MpsNoPrefixTest
+import qualified MigrationTest
 import qualified MpsCustomPrefixTest
-import qualified PersistentTest
+import qualified MpsNoPrefixTest
 import qualified PersistUniqueTest
+import qualified PersistentTest
+import qualified PgIntervalTest
 import qualified PrimaryTest
 import qualified RawSqlTest
 import qualified ReadWriteTest
@@ -53,10 +59,6 @@ import qualified TreeTest
 import qualified UniqueTest
 import qualified UpsertTest
 import qualified UpsertWhere
-import qualified CustomConstraintTest
-import qualified LongIdentifierTest
-import qualified PgIntervalTest
-import qualified GeneratedColumnTestSQL
 
 type Tuple = (,)
 
@@ -116,6 +118,7 @@ main = do
       , LargeNumberTest.numberMigrate
       , UniqueTest.uniqueMigrate
       , MaxLenTest.maxlenMigrate
+      , MaybeFieldDefsTest.maybeFieldDefMigrate
       , Recursive.recursiveMigrate
       , CompositeTest.compositeMigrate
       , TreeTest.treeMigrate
@@ -167,6 +170,7 @@ main = do
       ForeignKey.specsWith runConnAssert
       UniqueTest.specsWith runConnAssert
       MaxLenTest.specsWith runConnAssert
+      MaybeFieldDefsTest.specsWith runConnAssert
       Recursive.specsWith runConnAssert
       SumTypeTest.specsWith runConnAssert (Just (runMigrationSilent SumTypeTest.sumTypeMigrate))
       MigrationTest.specsWith runConnAssert
