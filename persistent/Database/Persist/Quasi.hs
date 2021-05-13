@@ -384,7 +384,8 @@ Alternatively we can specify the keyword nullable:
 >     nullableField  Int       nullable
 
 However the difference here is in the first instance the Haskell type will be 'Maybe Int',
-but in the second it will be 'Int'.
+but in the second it will be 'Int'. Be aware that this will cause runtime errors if the
+database returns `NULL` and the `PersistField` instance does not handle `PersistNull`.
 
 If you wish to define your Maybe types in a way that is similar to the actual Haskell
 definition, you can define 'Maybe Int' like so:
