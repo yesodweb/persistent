@@ -1,4 +1,8 @@
-module MaybeFieldDefsTest (specsWith) where
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wno-unused-top-binds #-}
+
+module MaybeFieldDefsTest (specsWith, maybeFieldDefMigrate) where
 
 import Data.String (IsString)
 
@@ -8,14 +12,15 @@ share [mkPersist sqlSettings,  mkMigrate "maybeFieldDefMigrate"] [persistLowerCa
   MaybeFieldDefEntity
     optionalString    (Maybe String)
     optionalInt       (Maybe Int)
+    deriving Eq Show
 |]
 
-specsWith :: Runner backend m => RunDb backend m -> Spec
+specsWith :: Runner SqlBackend m => RunDb SqlBackend m -> Spec
 specsWith runDb = describe "Maybe Field Definitions" $ do
   it "runs appropriate migrations" $ runDb $ do
-    runMigration maybeFieldDefMigrate
-
     emptyEntity <- insert $ MaybeFieldDefEntity Nothing Nothing
-    get emptyEntity `shouldReturn` MaybeFieldDefEntity Nothing Nothing
+    emptyResult <- get emptyEntity
+    liftIO $ emptyResult @?= Just (MaybeFieldDefEntity Nothing Nothing)
     populatedEntity <- insert $ MaybeFieldDefEntity (Just "text") (Just 8)
-    get populatedEntity `shouldReturn` MaybeFieldDefEntity (Just "text") (Just 8)
+    populatedResult <- get populatedEntity
+    liftIO $ populatedResult @?= Just (MaybeFieldDefEntity (Just "text") (Just 8))

@@ -46,7 +46,7 @@ import qualified EmptyEntityTest
 import qualified HtmlTest
 import qualified LargeNumberTest
 import qualified MaxLenTest
-import qualified MaybeFieldDefTest
+import qualified MaybeFieldDefsTest
 import qualified MigrationOnlyTest
 import qualified PersistentTest
 import qualified Recursive
@@ -129,7 +129,7 @@ main = do
     LargeNumberTest.specsWith
         (db' (deleteWhere ([] :: [Filter (LargeNumberTest.NumberGeneric backend)])))
     MaxLenTest.specsWith dbNoCleanup
-    MaybeFieldDefTest.specsWith dbNoCleanup
+    MaybeFieldDefsTest.specsWith dbNoCleanup
     Recursive.specsWith (db' Recursive.cleanup)
 
     SumTypeTest.specsWith (dbNoCleanup) Nothing

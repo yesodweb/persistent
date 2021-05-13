@@ -208,7 +208,7 @@ main = do
         LargeNumberTest.specsWith db
         UniqueTest.specsWith db
         MaxLenTest.specsWith db
-        MaybeFieldDefTest.specsWith db
+        MaybeFieldDefsTest.specsWith db
         Recursive.specsWith db
         SumTypeTest.specsWith db (Just (runMigrationSilent SumTypeTest.sumTypeMigrate))
         MigrationOnlyTest.specsWith db
