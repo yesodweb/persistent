@@ -187,7 +187,8 @@ parseEntityValues t vals =
         case fromPersistValues xs of
             Left e -> Left e
             Right xs' -> case keyFromValues keyvals of
-                Left _ -> error "fromPersistValuesComposite': keyFromValues failed"
+                Left err -> error $ "fromPersistValuesComposite': keyFromValues failed with error: "
+                    <> T.unpack err
                 Right key -> Right (Entity key xs')
 
 

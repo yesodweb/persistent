@@ -1,9 +1,14 @@
 # Changelog for persistent
 
-## 2.13.0.1
+## 2.13.0.2
 
 * [#1265](https://github.com/yesodweb/persistent/pull/1265)
     * Support GHC 9
+
+## 2.13.0.1
+
+* [#1268](https://github.com/yesodweb/persistent/pull/1268)
+    * Show `keyFromValues` error
 
 ## 2.13.0.0
 
@@ -16,7 +21,7 @@
       Please use `mkEntityDefList` instead.
     * `EntityDef` will now include fields marked `MigrationOnly` and
       `SafeToRemove`. Beforehand, those were filtered out, and `mkMigrate`
-      applied. The function `getEntityFields` wll only return fields defined on
+      applied. The function `getEntityFields` will only return fields defined on
       the Haskell type - for all columns, see `getEntityFieldsDatabase`.
 * [#1225](https://github.com/yesodweb/persistent/pull/1225)
     * The fields and constructor for `SqlBackend` are no longer exported by
@@ -31,16 +36,18 @@
       directly, use `mkSqlBackend` and the datatype `MkSqlBackendArgs`. The
       `MkSqlBackendArgs` record has the same field names as the `SqlBackend`, so
       the translation is easy:
-      ```diff
-- SqlBackend
-+ mkSqlBackend MkSqlBackendArgs
-    { connInsertSql = ...
-    , connCommit = ...
-    , connEscapeFieldName = ...
-    , connEscapeTableName = ...
-    , etc
-    }
-      ```
+
+        ```diff
+        - SqlBackend
+        + mkSqlBackend MkSqlBackendArgs
+            { connInsertSql = ...
+            , connCommit = ...
+            , connEscapeFieldName = ...
+            , connEscapeTableName = ...
+            , etc
+            }
+        ```
+
       Some fields were omitted in `MkSqlBackendArgs`. These fields are
       *optional* - they provide enhanced or backend-specific functionality. For
       these, use the setter functions like `setConnUpsertSql`.
