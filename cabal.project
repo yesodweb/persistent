@@ -7,8 +7,3 @@ packages:
   persistent-postgresql
   persistent-redis
   persistent-qq
-
-source-repository-package
-    type: git
-    location: https://github.com/informatikr/hedis
-    tag: d6487b1b433a75d2562629b624ebf370179cb474
