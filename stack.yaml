@@ -13,4 +13,4 @@ extra-deps:
   - lift-type-0.1.0.0
   - dhall-1.37.1
   - generic-lens-2.0.0.0
-
+  - generic-lens-core-2.0.0.0
