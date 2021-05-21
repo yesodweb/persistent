@@ -1,0 +1,9 @@
+resolver: lts-12.26
+packages:
+  - ./persistent
+  - ./persistent-sqlite
+  - ./persistent-test
+  - ./persistent-mysql
+  - ./persistent-postgresql
+  - ./persistent-redis
+  - ./persistent-qq

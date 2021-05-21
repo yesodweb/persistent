@@ -1,0 +1,9 @@
+resolver: lts-17.12
+packages:
+  - ./persistent
+  - ./persistent-sqlite
+  - ./persistent-test
+  - ./persistent-mysql
+  - ./persistent-postgresql
+  - ./persistent-redis
+  - ./persistent-qq
