@@ -1,4 +1,4 @@
-resolver: lts-14.27
+resolver: nightly-2021-05-20
 packages:
   - ./persistent
   - ./persistent-sqlite
