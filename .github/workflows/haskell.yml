@@ -50,7 +50,7 @@ jobs:
           stack-yaml:
               - stack-ghc-8.6.5.yaml
               - stack-ghc-8.8.4.yaml
-              - stack-ghc-8.10.3.yaml
+              - stack-ghc-8.10.4.yaml
               - stack.yaml
     steps:
       - uses: actions/checkout@v2

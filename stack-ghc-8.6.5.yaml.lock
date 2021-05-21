@@ -11,6 +11,20 @@ packages:
       sha256: 9de4bdc6ce32b78c28b4bce75b5b2e488bf0f875a136ae269a02df804eb94a1a
   original:
     hackage: lift-type-0.1.0.1
+- completed:
+    hackage: dhall-1.37.1@sha256:447031286e8fe270b0baacd9cc5a8af340d2ae94bb53b85807bee93381ca5287,35080
+    pantry-tree:
+      size: 305799
+      sha256: 623de5587e614ace2b6e2f908ccd4b4eec26db9cf29de45874bed8c0bdef2db8
+  original:
+    hackage: dhall-1.37.1
+- completed:
+    hackage: generic-lens-2.0.0.0@sha256:7409fa0ce540d0bd41acf596edd1c5d0c0ab1cd1294d514cf19c5c24e8ef2550,3866
+    pantry-tree:
+      size: 2470
+      sha256: 46ba160f0efc9c805eac6666f298f48dda899834b68c860f63641ce1f82db737
+  original:
+    hackage: generic-lens-2.0.0.0
 snapshots:
 - completed:
     size: 524996

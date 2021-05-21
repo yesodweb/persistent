@@ -10,4 +10,7 @@ packages:
   - ./persistent-qq
 
 extra-deps:
-    - lift-type-0.1.0.0
+  - lift-type-0.1.0.0
+  - dhall-1.37.1
+  - generic-lens-2.0.0.0
+

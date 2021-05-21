@@ -10,3 +10,6 @@ packages:
 
 extra-deps:
   - lift-type-0.1.0.1
+# for weeder
+  - dhall-1.37.1
+  - generic-lens-2.0.0.0
