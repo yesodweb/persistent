@@ -7,6 +7,7 @@ on:
     types:
       - opened
       - synchronize
+
 jobs:
   build:
     services:
@@ -44,13 +45,13 @@ jobs:
           --health-retries=3
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        stack-yaml:
-          - stack-ghc-8.4.4.yaml
-          - stack-ghc-8.6.5.yaml
-          - stack-ghc-8.8.4.yaml
-          - stack-ghc-8.10.3.yaml
-          - stack.yaml
+          stack-yaml:
+              - stack-ghc-8.6.5.yaml
+              - stack-ghc-8.8.4.yaml
+              - stack-ghc-8.10.3.yaml
+              - stack.yaml
     steps:
       - uses: actions/checkout@v2
       - uses: freckle/stack-cache-action@main
