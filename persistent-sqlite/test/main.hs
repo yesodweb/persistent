@@ -177,7 +177,7 @@ main = do
 
 
     hspec $ do
-        fdescribe "Database" $ describe "Persist" $ describe "Sqlite" $ do
+        describe "Database" $ describe "Persist" $ describe "Sqlite" $ do
             CompositeSpec.spec
         RenameTest.specsWith db
         DataTypeTest.specsWith
