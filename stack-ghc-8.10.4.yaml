@@ -10,3 +10,4 @@ packages:
 
 extra-deps:
   - lift-type-0.1.0.1
+  - generic-lens-core-2.0.0.0
