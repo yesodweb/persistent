@@ -55,7 +55,7 @@ test-suite specs
     , hspec
     , monad-logger
     , mtl
-    , persistent >=2.10
+    , persistent >=2.13
     , persistent-qq
     , persistent-sqlite
     , resourcet

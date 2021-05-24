@@ -3,6 +3,7 @@
 ## 2.12.0.1
 
 * Support GHC 9. [#1265](https://github.com/yesodweb/persistent/pull/1265)
+* Clarify lower bounds on `persistent` for the test suite. [#1274](https://github.com/yesodweb/persistent/pull/1274)
 
 ## 2.12.0.0
 

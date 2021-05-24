@@ -1,6 +1,7 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -9,21 +10,21 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE UndecidableInstances #-} -- FIXME
-{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE UndecidableInstances #-}
+
 module PersistentTestModels where
 
 import Control.Monad.Reader
 import Data.Aeson
-import Data.Text (Text)
 import Data.Proxy
+import Data.Text (Text)
 
+import Data.Foldable (toList)
 import qualified Data.List.NonEmpty as NEL
 import Database.Persist.Sql
 import Database.Persist.TH
-import PersistTestPetType
 import PersistTestPetCollarType
-import Data.Foldable (toList)
+import PersistTestPetType
 
 share
     [ mkPersist sqlSettings { mpsGeneric = True }
