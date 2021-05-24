@@ -30,7 +30,6 @@ import Data.Int (Int64)
 import Data.List (find, nubBy)
 import qualified Data.Map as Map
 import Data.Maybe (isJust)
-import Data.Monoid (mappend, (<>))
 import Data.Text (Text, unpack)
 import qualified Data.Text as T
 import Data.Void (Void)

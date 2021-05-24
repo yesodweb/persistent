@@ -6,12 +6,13 @@ import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Data.Aeson (Value (Object))
 import Data.Aeson.Types (Parser)
 import qualified Data.HashMap.Strict as HashMap
+import Data.Kind (Type)
 
 -- | Represents a value containing all the configuration options for a specific
 -- backend. This abstraction makes it easier to write code that can easily swap
 -- backends.
 class PersistConfig c where
-    type PersistConfigBackend c :: (* -> *) -> * -> *
+    type PersistConfigBackend c :: (Type -> Type) -> Type -> Type
     type PersistConfigPool c
 
     -- | Load the config settings from a 'Value', most likely taken from a YAML

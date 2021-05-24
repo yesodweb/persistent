@@ -97,7 +97,6 @@ import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NEL
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe, isJust, listToMaybe, mapMaybe)
-import Data.Monoid (mappend, mconcat, (<>))
 import Data.Proxy (Proxy(Proxy))
 import Data.Text (Text, concat, cons, pack, stripSuffix, uncons, unpack)
 import qualified Data.Text as T
@@ -124,7 +123,7 @@ import Database.Persist.Quasi.Internal
 import Database.Persist.Sql
        (Migration, PersistFieldSql, SqlBackend, migrate, sqlType)
 
-import Database.Persist.EntityDef.Internal (EntityDef(..), EntityIdDef(..))
+import Database.Persist.EntityDef.Internal (EntityDef(..))
 import Database.Persist.ImplicitIdDef (autoIncrementingInteger)
 import Database.Persist.ImplicitIdDef.Internal
 
@@ -714,7 +713,7 @@ mEmbedded _ (FTTypeCon Just{} _) =
     Left Nothing
 mEmbedded ents (FTTypeCon Nothing (EntityNameHS -> name)) =
     maybe (Left Nothing) (\_ -> Right name) $ M.lookup name ents
-mEmbedded ents (FTTypePromoted (EntityNameHS -> name)) =
+mEmbedded _ (FTTypePromoted _) =
     Left Nothing
 mEmbedded ents (FTList x) =
     mEmbedded ents x
@@ -1026,8 +1025,14 @@ dataTypeDec mps entityMap entDef = do
         )
 
     (nameFinal, paramsFinal)
-        | mpsGeneric mps = (mkEntityDefGenericName entDef, [PlainTV backendName])
-        | otherwise = (mkEntityDefName entDef, [])
+        | mpsGeneric mps =
+            ( mkEntityDefGenericName entDef
+            , [ mkPlainTV backendName
+              ]
+            )
+
+        | otherwise =
+            (mkEntityDefName entDef, [])
 
     cols :: [VarBangType]
     cols = do
@@ -1913,8 +1918,8 @@ mkLenses mps entityMap ent = fmap mconcat $ forM (getUnboundFieldDefs ent) $ \fi
         sT = mkST backend1
         tT = mkST backend2
         t1 `arrow` t2 = ArrowT `AppT` t1 `AppT` t2
-        vars = PlainTV fT
-             : (if mpsGeneric mps then [PlainTV backend1{-, PlainTV backend2-}] else [])
+        vars = mkForallTV fT
+             : (if mpsGeneric mps then [mkForallTV backend1{-, PlainTV backend2-}] else [])
     return
         [ SigD lensName $ ForallT vars [mkClassP ''Functor [VarT fT]] $
             (aT `arrow` (VarT fT `AppT` bT)) `arrow`
@@ -1932,6 +1937,33 @@ mkLenses mps entityMap ent = fmap mconcat $ forM (getUnboundFieldDefs ent) $ \fi
                     ])
             ]
         ]
+
+#if MIN_VERSION_template_haskell(2,17,0)
+mkPlainTV
+    :: Name
+    -> TyVarBndr ()
+mkPlainTV n = PlainTV n ()
+
+mkDoE :: [Stmt] -> Exp
+mkDoE stmts = DoE Nothing stmts
+
+mkForallTV :: Name -> TyVarBndr Specificity
+mkForallTV n = PlainTV n SpecifiedSpec
+#else
+
+mkDoE :: [Stmt] -> Exp
+mkDoE = DoE
+
+mkPlainTV
+    :: Name
+    -> TyVarBndr
+mkPlainTV = PlainTV
+
+mkForallTV
+    :: Name
+    -> TyVarBndr
+mkForallTV = mkPlainTV
+#endif
 
 mkForeignKeysComposite
     :: MkPersistSettings
@@ -2168,7 +2200,7 @@ mkDeleteCascade mps defs = do
             ]
             (ConT ''DeleteCascade `AppT` entityT `AppT` backendT)
             [ FunD 'deleteCascade
-                [normalClause [VarP key] (DoE stmts)]
+                [normalClause [VarP key] (mkDoE stmts)]
             ]
 
 -- | Creates a declaration for the @['EntityDef']@ from the @persistent@

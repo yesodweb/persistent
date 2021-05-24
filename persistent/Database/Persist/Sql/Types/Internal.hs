@@ -29,7 +29,6 @@ module Database.Persist.Sql.Types.Internal
 
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT, ask)
-import Data.Monoid ((<>))
 
 import Database.Persist.Class
     ( HasPersistBackend (..)

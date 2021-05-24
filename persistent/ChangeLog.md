@@ -1,5 +1,10 @@
 # Changelog for persistent
 
+## 2.13.0.2
+
+* [#1265](https://github.com/yesodweb/persistent/pull/1265)
+    * Support GHC 9
+
 ## 2.13.0.1
 
 * [#1268](https://github.com/yesodweb/persistent/pull/1268)

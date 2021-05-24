@@ -8,8 +8,6 @@ module Database.Persist.Sql.Types
     , ConnectionPoolConfig(..)
     ) where
 
-import Database.Persist.Types.Base (FieldCascade)
-
 import Control.Exception (Exception(..))
 import Control.Monad.Logger (NoLoggingT)
 import Control.Monad.Trans.Reader (ReaderT(..))

@@ -20,7 +20,6 @@ import Data.Fixed
 import Data.Int (Int8, Int16, Int32, Int64)
 import qualified Data.IntMap as IM
 import qualified Data.Map as M
-import Data.Monoid ((<>))
 import qualified Data.Set as S
 import Data.Text (Text)
 import qualified Data.Text as T

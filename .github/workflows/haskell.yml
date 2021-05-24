@@ -51,9 +51,10 @@ jobs:
           - "8.6.5"
           - "8.8.4"
           - "8.10.3"
+          - "9.0"
 
     env:
-      CONFIG: "--enable-tests"
+      CONFIG: "--enable-tests --enable-benchmarks"
     steps:
       - uses: actions/checkout@v2
       - uses: haskell/actions/setup@v1
@@ -81,6 +82,7 @@ jobs:
       - run: cabal v2-build all --disable-optimization --only-dependencies $CONFIG
       - run: cabal v2-build all --disable-optimization $CONFIG
       - run: cabal v2-test all --disable-optimization $CONFIG --test-options "--fail-on-focus"
+      - run: cabal v2-bench all --disable-optimization $CONFIG
       - run: cabal v2-haddock all $CONFIG
         continue-on-error: true
       - run: cabal v2-sdist all

@@ -1,5 +1,5 @@
 name:            persistent
-version:         2.13.0.1
+version:         2.13.0.2
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -166,6 +166,8 @@ test-suite test
         Database.Persist.TH.ForeignRefSpec
         Database.Persist.TH.ImplicitIdColSpec
         Database.Persist.TH.JsonEncodingSpec
+        Database.Persist.TH.KindEntitiesSpec
+        Database.Persist.TH.KindEntitiesSpecImports
         Database.Persist.TH.MigrationOnlySpec
         Database.Persist.TH.MultiBlockSpec
         Database.Persist.TH.MultiBlockSpec.Model
@@ -189,8 +191,7 @@ benchmark persistent-th-bench
     build-depends:    base
                     , persistent
                     , criterion
-                    , deepseq
-                    , deepseq-generics
+                    , deepseq >= 1.4
                     , file-embed
                     , text
                     , template-haskell

@@ -49,7 +49,6 @@ import Data.Attoparsec.ByteString (parseOnly)
 import qualified Data.HashMap.Strict as HM
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Maybe (isJust)
-import Data.Monoid (mappend)
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
@@ -58,6 +57,7 @@ import qualified Data.Text.Lazy.Builder as TB
 import GHC.Generics
 import GHC.OverloadedLabels
 import GHC.TypeLits
+import Data.Kind (Type)
 
 import Database.Persist.Class.PersistField
 import Database.Persist.Names
@@ -102,7 +102,7 @@ class ( PersistField (Key record), ToJSON (Key record), FromJSON (Key record)
     -- As of @persistent-2.11.0.0@, it's possible to use the @OverloadedLabels@
     -- language extension to refer to 'EntityField' values polymorphically. See
     -- the documentation on 'SymbolToField' for more information.
-    data EntityField record :: * -> *
+    data EntityField record :: Type -> Type
     -- | Return meta-data for a given 'EntityField'.
     persistFieldDef :: EntityField record typ -> FieldDef
     -- | A meta-operation to get the database fields of a record.
@@ -317,7 +317,7 @@ instance (PersistEntity record, PersistField record, PersistField (Key record))
         _ -> error $ T.unpack $ errMsg "expected PersistMap"
 
     fromPersistValue (PersistMap alist) = case after of
-        [] -> Left $ errMsg $ "did not find " `Data.Monoid.mappend` idField `mappend` " field"
+        [] -> Left $ errMsg $ "did not find " `mappend` idField `mappend` " field"
         ("_id", kv):afterRest ->
             fromPersistValue (PersistMap (before ++ afterRest)) >>= \record ->
                 keyFromValues [kv] >>= \k ->

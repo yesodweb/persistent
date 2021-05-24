@@ -924,7 +924,7 @@ takeConstraint ps entityName defs (n:rest) | isCapitalizedText n = takeConstrain
           | n == "Foreign" =
               (Nothing, Nothing, Nothing, Just $ takeForeign ps entityName rest)
           | n == "Primary" =
-              (Nothing, Just $ takeComposite ps defNames rest, Nothing, Nothing)
+              (Nothing, Just $ takeComposite defNames rest, Nothing, Nothing)
           | n == "Id"      =
               (Just $ takeId ps entityName rest, Nothing, Nothing, Nothing)
           | otherwise      =
@@ -1012,11 +1012,10 @@ data UnboundCompositeDef = UnboundCompositeDef
     deriving (Show, Lift)
 
 takeComposite
-    :: PersistSettings
-    -> [FieldNameHS]
+    :: [FieldNameHS]
     -> [Text]
     -> UnboundCompositeDef
-takeComposite ps fields pkcols =
+takeComposite fields pkcols =
     UnboundCompositeDef
         { unboundCompositeCols =
             map (getDef fields) cols
