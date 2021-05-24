@@ -10,7 +10,6 @@ import Control.Monad.Trans.Reader hiding (local)
 import Control.Monad.Trans.Resource
 import Data.Acquire (Acquire, ReleaseType(..), mkAcquireType, with)
 import Data.IORef (readIORef)
-import Data.Pool (Pool)
 import Data.Pool as P
 import qualified Data.Map as Map
 import qualified Data.Text as T

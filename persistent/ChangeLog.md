@@ -1,9 +1,14 @@
 # Changelog for persistent
 
-## Unreleased
+## 2.13.1.0
 
 * [#1264](https://github.com/yesodweb/persistent/pull/1264)
     * Support declaring Maybe before the type in model definitions
+
+## 2.13.0.2
+
+* [#1265](https://github.com/yesodweb/persistent/pull/1265)
+    * Support GHC 9
 
 ## 2.13.0.1
 
@@ -83,17 +88,6 @@
 * [#1255](https://github.com/yesodweb/persistent/pull/1255)
     * `mkPersist` now checks to see if an instance already exists for
       `PersistEntity` for the inputs.
-
-## 2.12.1.2
-
-* [#1258](https://github.com/yesodweb/persistent/pull/1258)
-    * Support promoted types in Quasi Quoter
-* [#1243](https://github.com/yesodweb/persistent/pull/1243)
-    * Assorted cleanup of TH module
-* [#1242](https://github.com/yesodweb/persistent/pull/1242)
-    * Refactor setEmbedField to use do notation
-* [#1237](https://github.com/yesodweb/persistent/pull/1237)
-    * Remove nonEmptyOrFail function from recent tests
 * [#1256](https://github.com/yesodweb/persistent/pull/1256)
     * The QuasiQuoter has been refactored and improved.
     * You can now use `mkPersistWith` to pass in a list of pre-existing
@@ -107,6 +101,17 @@
       on fields.
     * You can use `Key Foo` and `FooId` interchangeably in fields.
     * Support for GHC < 8.4 dropped.
+
+## 2.12.1.2
+
+* [#1258](https://github.com/yesodweb/persistent/pull/1258)
+    * Support promoted types in Quasi Quoter
+* [#1243](https://github.com/yesodweb/persistent/pull/1243)
+    * Assorted cleanup of TH module
+* [#1242](https://github.com/yesodweb/persistent/pull/1242)
+    * Refactor setEmbedField to use do notation
+* [#1237](https://github.com/yesodweb/persistent/pull/1237)
+    * Remove nonEmptyOrFail function from recent tests
 
 ## 2.12.1.1
 

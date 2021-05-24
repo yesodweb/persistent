@@ -74,8 +74,25 @@ type Getting r s t a b = (a -> Constant r b) -> s -> Constant r t
 view :: s -> Getting a s t a b -> a
 view s l = getConstant (l Constant s)
 
+safeToRemoveSpec :: forall backend m. Runner backend m => RunDb backend m -> Spec
+safeToRemoveSpec runDb = do
+    describe "DudeWeirdColumns" $ do
+        it "can insert and get" $ do
+            let m = DudeWeirdColumns "hello"
+            runDb $ do
+                k <- insert m
+                mval <- get k
+                liftIO $ fmap dudeWeirdColumnsName mval `shouldBe` Just "hello"
+        it "can putMany" $ do
+            let ms =
+                    [ DudeWeirdColumns "hello"
+                    , DudeWeirdColumns "goodbyue"
+                    ]
+            runDb $ putMany ms
+
 specsWith :: forall backend m. Runner backend m => RunDb backend m -> Spec
 specsWith runDb = describe "persistent" $ do
+  describe "SafeToRemove" (safeToRemoveSpec runDb)
   it "fieldLens" $ do
       let michael = Entity undefined $ Person "Michael" 28 Nothing :: Entity Person
           michaelP1 = Person "Michael" 29 Nothing :: Person

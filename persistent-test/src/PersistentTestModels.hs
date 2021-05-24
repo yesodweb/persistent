@@ -98,6 +98,13 @@ share [mkPersist persistSettings { mpsGeneric = True },  mkMigrate "testMigrate"
     ~no Int
     def Int
 
+  DudeWeirdColumns
+    name Text
+    foo  Int     Maybe MigrationOnly
+    bar  Double  SafeToRemove
+    UniqueName name
+    deriving Eq Show
+
   -- | This is a doc comment for a relationship.
   -- | You need to put the pipe character for each line of documentation.
   -- Lines without a pipe are omitted.
@@ -218,7 +225,7 @@ instance (PersistEntity a) => PersistEntity (ReverseFieldOrder a) where
     persistUniqueKeys = fmap URFO . reverse . persistUniqueKeys . unRFO
 
     persistIdField = error "ReverseFieldOrder.persistIdField"
-    fieldLens = error "ReverseFieldOrder.fieldLens"
+    fieldLens x = error "ReverseFieldOrder.fieldLens"
 
 cleanDB
     :: (MonadIO m, PersistQuery backend, PersistStoreWrite (BaseBackend backend))

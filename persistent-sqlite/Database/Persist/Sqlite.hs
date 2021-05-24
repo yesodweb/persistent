@@ -499,7 +499,14 @@ safeToRemove :: EntityDef -> FieldNameDB -> Bool
 safeToRemove def (FieldNameDB colName)
     = any (elem FieldAttrSafeToRemove . fieldAttrs)
     $ filter ((== FieldNameDB colName) . fieldDB)
-    $ getEntityFieldsDatabase def
+    $ allEntityFields
+  where
+    allEntityFields =
+        getEntityFieldsDatabase def <> case getEntityId def of
+            EntityIdField fdef ->
+                [fdef]
+            _ ->
+                []
 
 getCopyTable :: [EntityDef]
              -> (Text -> IO Statement)
@@ -676,7 +683,7 @@ escape s =
 putManySql :: EntityDef -> Int -> Text
 putManySql ent n = putManySql' conflictColumns (toList fields) ent n
   where
-    fields = getEntityFieldsDatabase ent
+    fields = getEntityFields ent
     conflictColumns = concatMap (map (escapeF . snd) . toList . uniqueFields) (getEntityUniques ent)
 
 repsertManySql :: EntityDef -> Int -> Text
@@ -915,6 +922,33 @@ instance BackendCompatible b (RawSqlite b) where
     projectBackend = _persistentBackend
 
 #if MIN_VERSION_base(4,12,0)
+instance (PersistCore b) => PersistCore (RawSqlite b) where
+  newtype BackendKey (RawSqlite b) = RawSqliteKey { unRawSqliteKey :: BackendKey (Compatible b (RawSqlite b)) }
+
+makeCompatibleKeyInstances [t| forall b. Compatible b (RawSqlite b) |]
+#else
+instance (PersistCore b) => PersistCore (RawSqlite b) where
+  newtype BackendKey (RawSqlite b) = RawSqliteKey { unRawSqliteKey :: BackendKey (RawSqlite b) }
+
+deriving instance (Show (BackendKey b)) => Show (BackendKey (RawSqlite b))
+deriving instance (Read (BackendKey b)) => Read (BackendKey (RawSqlite b))
+deriving instance (Eq (BackendKey b)) => Eq (BackendKey (RawSqlite b))
+deriving instance (Ord (BackendKey b)) => Ord (BackendKey (RawSqlite b))
+deriving instance (Num (BackendKey b)) => Num (BackendKey (RawSqlite b))
+deriving instance (Integral (BackendKey b)) => Integral (BackendKey (RawSqlite b))
+deriving instance (PersistField (BackendKey b)) => PersistField (BackendKey (RawSqlite b))
+deriving instance (PersistFieldSql (BackendKey b)) => PersistFieldSql (BackendKey (RawSqlite b))
+deriving instance (Real (BackendKey b)) => Real (BackendKey (RawSqlite b))
+deriving instance (Enum (BackendKey b)) => Enum (BackendKey (RawSqlite b))
+deriving instance (Bounded (BackendKey b)) => Bounded (BackendKey (RawSqlite b))
+deriving instance (ToJSON (BackendKey b)) => ToJSON (BackendKey (RawSqlite b))
+deriving instance (FromJSON (BackendKey b)) => FromJSON (BackendKey (RawSqlite b))
+#endif
+
+
+#if MIN_VERSION_base(4,12,0)
+$(pure [])
+
 makeCompatibleInstances [t| forall b. Compatible b (RawSqlite b) |]
 #else
 instance HasPersistBackend b => HasPersistBackend (RawSqlite b) where
@@ -959,30 +993,6 @@ instance (PersistUniqueWrite b) => PersistUniqueWrite (RawSqlite b) where
     upsert rec = withReaderT _persistentBackend . upsert rec
     upsertBy uniq rec = withReaderT _persistentBackend . upsertBy uniq rec
     putMany = withReaderT _persistentBackend . putMany
-#endif
-
-#if MIN_VERSION_base(4,12,0)
-instance (PersistCore b) => PersistCore (RawSqlite b) where
-  newtype BackendKey (RawSqlite b) = RawSqliteKey { unRawSqliteKey :: BackendKey (Compatible b (RawSqlite b)) }
-
-makeCompatibleKeyInstances [t| forall b. Compatible b (RawSqlite b) |]
-#else
-instance (PersistCore b) => PersistCore (RawSqlite b) where
-  newtype BackendKey (RawSqlite b) = RawSqliteKey { unRawSqliteKey :: BackendKey (RawSqlite b) }
-
-deriving instance (Show (BackendKey b)) => Show (BackendKey (RawSqlite b))
-deriving instance (Read (BackendKey b)) => Read (BackendKey (RawSqlite b))
-deriving instance (Eq (BackendKey b)) => Eq (BackendKey (RawSqlite b))
-deriving instance (Ord (BackendKey b)) => Ord (BackendKey (RawSqlite b))
-deriving instance (Num (BackendKey b)) => Num (BackendKey (RawSqlite b))
-deriving instance (Integral (BackendKey b)) => Integral (BackendKey (RawSqlite b))
-deriving instance (PersistField (BackendKey b)) => PersistField (BackendKey (RawSqlite b))
-deriving instance (PersistFieldSql (BackendKey b)) => PersistFieldSql (BackendKey (RawSqlite b))
-deriving instance (Real (BackendKey b)) => Real (BackendKey (RawSqlite b))
-deriving instance (Enum (BackendKey b)) => Enum (BackendKey (RawSqlite b))
-deriving instance (Bounded (BackendKey b)) => Bounded (BackendKey (RawSqlite b))
-deriving instance (ToJSON (BackendKey b)) => ToJSON (BackendKey (RawSqlite b))
-deriving instance (FromJSON (BackendKey b)) => FromJSON (BackendKey (RawSqlite b))
 #endif
 
 makeLenses ''RawSqlite
