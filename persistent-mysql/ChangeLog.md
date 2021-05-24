@@ -1,5 +1,10 @@
 # Changelog for persistent-mysql
 
+## 2.13.0.1
+
+* [#1275](https://github.com/yesodweb/persistent/pull/1275)
+    * Fix `SafeToRemove`
+
 ## 2.13.0.0
 
 * [#1225](https://github.com/yesodweb/persistent/pull/1225)

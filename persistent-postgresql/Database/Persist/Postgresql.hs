@@ -402,7 +402,7 @@ insertSql' ent vals =
     sql = T.concat
         [ "INSERT INTO "
         , escapeE $ getEntityDBName ent
-        , if null (getEntityFieldsDatabase ent)
+        , if null (getEntityFields ent)
             then " DEFAULT VALUES"
             else T.concat
                 [ "("
@@ -864,7 +864,11 @@ addTable cols entity =
             Just _ ->
                 cols
             _ ->
-                filter (\c -> Just (cName c) /= fmap fieldDB (getEntityIdField entity) ) cols
+                filter keepField cols
+      where
+        keepField c =
+            Just (cName c) /= fmap fieldDB (getEntityIdField entity)
+            && not (safeToRemove entity (cName c))
 
     name =
         getEntityDBName entity
@@ -1009,7 +1013,14 @@ safeToRemove :: EntityDef -> FieldNameDB -> Bool
 safeToRemove def (FieldNameDB colName)
     = any (elem FieldAttrSafeToRemove . fieldAttrs)
     $ filter ((== FieldNameDB colName) . fieldDB)
-    $ NEL.toList $ keyAndEntityFields def
+    $ allEntityFields
+  where
+    allEntityFields =
+        getEntityFieldsDatabase def <> case getEntityId def of
+            EntityIdField fdef ->
+                [fdef]
+            _ ->
+                []
 
 getAlters :: [EntityDef]
           -> EntityDef
@@ -1301,8 +1312,12 @@ findAlters defs edef col@(Column name isNull sqltype def _gen _defConstraintName
                             case def of
                                 Nothing -> [NoDefault col]
                                 Just s  -> [Default col s]
+                dropSafe =
+                    if safeToRemove edef name
+                        then error "wtf" [Drop col True]
+                        else []
              in
-                ( modRef ++ modDef ++ modNull ++ modType
+                ( modRef ++ modDef ++ modNull ++ modType ++ dropSafe
                 , filter (\c -> cName c /= name) cols
                 )
 
@@ -1742,7 +1757,7 @@ mockMigration mig = do
 putManySql :: EntityDef -> Int -> Text
 putManySql ent n = putManySql' conflictColumns fields ent n
   where
-    fields = getEntityFieldsDatabase ent
+    fields = getEntityFields ent
     conflictColumns = concatMap (map (escapeF . snd) . NEL.toList . uniqueFields) (getEntityUniques ent)
 
 repsertManySql :: EntityDef -> Int -> Text
