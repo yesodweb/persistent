@@ -676,7 +676,7 @@ escape s =
 putManySql :: EntityDef -> Int -> Text
 putManySql ent n = putManySql' conflictColumns (toList fields) ent n
   where
-    fields = getEntityFieldsDatabase ent
+    fields = getEntityFields ent
     conflictColumns = concatMap (map (escapeF . snd) . toList . uniqueFields) (getEntityUniques ent)
 
 repsertManySql :: EntityDef -> Int -> Text
