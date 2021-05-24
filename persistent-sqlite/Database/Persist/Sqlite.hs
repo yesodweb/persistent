@@ -499,7 +499,14 @@ safeToRemove :: EntityDef -> FieldNameDB -> Bool
 safeToRemove def (FieldNameDB colName)
     = any (elem FieldAttrSafeToRemove . fieldAttrs)
     $ filter ((== FieldNameDB colName) . fieldDB)
-    $ getEntityFieldsDatabase def
+    $ allEntityFields
+  where
+    allEntityFields =
+        getEntityFieldsDatabase def <> case getEntityId def of
+            EntityIdField fdef ->
+                [fdef]
+            _ ->
+                []
 
 getCopyTable :: [EntityDef]
              -> (Text -> IO Statement)
@@ -676,7 +683,7 @@ escape s =
 putManySql :: EntityDef -> Int -> Text
 putManySql ent n = putManySql' conflictColumns (toList fields) ent n
   where
-    fields = getEntityFieldsDatabase ent
+    fields = getEntityFields ent
     conflictColumns = concatMap (map (escapeF . snd) . toList . uniqueFields) (getEntityUniques ent)
 
 repsertManySql :: EntityDef -> Int -> Text
