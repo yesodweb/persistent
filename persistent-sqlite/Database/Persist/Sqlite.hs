@@ -499,7 +499,14 @@ safeToRemove :: EntityDef -> FieldNameDB -> Bool
 safeToRemove def (FieldNameDB colName)
     = any (elem FieldAttrSafeToRemove . fieldAttrs)
     $ filter ((== FieldNameDB colName) . fieldDB)
-    $ getEntityFieldsDatabase def
+    $ allEntityFields
+  where
+    allEntityFields =
+        getEntityFieldsDatabase def <> case getEntityId def of
+            EntityIdField fdef ->
+                [fdef]
+            _ ->
+                []
 
 getCopyTable :: [EntityDef]
              -> (Text -> IO Statement)

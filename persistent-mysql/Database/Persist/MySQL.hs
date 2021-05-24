@@ -1533,7 +1533,7 @@ mkBulkInsertQuery records fieldValues updates =
 putManySql :: EntityDef -> Int -> Text
 putManySql ent n = putManySql' fields ent n
   where
-    fields = getEntityFieldsDatabase ent
+    fields = getEntityFields ent
 
 repsertManySql :: EntityDef -> Int -> Text
 repsertManySql ent n = putManySql' fields ent n
