@@ -1,5 +1,10 @@
 # Changelog for persistent
 
+## 2.13.0.3
+* [#1277](https://github.com/yesodweb/persistent/pull/1277)
+    * Corrected the documentation of `addMigration` to match the actual
+      behaviour - this will not change the behaviour of your code.
+
 ## 2.13.0.2
 
 * [#1265](https://github.com/yesodweb/persistent/pull/1265)
