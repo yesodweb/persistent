@@ -63,7 +63,10 @@ type SqlPersistM = SqlPersistT (NoLoggingT (ResourceT IO))
 
 type Sql = Text
 
--- Bool indicates if the Sql is safe
+-- A list of SQL operations, marked with a safety flag. If the 'Bool' is
+-- 'True', then the operation is *unsafe* - it might be destructive, or
+-- otherwise not idempotent. If the 'Bool' is 'False', then the operation
+-- is *safe*, and can be run repeatedly without issues.
 type CautiousMigration = [(Bool, Sql)]
 
 -- | A 'Migration' is a four level monad stack consisting of:

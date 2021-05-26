@@ -195,12 +195,14 @@ reportErrors = tell
 -- @since 2.9.2
 addMigration
     :: Bool
-    -- ^ Is the migration safe to run? (eg a non-destructive and idempotent
-    -- update on the schema)
+    -- ^ Is the migration unsafe to run? (eg a destructive or non-idempotent
+    -- update on the schema). If 'True', the migration is *unsafe*, and will
+    -- need to be run manually later. If 'False', the migration is *safe*, and
+    -- can be run any number of times.
     -> Sql
     -- ^ A 'Text' value representing the command to run on the database.
     -> Migration
-addMigration isSafe sql = lift (tell [(isSafe, sql)])
+addMigration isUnsafe sql = lift (tell [(isUnsafe, sql)])
 
 -- | Add a 'CautiousMigration' (aka a @[('Bool', 'Text')]@) to the
 -- migration plan.
