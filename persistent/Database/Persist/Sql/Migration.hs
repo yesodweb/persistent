@@ -22,20 +22,20 @@ module Database.Persist.Sql.Migration
 import Control.Exception (throwIO)
 import Control.Monad (liftM, unless)
 import Control.Monad.IO.Unlift
-import Control.Monad.Trans.Class (MonadTrans (..))
-import Control.Monad.Trans.Reader (ReaderT (..), ask)
+import Control.Monad.Trans.Class (MonadTrans(..))
+import Control.Monad.Trans.Reader (ReaderT(..), ask)
 import Control.Monad.Trans.Writer
-import Data.Text (Text, unpack, snoc, isPrefixOf, pack)
+import Data.Text (Text, isPrefixOf, pack, snoc, unpack)
 import qualified Data.Text.IO
+import GHC.Stack
 import System.IO
 import System.IO.Silently (hSilence)
-import GHC.Stack
 
+import Database.Persist.Sql.Orphan.PersistStore ()
+import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Types.Internal
-import Database.Persist.Sql.Raw
 import Database.Persist.Types
-import Database.Persist.Sql.Orphan.PersistStore()
 
 allSql :: CautiousMigration -> [Sql]
 allSql = map snd
