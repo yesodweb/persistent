@@ -37,6 +37,7 @@ library
       , template-haskell         >= 2.13 && < 2.18
       , text                     >= 1.2
       , th-lift-instances        >= 0.1.14    && < 0.2
+      , th-abstraction           >= 0.2.8
       , time                     >= 1.6
       , transformers             >= 0.5
       , unliftio
@@ -140,6 +141,7 @@ test-suite test
       , template-haskell         >= 2.4
       , text
       , th-lift-instances
+      , th-abstraction
       , time
       , transformers
       , unliftio

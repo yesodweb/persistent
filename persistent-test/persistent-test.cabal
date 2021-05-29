@@ -21,6 +21,7 @@ library
         CustomPersistFieldTest
         CustomPrimaryKeyReferenceTest
         DataTypeTest
+        DerivePersistTest
         EmbedTest
         EmbedOrderTest
         EmptyEntityTest

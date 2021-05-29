@@ -46,6 +46,7 @@ import qualified TransactionLevelTest
 import qualified UniqueTest
 import qualified UpsertTest
 import qualified LongIdentifierTest
+import qualified DerivePersistTest
 
 import Control.Exception (handle, IOException, throwIO)
 import Control.Monad.Catch (catch)
@@ -168,6 +169,7 @@ main = do
             , CustomPersistFieldTest.customFieldMigrate
             , PrimaryTest.migration
             , CustomPrimaryKeyReferenceTest.migration
+            , DerivePersistTest.migration
             , MigrationColumnLengthTest.migration
             , TransactionLevelTest.migration
             , LongIdentifierTest.migration
@@ -237,6 +239,7 @@ main = do
         MigrationTest.specsWith db
         LongIdentifierTest.specsWith db
         GeneratedColumnTestSQL.specsWith db
+        DerivePersistTest.specsWith db
 
         it "issue #328" $ asIO $ runSqliteInfo (mkSqliteConnectionInfo ":memory:") $ do
             void $ runMigrationSilent migrateAll

@@ -31,6 +31,13 @@ module Database.Persist.TH
     , mkPersist
     , mkPersistWith
     , MkPersistSettings
+    , derivePersist
+    , stripEntityNamePrefix
+    , DeriveEntityDef(..)
+    , DeriveFieldDef(..)
+    , DeriveForeignKey(..)
+    , mkDeriveEntityDef
+    , mkDeriveFieldDef
     , mpsBackend
     , mpsGeneric
     , mpsPrefixFields
@@ -39,6 +46,7 @@ module Database.Persist.TH
     , mpsEntityJSON
     , mpsGenerateLenses
     , mpsDeriveInstances
+    , mpsRecordFieldToHaskellName
     , EntityJSON(..)
     , mkPersistSettings
     , sqlSettings
@@ -110,6 +118,8 @@ import Instances.TH.Lift ()
     -- instance on pre-1.2.4 versions of `text`
 import Data.Foldable (toList)
 import qualified Data.Set as Set
+import Language.Haskell.TH.Datatype
+import qualified Language.Haskell.TH.Datatype as THD
 import Language.Haskell.TH.Lib
        (appT, conE, conK, conT, litT, strTyLit, varE, varP, varT)
 import Language.Haskell.TH.Quote
@@ -126,6 +136,7 @@ import Database.Persist.Sql
 import Database.Persist.EntityDef.Internal (EntityDef(..))
 import Database.Persist.ImplicitIdDef (autoIncrementingInteger)
 import Database.Persist.ImplicitIdDef.Internal
+import Debug.Trace
 
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
 -- used as input to the template haskell generation code (mkPersist).
@@ -272,6 +283,189 @@ preprocessUnboundDefs preexistingEntities unboundDefs =
   where
     (embedEntityMap, noCycleEnts) =
         embedEntityDefsMap preexistingEntities unboundDefs
+
+-- | Include entities that are related to each other in one call
+derivePersist :: MkPersistSettings -> PersistSettings -> [DeriveEntityDef] -> Q [Dec]
+derivePersist mps ps defs = do
+    ents <- mapM (\ded -> datatypeToEntityDef mps ps ded <$> reifyDatatype (entityTypeName ded)) defs
+    let mps' = mps {mpsCreateDataType = False}
+    mkPersist mps' ents
+
+mkAutoIdField :: PersistSettings -> EntityNameHS -> SqlType -> FieldDef
+mkAutoIdField ps entName idSqlType =
+    FieldDef
+        { fieldHaskell = FieldNameHS "Id"
+        -- this should be modeled as a Maybe
+        -- but that sucks for non-ID field
+        -- TODO: use a sumtype FieldDef | IdFieldDef
+        , fieldDB = FieldNameDB $ psIdName ps
+        , fieldType = FTTypeCon Nothing $ (`mappend` "Id") $ unEntityNameHS entName
+        , fieldSqlType = idSqlType
+        -- the primary field is actually a reference to the entity
+        , fieldReference = ForeignRef entName
+        , fieldAttrs = []
+        , fieldStrict = True
+        , fieldComments = Nothing
+        , fieldCascade = noCascade
+        , fieldGenerated = Nothing
+        , fieldIsImplicitIdColumn = True
+        }
+
+
+data DeriveFieldDef = DeriveFieldDef {
+    fieldRecordName :: Name
+    , sqlNameOverride :: Maybe Text
+    , sqlTypeOverride :: Maybe Text
+    , generatedOverride :: Maybe Text
+    , fieldCascadeOverride :: Maybe FieldCascade
+    , fieldAttrOverride :: [FieldAttr]
+}
+
+data DeriveEntityDef = DeriveEntityDef {
+    entityTypeName :: Name
+    , primaryId :: Maybe (Either DeriveFieldDef [Name])
+    , deriveEntityDB :: Maybe Text
+    , uniques :: Maybe (Text, [Name])
+    , deriveFields :: [DeriveFieldDef]
+    , foreignKeys :: [DeriveForeignKey]
+}
+
+mkDeriveEntityDef :: Name -> DeriveEntityDef
+mkDeriveEntityDef name = DeriveEntityDef {
+    entityTypeName = name
+    , primaryId = Nothing
+    , deriveEntityDB = Nothing
+    , uniques = Nothing
+    , deriveFields = []
+    , foreignKeys = []
+}
+
+mkDeriveFieldDef :: Name -> DeriveFieldDef
+mkDeriveFieldDef name = DeriveFieldDef
+    { fieldRecordName = name
+    , sqlNameOverride = Nothing
+    , sqlTypeOverride = Nothing
+    , generatedOverride = Nothing
+    , fieldCascadeOverride = Nothing
+    , fieldAttrOverride = []
+}
+
+data DeriveForeignKey = DeriveForeignKey
+    { otherEntity :: Name
+    , constraintName :: Text
+    , ourFields :: [Name]
+    , parentFields :: Maybe [Name]
+}
+
+stripEntityNamePrefix :: Text -> Text -> Text
+stripEntityNamePrefix entName fieldName = if T.toLower entName `T.isPrefixOf` T.toLower fieldName
+    then T.drop (T.length entName) fieldName
+    else fieldName
+
+datatypeToEntityDef :: MkPersistSettings -> PersistSettings -> DeriveEntityDef -> DatatypeInfo -> UnboundEntityDef
+datatypeToEntityDef mps ps@PersistSettings{..} ded DatatypeInfo{..} = unbound where
+    unbound = (unbindEntityDef ent) {
+        unboundForeignDefs = foreigns
+    }
+    ent = EntityDef
+        { entityHaskell = EntityNameHS entName
+        , entityDB = EntityNameDB $ fromMaybe (psToDBName entName) (deriveEntityDB ded)
+        , entityId = entityIdField
+        , entityAttrs = []
+        , entityFields = map snd fields 
+        , entityUniques = []
+        , entityForeigns = []
+        , entityDerives = []
+        , entityExtra = mempty
+        , entitySum = False 
+        , entityComments = Nothing
+    }
+    -- unboundPrimarySpec = error "unboundPrimarySpec"
+    entName = pack $ nameBase datatypeName
+    -- autoIdField = mkAutoIdField ps (EntityNameHS entName) idSqlType
+
+    fields = fieldToFieldDefs mps ps ded $ case datatypeCons of
+        [c] -> c
+        _ -> error $ show entName <> ": data type must have a single constructor"
+
+    entityIdField = case primaryId ded of
+        Nothing -> EntityIdField $ mkAutoIdField' (FieldNameDB psIdName) (EntityNameHS entName) SqlInt64
+        Just (Right names) | null names -> error "No fields on primary composite key."
+        Just (Right names) -> EntityIdNaturalKey $ CompositeDef (getFieldByName <$> NEL.fromList names) []
+        Just (Left primaryOverride) -> error "Left entityIdField"
+
+    getFieldByName :: Name -> FieldDef
+    getFieldByName name = case lookup name fields of
+        Just field -> field
+        Nothing -> error $ "datatypeToEntityDef: entity " <> show entName <> "  does not have field " <> show name
+
+    foreigns = map mkForeign (foreignKeys ded)
+
+    mkForeign :: DeriveForeignKey -> UnboundForeignDef
+    mkForeign DeriveForeignKey{..} = UnboundForeignDef foreignFields $ ForeignDef
+        { foreignRefTableHaskell = EntityNameHS $ pack $ nameBase otherEntity
+        , foreignRefTableDBName = EntityNameDB $ psToDBName $ pack $ nameBase otherEntity
+        , foreignConstraintNameHaskell = ConstraintNameHS constraintName
+        , foreignConstraintNameDBName =
+            ConstraintNameDB $ psToDBName (entName `T.append` constraintName)
+        , foreignFieldCascade = FieldCascade
+            { fcOnDelete = Nothing
+            , fcOnUpdate = Nothing
+            }
+        , foreignFields = []
+        , foreignAttrs = []
+        , foreignNullable = False
+        , foreignToPrimary = null parentFields
+        } where
+            foreignFields = FieldListImpliedId $ NEL.fromList $ map toFieldHaskell ourFields
+    toFieldHaskell name = FieldNameHS $
+        mpsRecordFieldToHaskellName mps entName (pack $ nameBase name)
+
+fieldToFieldDefs :: MkPersistSettings -> PersistSettings -> DeriveEntityDef -> ConstructorInfo -> [(Name, FieldDef)]
+fieldToFieldDefs mps PersistSettings{..} ded ConstructorInfo{..} = case constructorVariant of
+    RecordConstructor names -> zipWith3 (\name -> toFieldDef name (lookupFieldOverride name)) names constructorFields constructorStrictness
+    _ -> error "Data type must have a record constructor"
+    where
+    lookupFieldOverride :: Name -> Maybe DeriveFieldDef
+    lookupFieldOverride =
+        let fieldMap = M.fromList $ map (\f -> (fieldRecordName f, f)) $ deriveFields ded
+        in flip M.lookup fieldMap
+
+    toFieldDef :: Name -> Maybe DeriveFieldDef -> Type -> FieldStrictness -> (Name, FieldDef)
+    toFieldDef name maybeDef typ strictness = (name, FieldDef{
+          fieldHaskell = FieldNameHS fieldHaskell
+        , fieldDB = FieldNameDB $ fromMaybe (psToDBName fieldHaskell) (maybeDef >>= sqlNameOverride)
+        , fieldType = fieldType
+        , fieldSqlType = SqlOther $ "SqlType unset for " `mappend` pack (show name)
+        , fieldAttrs = recordNameAttr: sqlTypeAttr <> nullableAttr <> maybe [] fieldAttrOverride maybeDef
+        , fieldStrict = fieldStrictness strictness == THD.Strict
+        , fieldReference = NoReference
+        , fieldComments = Nothing
+        , fieldCascade = FieldCascade (maybeDef >>= fieldCascadeOverride >>= fcOnUpdate) (maybeDef >>= fieldCascadeOverride >>= fcOnDelete)
+        , fieldGenerated = maybeDef >>= generatedOverride
+        , fieldIsImplicitIdColumn = False
+        }) where
+        -- Save the field name for code generation. It cannot always be inferred from fieldHaskell.
+        recordNameAttr = FieldAttrOther $ "recordName=" <> pack (nameBase name)
+        entName = pack $ nameBase $ entityTypeName ded
+        fieldHaskell = mpsRecordFieldToHaskellName mps entName (pack $ nameBase name)
+        (fieldType, isNullable) = decomposeFieldType typ
+        sqlTypeAttr = maybe [] (\t -> [FieldAttrSqltype t]) (maybeDef >>= sqlTypeOverride)
+        nullableAttr = [FieldAttrMaybe | isNullable]
+
+decomposeFieldType :: Type -> (FieldType, Bool)
+decomposeFieldType = unwrapMaybe where
+    unwrapMaybe (AppT t1 t2) | t1 == ConT ''Maybe = (go t2, True)
+    unwrapMaybe t = (go t, False)
+
+    go (ConT name) = FTTypeCon Nothing (pack $ nameBase name)
+    go (ParensT t) = go t
+    go (AppT ListT t) = FTList (go t)
+    go (AppT t1 t2) | t1 == ConT ''Maybe = go t2
+    go (AppT t1 t2) = FTApp (go t1) (go t2)
+    go t = error $ "Cannot process type: " <> show t
+    -- convertModule Nothing = Nothing 
+    -- convertModule (Just m) | m == "GHC.Base"
 
 stripId :: FieldType -> Maybe Text
 stripId (FTTypeCon Nothing t) = stripSuffix "Id" t
@@ -492,6 +686,11 @@ getFieldDBName name fs
 getFieldDef :: FieldNameHS -> FieldStore -> Maybe UnboundFieldDef
 getFieldDef fieldNameHS fs =
     M.lookup fieldNameHS (fieldStoreMap fs)
+
+getFieldDef' :: FieldNameHS -> FieldStore -> UnboundFieldDef
+getFieldDef' fieldNameHS fs = case getFieldDef fieldNameHS fs of
+    Nothing -> error $ "Cannot find field " <> show fieldNameHS <> " in " <> show (fieldStoreEntity fs)
+    Just fd -> fd
 
 extractForeignRef :: EntityMap -> UnboundFieldDef -> Maybe EntityNameHS
 extractForeignRef entityMap fieldDef = do
@@ -763,7 +962,7 @@ mkPersistWith
     -> [EntityDef]
     -> [UnboundEntityDef]
     -> Q [Dec]
-mkPersistWith mps preexistingEntities ents' = do
+mkPersistWith mps preexistingEntities ents' = traceShow ents' $ do
     let
         (embedEntityMap, predefs) =
             preprocessUnboundDefs preexistingEntities ents'
@@ -929,6 +1128,12 @@ data MkPersistSettings = MkPersistSettings
     -- ^ TODO: document
     --
     -- @since 2.13.0.0
+    , mpsCreateDataType :: !Bool
+    -- ^ Create data type for the entity
+    , mpsFieldSqlType :: FieldDef -> SqlTypeExp
+    , mpsRecordFieldToHaskellName :: Text -> Text -> Text
+    -- ^ Derive the Haskell names using the entity and field name. The result
+    -- should be a valid haskell indentifier (start with an lower cased letter).
     }
 
 {-# DEPRECATED mpsGeneric "The mpsGeneric function adds a considerable amount of overhead and complexity to the library without bringing significant benefit. We would like to remove it. If you require this feature, please comment on the linked GitHub issue, and we'll either keep it around, or we can figure out a nicer way to solve your problem.\n\n Github: https://github.com/yesodweb/persistent/issues/1204" #-}
@@ -973,6 +1178,9 @@ mkPersistSettings backend = MkPersistSettings
     , mpsDeriveInstances = []
     , mpsImplicitIdDef =
         autoIncrementingInteger
+    , mpsCreateDataType = True
+    , mpsFieldSqlType = SqlType' . fieldSqlType
+    , mpsRecordFieldToHaskellName = \_ fName -> fName
     }
 
 -- | Use the 'SqlPersist' backend.
@@ -1620,6 +1828,8 @@ mkEntity embedEntityMap entityMap mps preDef = do
     let
         entDef =
             fixEntityDef preDef
+        fieldStore =
+            mkFieldStore entDef
     fields <- mkFields mps entityMap entDef
     let name = mkEntityDefName entDef
     let clazz = ConT ''PersistEntity `AppT` genDataType
@@ -1655,7 +1865,7 @@ mkEntity embedEntityMap entityMap mps preDef = do
                     keyCon =
                         keyConName entDef
                     keyFields' =
-                        fieldNameToRecordName mps entDef <$> unboundCompositeCols ucd
+                        (fieldDefToRecordName mps entDef . flip getFieldDef' fieldStore) <$> unboundCompositeCols ucd
                     constr =
                         foldl'
                             AppE
@@ -1674,14 +1884,17 @@ mkEntity embedEntityMap entityMap mps preDef = do
             _ ->
                 [d|$(varP 'keyFromRecordM) = Nothing|]
 
-    dtd <- dataTypeDec mps entityMap entDef
+    addDtd <- if mpsCreateDataType mps
+        then (:) <$> dataTypeDec mps entityMap entDef
+        else pure id
+
     let
         allEntDefs =
             entityFieldTHCon <$> efthAllFields fields
         allEntDefClauses =
             entityFieldTHClause <$> efthAllFields fields
-    return $ addSyn $
-       dtd : mconcat fkc `mappend`
+    return $ addSyn $ addDtd $
+       mconcat fkc `mappend`
       ( [ TySynD (keyIdName entDef) [] $
             ConT ''Key `AppT` ConT name
       , instanceD instanceConstraint clazz
@@ -1974,9 +2187,10 @@ mkForeignKeysComposite mps entDef foreignDef
     | foreignToPrimary (unboundForeignDef foreignDef) = do
         let
             fieldName =
-                fieldNameToRecordName mps entDef
+                fieldDefToRecordName mps entDef . flip getFieldDef' fieldStore
             fname =
-                fieldName $ constraintToField $ foreignConstraintNameHaskell $ unboundForeignDef foreignDef
+                mkRecordName mps Nothing (entityHaskell (unboundEntityDef entDef)) $
+                    constraintToField $ foreignConstraintNameHaskell $ unboundForeignDef foreignDef
             reftableString =
                 unpack $ unEntityNameHS $ foreignRefTableHaskell $ unboundForeignDef foreignDef
             reftableKeyName =
@@ -2740,24 +2954,25 @@ entityDefConE :: UnboundEntityDef -> Exp
 entityDefConE = ConE . mkEntityDefName
 
 -- | creates a TH Name for an entity's field, based on the entity
--- name and the field name, so for example:
+-- name and the field definition, so for example:
 --
 -- Customer
 --   name Text
 --
 -- This would generate `customerName` as a TH Name
-fieldNameToRecordName :: MkPersistSettings -> UnboundEntityDef -> FieldNameHS -> Name
-fieldNameToRecordName mps entDef fieldName =
-    mkRecordName mps mUnderscore (entityHaskell (unboundEntityDef entDef)) fieldName
-  where
+fieldDefToRecordName :: MkPersistSettings -> UnboundEntityDef -> UnboundFieldDef -> Name
+-- fieldDefToRecordName mps entDef fieldDef =
+--     fieldNameToRecordName mps entDef (unboundFieldNameHS fieldDef)
+fieldDefToRecordName mps entDef fieldDef = case maybeRecordName of
+    Nothing -> mkRecordName mps mUnderscore (entityHaskell (unboundEntityDef entDef)) (unboundFieldNameHS fieldDef)
+    Just recordName -> mkName $ T.unpack recordName
+    where
+    maybeRecordName = listToMaybe $ mapMaybe getAttrRecordName $ unboundFieldAttrs fieldDef
+    getAttrRecordName (FieldAttrOther other) = T.stripPrefix "recordName=" other
+    getAttrRecordName _ = Nothing
     mUnderscore
         | mpsGenerateLenses mps = Just "_"
         | otherwise = Nothing
-
--- | as above, only takes a `FieldDef`
-fieldDefToRecordName :: MkPersistSettings -> UnboundEntityDef -> UnboundFieldDef -> Name
-fieldDefToRecordName mps entDef fieldDef =
-    fieldNameToRecordName mps entDef (unboundFieldNameHS fieldDef)
 
 -- | creates a TH Name for a lens on an entity's field, based on the entity
 -- name and the field name, so as above but for the Lens
