@@ -1,5 +1,9 @@
 # Changelog for persistent-postgresql
 
+## 2.13.0.2
+
+* Actually release the SafeTORemove fix
+
 ## 2.13.0.1
 
 * [#1275](https://github.com/yesodweb/persistent/pull/1275)
