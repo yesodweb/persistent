@@ -99,6 +99,7 @@ import Data.Either
 import qualified Data.HashMap.Strict as HM
 import Data.Int (Int64)
 import Data.Ix (Ix)
+import Data.String (IsString(..))
 import Data.List (foldl')
 import qualified Data.List as List
 import Data.List.NonEmpty (NonEmpty(..))
@@ -311,51 +312,58 @@ mkAutoIdField ps entName idSqlType =
         , fieldIsImplicitIdColumn = True
         }
 
+data OptionalText = DefaultText | Override Text
+instance IsString OptionalText where
+  fromString = Override . pack
 
-data DeriveFieldDef = DeriveFieldDef {
-    fieldRecordName :: Name
-    , sqlNameOverride :: Maybe Text
-    , sqlTypeOverride :: Maybe Text
-    , generatedOverride :: Maybe Text
+optionalTextToMaybe :: OptionalText -> Maybe Text
+optionalTextToMaybe DefaultText = Nothing
+optionalTextToMaybe (Override t) = Just t
+
+data DeriveFieldDef = DeriveFieldDef
+    { fieldRecordName :: Name
+    , sqlNameOverride :: OptionalText
+    , sqlTypeOverride :: OptionalText
+    , generatedOverride :: OptionalText
     , fieldCascadeOverride :: Maybe FieldCascade
     , fieldAttrOverride :: [FieldAttr]
-}
+    }
 
-data DeriveEntityDef = DeriveEntityDef {
-    entityTypeName :: Name
+data DeriveEntityDef = DeriveEntityDef
+    { entityTypeName :: Name
     , primaryId :: Maybe (Either DeriveFieldDef [Name])
-    , deriveEntityDB :: Maybe Text
+    , deriveEntityDB :: OptionalText
     , uniques :: Maybe (Text, [Name])
     , deriveFields :: [DeriveFieldDef]
     , foreignKeys :: [DeriveForeignKey]
-}
+    }
 
 mkDeriveEntityDef :: Name -> DeriveEntityDef
-mkDeriveEntityDef name = DeriveEntityDef {
-    entityTypeName = name
+mkDeriveEntityDef name = DeriveEntityDef
+    { entityTypeName = name
     , primaryId = Nothing
-    , deriveEntityDB = Nothing
+    , deriveEntityDB = DefaultText
     , uniques = Nothing
     , deriveFields = []
     , foreignKeys = []
-}
+    }
 
 mkDeriveFieldDef :: Name -> DeriveFieldDef
 mkDeriveFieldDef name = DeriveFieldDef
     { fieldRecordName = name
-    , sqlNameOverride = Nothing
-    , sqlTypeOverride = Nothing
-    , generatedOverride = Nothing
+    , sqlNameOverride = DefaultText
+    , sqlTypeOverride = DefaultText
+    , generatedOverride = DefaultText
     , fieldCascadeOverride = Nothing
     , fieldAttrOverride = []
-}
+    }  
 
 data DeriveForeignKey = DeriveForeignKey
     { otherEntity :: Name
     , constraintName :: Text
     , ourFields :: [Name]
     , parentFields :: Maybe [Name]
-}
+    }
 
 stripEntityNamePrefix :: Text -> Text -> Text
 stripEntityNamePrefix entName fieldName = if T.toLower entName `T.isPrefixOf` T.toLower fieldName
@@ -374,7 +382,7 @@ datatypeToEntityDef mps ps@PersistSettings{..} ded DatatypeInfo{..} = unbound' w
     }
     ent = EntityDef
         { entityHaskell = EntityNameHS entName
-        , entityDB = EntityNameDB $ fromMaybe (psToDBName entName) (deriveEntityDB ded)
+        , entityDB = EntityNameDB $ fromMaybe (psToDBName entName) (optionalTextToMaybe $ deriveEntityDB ded)
         , entityId = entityIdField
         , entityAttrs = []
         , entityFields = map snd fields 
@@ -439,7 +447,7 @@ fieldToFieldDefs mps PersistSettings{..} ded ConstructorInfo{..} = case construc
     toFieldDef :: Name -> Maybe DeriveFieldDef -> Type -> FieldStrictness -> (Name, FieldDef)
     toFieldDef name maybeDef typ strictness = (name, FieldDef{
           fieldHaskell = FieldNameHS fieldHaskell
-        , fieldDB = FieldNameDB $ fromMaybe (psToDBName fieldHaskell) (maybeDef >>= sqlNameOverride)
+        , fieldDB = FieldNameDB $ fromMaybe (psToDBName fieldHaskell) (maybeDef >>= optionalTextToMaybe . sqlNameOverride)
         , fieldType = fieldType
         , fieldSqlType = SqlOther $ "SqlType unset for " `mappend` pack (show name)
         , fieldAttrs = recordNameAttr: sqlTypeAttr <> nullableAttr <> maybe [] fieldAttrOverride maybeDef
@@ -447,7 +455,7 @@ fieldToFieldDefs mps PersistSettings{..} ded ConstructorInfo{..} = case construc
         , fieldReference = NoReference
         , fieldComments = Nothing
         , fieldCascade = FieldCascade (maybeDef >>= fieldCascadeOverride >>= fcOnUpdate) (maybeDef >>= fieldCascadeOverride >>= fcOnDelete)
-        , fieldGenerated = maybeDef >>= generatedOverride
+        , fieldGenerated = maybeDef >>= optionalTextToMaybe . generatedOverride
         , fieldIsImplicitIdColumn = False
         }) where
         -- Save the field name for code generation. It cannot always be inferred from fieldHaskell.
@@ -455,7 +463,7 @@ fieldToFieldDefs mps PersistSettings{..} ded ConstructorInfo{..} = case construc
         entName = pack $ nameBase $ entityTypeName ded
         fieldHaskell = mpsRecordFieldToHaskellName mps entName (pack $ nameBase name)
         (fieldType, isNullable) = decomposeFieldType typ
-        sqlTypeAttr = maybe [] (\t -> [FieldAttrSqltype t]) (maybeDef >>= sqlTypeOverride)
+        sqlTypeAttr = maybe [] (\t -> [FieldAttrSqltype t]) (maybeDef >>= optionalTextToMaybe . sqlTypeOverride)
         nullableAttr = [FieldAttrMaybe | isNullable]
 
 decomposeFieldType :: Type -> (FieldType, Bool)

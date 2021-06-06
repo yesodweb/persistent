@@ -17,7 +17,7 @@ data DerivePrimary = DerivePrimary {
 derivePersist persistSettings {mpsGeneric=False, mpsRecordFieldToHaskellName = stripEntityNamePrefix} lowerCaseSettings [
   (mkDeriveEntityDef 'DerivePrimary) {
     deriveFields = [(mkDeriveFieldDef 'derivePrimaryName) {
-      sqlNameOverride=Just "sql_name"
+      sqlNameOverride="sql_name"
       }]
   }]
 
