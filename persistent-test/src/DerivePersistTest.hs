@@ -2,7 +2,7 @@
 
 module DerivePersistTest where
 
-import Database.Persist.TH (mkDeleteCascade, derivePersist, persistLowerCase, stripEntityNamePrefix, DeriveEntityDef(..), DeriveFieldDef(..), DeriveForeignKey(..), mkDeriveEntityDef, mkDeriveFieldDef)
+import Database.Persist.TH (mkDeleteCascade, derivePersist, persistLowerCase, stripEntityNamePrefix, DeriveEntityDef(..), DeriveFieldDef(..), DeriveForeignKey(..), DeriveUniqueDef(..), mkDeriveEntityDef, mkDeriveFieldDef, mkDeriveUniqueDef)
 import Database.Persist.Quasi (lowerCaseSettings)
 import Data.Maybe (isJust)
 
@@ -45,8 +45,19 @@ derivePersist persistSettings {mpsGeneric=False, mpsRecordFieldToHaskellName = s
   mkDeriveEntityDef 'MenuObject2
   ]
 
-share [mkPersist sqlSettings { mpsGeneric = True }] [persistLowerCase|
+data TestNull2 = TestNull2 {
+  fieldA :: Int,
+  fieldB :: Maybe Int
+}
+derivePersist persistSettings {mpsGeneric=False, mpsRecordFieldToHaskellName = stripEntityNamePrefix} lowerCaseSettings [
+  (mkDeriveEntityDef 'TestNull2) {
+    uniques = [(mkDeriveUniqueDef "UniqueTestNull" ['fieldA, 'fieldB]) {
+      forceNullableFields = True
+    }]
+  }
+  ]
 
+share [mkPersist sqlSettings { mpsGeneric = True }] [persistLowerCase|
 SubType3
   object3 [MenuObject3]
   deriving Show Eq
@@ -54,7 +65,6 @@ SubType3
 MenuObject3
   sub3 SubType3 Maybe
   deriving Show Eq
-
 |]
 
 data TestParent2 = TestParent2 {
@@ -88,6 +98,7 @@ migration = do
   migrate [] (entityDef (Proxy :: Proxy MenuObject2))
   migrate [] (entityDef (Proxy :: Proxy TestParent2))
   migrate [] (entityDef (Proxy :: Proxy TestChild2))
+  migrate [] (entityDef (Proxy :: Proxy TestNull2))
 
 specsWith :: (MonadIO m, MonadFail m) => RunDb SqlBackend m -> Spec
 specsWith runDb = describe "derivePersist" $ do
@@ -134,3 +145,12 @@ specsWith runDb = describe "derivePersist" $ do
     let Just c11 = mc
     c1 @== c11
     testChild2Fkparent c11 @== kp1
+
+  it "are respected for nullable Ints" $ do
+    let ins a b = insert $ TestNull2 a b
+        ctx = ins 1 Nothing  >> ins 1 Nothing >> ins 1 Nothing >>
+              ins 1 (Just 3) >> ins 1 (Just 4)
+    (runDb $ void   ctx)
+    (runDb $ void $ ctx >> ins 1 (Just 3)) `shouldThrow` anyException
+    (runDb $ void $ ctx >> ins 1 (Just 4)) `shouldThrow` anyException
+    (runDb $ void $ ctx >>= \k -> delete k >> ins 1 (Just 4))
