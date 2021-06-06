@@ -363,9 +363,14 @@ stripEntityNamePrefix entName fieldName = if T.toLower entName `T.isPrefixOf` T.
     else fieldName
 
 datatypeToEntityDef :: MkPersistSettings -> PersistSettings -> DeriveEntityDef -> DatatypeInfo -> UnboundEntityDef
-datatypeToEntityDef mps ps@PersistSettings{..} ded DatatypeInfo{..} = unbound where
-    unbound = (unbindEntityDef ent) {
-        unboundForeignDefs = foreigns
+datatypeToEntityDef mps ps@PersistSettings{..} ded DatatypeInfo{..} = unbound' where
+    unbound = unbindEntityDef ent
+    unbound' = unbound {
+        unboundForeignDefs = foreigns,
+        unboundPrimarySpec = case primaryId ded of
+            -- unbindEntityDef never creates a DefaultKey
+            Nothing -> DefaultKey (FieldNameDB $ psIdName)
+            _ -> unboundPrimarySpec unbound
     }
     ent = EntityDef
         { entityHaskell = EntityNameHS entName

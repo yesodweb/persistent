@@ -13,6 +13,7 @@ data DerivePrimary = DerivePrimary {
   derivePrimaryAge :: Int
 } deriving (Eq, Show)
 
+
 derivePersist persistSettings {mpsGeneric=False, mpsRecordFieldToHaskellName = stripEntityNamePrefix} lowerCaseSettings [
   (mkDeriveEntityDef 'DerivePrimary) {
     deriveFields = [(mkDeriveFieldDef 'derivePrimaryName) {

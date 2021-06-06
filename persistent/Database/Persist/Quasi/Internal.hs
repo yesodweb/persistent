@@ -33,6 +33,7 @@ module Database.Persist.Quasi.Internal
     , UnboundEntityDef(..)
     , getUnboundEntityNameHS
     , unbindEntityDef
+    , unbindCompositeDef
     , getUnboundFieldDefs
     , UnboundForeignDef(..)
     , getSqlNameOr
