@@ -38,7 +38,10 @@ newtype MenuObject2 = MenuObject2 {
 } deriving (Eq, Show)
 
 derivePersist persistSettings {mpsGeneric=False, mpsRecordFieldToHaskellName = stripEntityNamePrefix} lowerCaseSettings [
-  mkDeriveEntityDef 'SubType2,
+  mkDeriveEntityDef 'SubType2
+  ]
+
+derivePersist persistSettings {mpsGeneric=False, mpsRecordFieldToHaskellName = stripEntityNamePrefix} lowerCaseSettings [
   mkDeriveEntityDef 'MenuObject2
   ]
 

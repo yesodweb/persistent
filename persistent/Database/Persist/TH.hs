@@ -312,6 +312,8 @@ mkAutoIdField ps entName idSqlType =
         , fieldIsImplicitIdColumn = True
         }
 
+-- | Helper data type for better ergonomics.
+-- Overriding a string with it does not need Just, which makes it easier to use than @Maybe Text@.
 data OptionalText = DefaultText | Override Text
 instance IsString OptionalText where
   fromString = Override . pack
@@ -333,6 +335,7 @@ data DeriveEntityDef = DeriveEntityDef
     { entityTypeName :: Name
     , primaryId :: Maybe (Either DeriveFieldDef [Name])
     , deriveEntityDB :: OptionalText
+    -- TODO: uniques are ignored now
     , uniques :: Maybe (Text, [Name])
     , deriveFields :: [DeriveFieldDef]
     , foreignKeys :: [DeriveForeignKey]
@@ -405,6 +408,7 @@ datatypeToEntityDef mps ps@PersistSettings{..} ded DatatypeInfo{..} = unbound' w
         Nothing -> EntityIdField $ mkAutoIdField' (FieldNameDB psIdName) (EntityNameHS entName) SqlInt64
         Just (Right names) | null names -> error "No fields on primary composite key."
         Just (Right names) -> EntityIdNaturalKey $ CompositeDef (getFieldByName <$> NEL.fromList names) []
+        -- TODO: override sql type and sql name
         Just (Left primaryOverride) -> error "Left entityIdField"
 
     getFieldByName :: Name -> FieldDef
