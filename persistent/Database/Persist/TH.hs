@@ -140,7 +140,6 @@ import Database.Persist.Sql
 import Database.Persist.EntityDef.Internal (EntityDef(..))
 import Database.Persist.ImplicitIdDef (autoIncrementingInteger)
 import Database.Persist.ImplicitIdDef.Internal
-import Debug.Trace
 
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
 -- used as input to the template haskell generation code (mkPersist).
@@ -316,7 +315,6 @@ data DeriveEntityDef = DeriveEntityDef
     { entityTypeName :: Name
     , primaryId :: Maybe (Either DeriveFieldDef [Name])
     , deriveEntityDB :: OptionalText
-    -- TODO: uniques are ignored now
     , uniques :: [DeriveUniqueDef]
     , deriveFields :: [DeriveFieldDef]
     , foreignKeys :: [DeriveForeignKey]
@@ -374,10 +372,10 @@ datatypeToEntityDef mps ps@PersistSettings{..} ded DatatypeInfo{..} = unbound' w
     unbound = unbindEntityDef ent
     unbound' = unbound {
         unboundForeignDefs = foreigns,
-        unboundPrimarySpec = case primaryId ded of
-            -- unbindEntityDef never creates a DefaultKey
-            Nothing -> DefaultKey (FieldNameDB $ psIdName)
-            _ -> unboundPrimarySpec unbound
+        unboundPrimarySpec = case entityIdField of
+            EntityIdNaturalKey _ -> unboundPrimarySpec unbound
+            -- unbindEntityDef never creates a DefaultKey, so we do it here
+            EntityIdField f -> DefaultKey $ fieldDB f
     }
     ent = EntityDef
         { entityHaskell = EntityNameHS entName
@@ -403,8 +401,9 @@ datatypeToEntityDef mps ps@PersistSettings{..} ded DatatypeInfo{..} = unbound' w
         Nothing -> EntityIdField $ mkAutoIdField' (FieldNameDB psIdName) (EntityNameHS entName) SqlInt64
         Just (Right names) | null names -> error "No fields on primary composite key."
         Just (Right names) -> EntityIdNaturalKey $ CompositeDef (getFieldByName <$> NEL.fromList names) []
-        -- TODO: override sql type and sql name
-        Just (Left primaryOverride) -> error "Left entityIdField"
+        Just (Left primaryOverride) ->
+            -- Only the id column name can be adjusted
+            EntityIdField $ mkAutoIdField' (FieldNameDB $ fromMaybe psIdName $ fromOptionalText $ sqlNameOverride primaryOverride) (EntityNameHS entName) SqlInt64
 
     getFieldByName :: Name -> FieldDef
     getFieldByName name = case lookup name fields of
@@ -492,8 +491,6 @@ decomposeFieldType = unwrapMaybe where
     go (AppT t1 t2) | t1 == ConT ''Maybe = go t2
     go (AppT t1 t2) = FTApp (go t1) (go t2)
     go t = error $ "Cannot process type: " <> show t
-    -- convertModule Nothing = Nothing 
-    -- convertModule (Just m) | m == "GHC.Base"
 
 stripId :: FieldType -> Maybe Text
 stripId (FTTypeCon Nothing t) = stripSuffix "Id" t
@@ -990,7 +987,7 @@ mkPersistWith
     -> [EntityDef]
     -> [UnboundEntityDef]
     -> Q [Dec]
-mkPersistWith mps preexistingEntities ents' = traceShow ents' $ do
+mkPersistWith mps preexistingEntities ents' = do
     let
         (embedEntityMap, predefs) =
             preprocessUnboundDefs preexistingEntities ents'
@@ -2989,8 +2986,6 @@ entityDefConE = ConE . mkEntityDefName
 --
 -- This would generate `customerName` as a TH Name
 fieldDefToRecordName :: MkPersistSettings -> UnboundEntityDef -> UnboundFieldDef -> Name
--- fieldDefToRecordName mps entDef fieldDef =
---     fieldNameToRecordName mps entDef (unboundFieldNameHS fieldDef)
 fieldDefToRecordName mps entDef fieldDef = case maybeRecordName of
     Nothing -> mkRecordName mps mUnderscore (entityHaskell (unboundEntityDef entDef)) (unboundFieldNameHS fieldDef)
     Just recordName -> mkName $ T.unpack recordName
