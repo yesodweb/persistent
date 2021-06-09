@@ -124,6 +124,7 @@ instance (HasPersistBackend b, BackendCompatible b s, PersistUniqueWrite b) => P
     insertUnique = withReaderT (projectBackend @b @s . unCompatible) . insertUnique
     upsert rec = withReaderT (projectBackend @b @s . unCompatible) . upsert rec
     upsertBy uniq rec = withReaderT (projectBackend @b @s . unCompatible) . upsertBy uniq rec
+    put = withReaderT (projectBackend @b @s . unCompatible) . put
     putMany = withReaderT (projectBackend @b @s . unCompatible) . putMany
 
 deriving via (BackendKey b) instance (BackendCompatible b s, Show (BackendKey b)) => Show (BackendKey (Compatible b s))

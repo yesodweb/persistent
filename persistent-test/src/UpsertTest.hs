@@ -146,6 +146,42 @@ specsWith runDb handleNull handleKey = describe "UpsertTests" $ do
           Don'tUpdateNull ->
               Nothing
 
+  describe "put" $ do
+    it "adds a new row" $ runDb $ do
+        _ <- insertEntity (Upsert "b" "old" "unused" 1)
+        key <- put (Upsert "a" "new" "extra" 2)
+        Just u <- get key
+        c <- count ([] :: [Filter (UpsertGeneric backend)])
+        c @== 2
+        upsertEmail u @== "a"
+        upsertAttr u @== "new"
+        upsertExtra u @== "extra"
+        upsertAge u @== 2
+    it "replaces an existing row" $ runDb $ do
+-- #ifdef WITH_MONGODB
+--         initial <- insertEntity (Upsert "cow" "initial" "extra" 1)
+--         k1 <- put (Upsert "cow" "wow" "such used" 2)
+--         c <- count ([] :: [Filter (UpsertGeneric backend)])
+--         c @== 1
+--         Just update' <- getEntity k1
+--         ((==@) `on` entityKey) initial update'
+--         upsertEmail (entityVal update') @== "cow"
+--         upsertAttr (entityVal update') @== "wow"
+--         upsertExtra (entityVal update') @== "such used"
+--         upsertAge (entityVal update') @== 2
+-- #else
+        initial <- insertEntity (Upsert "cow" "initial" "extra" 1)
+        k1 <- put (Upsert "cow" "wow" "such used" 2)
+        c <- count ([] :: [Filter (UpsertGeneric backend)])
+        c @== 1
+        Just update' <- getEntity k1
+        ifKeyIsPreserved $ ((==@) `on` entityKey) initial update'
+        upsertEmail (entityVal update') @== "cow"
+        upsertAttr (entityVal update') @== "wow"
+        upsertExtra (entityVal update') @== "such used"
+        upsertAge (entityVal update') @== 2
+-- #endif
+
   describe "putMany" $ do
     it "adds new rows when entity has no unique constraints" $ runDb $ do
         let mkPerson name_ = Person1 name_ 25
@@ -189,4 +225,3 @@ specsWith runDb handleNull handleKey = describe "UpsertTests" $ do
         deleteBy $ UniqueUpsert "putMany5"
         deleteBy $ UniqueUpsert "putMany6"
         deleteBy $ UniqueUpsert "putMany7"
-

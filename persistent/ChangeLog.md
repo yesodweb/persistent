@@ -1,5 +1,9 @@
 # Changelog for persistent
 
+## 2.13.1.0
+* []()
+    * Add put that returns the repsert key
+
 ## 2.13.0.2
 
 * [#1265](https://github.com/yesodweb/persistent/pull/1265)

@@ -20,6 +20,7 @@ module Database.Persist.Class.PersistUnique
     , checkUniqueUpdateable
     , onlyUnique
     , defaultUpsertBy
+    , defaultPut
     , defaultPutMany
     , persistUniqueKeyValues
     )
@@ -267,6 +268,17 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
         -> ReaderT backend m (Entity record)
         -- ^ the record in the database after the operation
     upsertBy = defaultUpsertBy
+
+    -- | Like 'upsert' but will do a 'replace' operation instead of updates in place
+    --
+    -- @since 2.13.1
+    put
+        :: forall record m. (MonadIO m, PersistRecordBackend record backend)
+        => record
+        -- ^ new record to insert or replace
+        -> ReaderT backend m (Key record)
+        -- ^ the key in the database after the operation
+    put = defaultPut
 
     -- | Put many records into db
     --
@@ -639,6 +651,31 @@ defaultUpsertBy uniqueKey record updates = do
   where
     updateGetEntity (Entity k _) upds =
         (Entity k) `liftM` (updateGet k upds)
+
+-- | The slow but generic 'put' implementation for any 'PersistUniqueRead'.
+-- * Lookup corresponding entity (if any) for a record using 'getBy'
+-- * For a pre-existing record, issue a 'replace' for the old key and new record
+-- * For new records, issue an 'insert'
+-- @since 2.13
+defaultPut
+    :: forall record backend m. ( PersistEntityBackend record ~ BaseBackend backend
+      , PersistEntity record
+      , MonadIO m
+      , PersistStoreWrite backend
+      , PersistUniqueRead backend
+      )
+    => record
+    -- ^ new record to insert or replace
+    -> ReaderT backend m (Key record)
+    -- ^ the key in the database after the operation
+defaultPut record = do
+    mrecord <- getByValueUniques $ persistUniqueKeys record
+    maybe (insert record) replaceEntity mrecord
+  where
+    replaceEntity r = do
+        let key = entityKey r
+        replace key record
+        pure key
 
 -- | The slow but generic 'putMany' implementation for any 'PersistUniqueRead'.
 -- * Lookup corresponding entities (if any) for each record using 'getByValue'

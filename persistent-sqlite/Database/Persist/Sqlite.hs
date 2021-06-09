@@ -992,6 +992,7 @@ instance (PersistUniqueWrite b) => PersistUniqueWrite (RawSqlite b) where
     insertUnique = withReaderT _persistentBackend . insertUnique
     upsert rec = withReaderT _persistentBackend . upsert rec
     upsertBy uniq rec = withReaderT _persistentBackend . upsertBy uniq rec
+    put = withReaderT _persistentBackend . put
     putMany = withReaderT _persistentBackend . putMany
 #endif
 
