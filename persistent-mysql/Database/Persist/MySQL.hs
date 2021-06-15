@@ -440,7 +440,7 @@ addTable cols entity = AddTable $ concat
            , "("
            , idtxt
            , if null nonIdCols then [] else ","
-           , intercalate "," $ map showColumn nonIdCols
+           , intercalate "," $ map showCreateColumn nonIdCols
            , ")"
            ]
     where
@@ -927,8 +927,14 @@ findAlters edef allDefs col@(Column name isNull type_ def gen _defConstraintName
 
 -- | Prints the part of a @CREATE TABLE@ statement about a given
 -- column.
-showColumn :: Column -> String
-showColumn (Column n nu t def gen _defConstraintName maxLen ref) = concat
+showCreateColumn :: Column -> String
+showCreateColumn = showColumn False
+
+showAlterColumn :: Column -> String
+showAlterColumn = showColumn True
+
+showColumn :: Bool -> Column -> String
+showColumn showReferences (Column n nu t def gen _defConstraintName maxLen ref) = concat
     [ escapeDBName n
     , " "
     , showSqlType t maxLen True
@@ -945,9 +951,9 @@ showColumn (Column n nu t def gen _defConstraintName maxLen ref) = concat
                   if T.toUpper s == "NULL" then ""
                   else " DEFAULT " ++ T.unpack s
     , case ref of
-        Nothing -> ""
-        Just cRef -> " REFERENCES " ++ escapeDBName (crTableName cRef)
+        Just cRef | showReferences -> " REFERENCES " ++ escapeDBName (crTableName cRef)
             <> " " <> T.unpack (renderFieldCascade (crFieldCascade cRef))
+        _ -> ""
     ]
 
 
@@ -1016,14 +1022,14 @@ showAlter table (oldName, Change (Column n nu t def gen defConstraintName maxLen
     , " CHANGE "
     , escapeDBName oldName
     , " "
-    , showColumn (Column n nu t def gen defConstraintName maxLen Nothing)
+    , showAlterColumn (Column n nu t def gen defConstraintName maxLen Nothing)
     ]
 showAlter table (_, Add' col) =
     concat
     [ "ALTER TABLE "
     , escapeDBName table
     , " ADD COLUMN "
-    , showColumn col
+    , showAlterColumn col
     ]
 showAlter table (n, Drop) =
     concat
