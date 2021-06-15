@@ -35,7 +35,7 @@ library
                    , conduit          >= 1.2.12
                    , containers       >= 0.5
                    , monad-logger
-                   , mysql            >= 0.1.4    && < 0.2
+                   , mysql            >= 0.1.4    && < 0.3
                    , mysql-simple     >= 0.4.4    && < 0.5
                    , resourcet        >= 1.1
                    , resource-pool
