@@ -438,7 +438,10 @@ toInsertDoc record =
         isNull (PersistList l) = null l
         isNull _ = False
 
-    -- make sure to removed nulls from embedded entities also
+    -- make sure to removed nulls from embedded entities also.
+    -- note that persistent no longer supports embedded maps
+    -- with fields. This means any embedded bson object will
+    -- insert null. But top level will not.
     embeddedVal :: PersistValue -> DB.Value
     embeddedVal (PersistMap m) =
         DB.Doc $ fmap (\(k, v) -> k DB.:= DB.val v) $ m
@@ -997,12 +1000,13 @@ orderPersistValues entDef castDoc =
             match columns unused $
                 values ++ [(fName, nestedOrder medef pv)]
       where
-        nestedOrder (Just _) (PersistMap m) =
-            PersistMap m
-        nestedOrder (Just em) (PersistList l) =
-            PersistList $ map (nestedOrder (Just em)) l
-        nestedOrder Nothing found =
-            found
+        -- support for embedding other persistent objects into a schema for
+        -- mongodb cannot be currently supported in persistent.
+        -- The order will be undetermined but that's ok because there is no
+        -- schema migration for mongodb anyways.
+        -- nestedOrder (Just _) (PersistMap m) = PersistMap m
+        nestedOrder (Just em) (PersistList l) = PersistList $ map (nestedOrder (Just em)) l
+        nestedOrder _ found = found
 
         matchOne (field:fs) tried =
             if fName == fst field
@@ -1055,8 +1059,7 @@ instance DB.Val PersistValue where
   val (PersistRational _)   = throw $ PersistMongoDBUnsupported "PersistRational not implemented for the MongoDB backend"
   val (PersistArray a)      = DB.val $ PersistList a
   val (PersistDbSpecific _)   = throw $ PersistMongoDBUnsupported "PersistDbSpecific not implemented for the MongoDB backend"
-  val (PersistLiteral _)   = throw $ PersistMongoDBUnsupported "PersistLiteral not implemented for the MongoDB backend"
-  val (PersistLiteralEscaped _) = throw $ PersistMongoDBUnsupported "PersistLiteralEscaped not implemented for the MongoDB backend"
+  val (PersistLiteral_ _ _)   = throw $ PersistMongoDBUnsupported "PersistLiteral not implemented for the MongoDB backend"
   cast' (DB.Float x)  = Just (PersistDouble x)
   cast' (DB.Int32 x)  = Just $ PersistInt64 $ fromIntegral x
   cast' (DB.Int64 x)  = Just $ PersistInt64 x
