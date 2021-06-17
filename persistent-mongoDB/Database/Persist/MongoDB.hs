@@ -430,7 +430,7 @@ toInsertDoc record =
                 DB.:=
                     embeddedVal pv
         )
-        $ filter (\(_, pv) -> isNull pv)
+        $ filter (\(_, pv) -> not $ isNull pv)
         $ zip xs ys
       where
         isNull PersistNull = True
