@@ -1,5 +1,10 @@
 # Changelog for persistent
 
+## 2.13.0.3
+
+* [#1287](https://github.com/yesodweb/persistent/pull/1287)
+    * Fix the duplicate entity check for transitive dependencies
+
 ## 2.13.0.2
 
 * [#1265](https://github.com/yesodweb/persistent/pull/1265)
