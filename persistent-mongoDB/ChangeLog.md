@@ -1,5 +1,9 @@
 # Changelog for persistent-mongoDB
 
+## 2.13.0.0
+
+* Fix persistent 2.13 changes [#1286](https://github.com/yesodweb/persistent/pull/1286)
+
 ## 2.12.0.0
 
 * Decomposed `HaskellName` into `ConstraintNameHS`, `EntityNameHS`, `FieldNameHS`. Decomposed `DBName` into `ConstraintNameDB`, `EntityNameDB`, `FieldNameDB` respectively. [#1174](https://github.com/yesodweb/persistent/pull/1174)
