@@ -112,31 +112,40 @@ module Database.Persist.MongoDB
     , module Database.Persist
     ) where
 
-import qualified Data.List.NonEmpty as NEL
 import Control.Exception (throw, throwIO)
-import Control.Monad (liftM, (>=>), forM_, unless)
+import Control.Monad (forM_, liftM, unless, (>=>))
 import Control.Monad.IO.Class (liftIO)
 import qualified Control.Monad.IO.Class as Trans
 import Control.Monad.IO.Unlift (MonadUnliftIO, withRunInIO)
 import Control.Monad.Trans.Reader (ask, runReaderT)
+import qualified Data.List.NonEmpty as NEL
 
 import Data.Acquire (mkAcquire)
-import Data.Aeson (Value (Number), (.:), (.:?), (.!=), FromJSON(..), ToJSON(..), withText, withObject)
+import Data.Aeson
+       ( FromJSON(..)
+       , ToJSON(..)
+       , Value(Number)
+       , withObject
+       , withText
+       , (.!=)
+       , (.:)
+       , (.:?)
+       )
 import Data.Aeson.Types (modifyFailure)
 import Data.Bits (shiftR)
 import Data.Bson (ObjectId(..))
 import qualified Data.ByteString as BS
 import Data.Conduit
-import Data.Maybe (mapMaybe, fromJust)
+import Data.Maybe (fromJust, mapMaybe)
 import Data.Monoid (mappend)
+import qualified Data.Pool as Pool
 import qualified Data.Serialize as Serialize
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as E
-import qualified Data.Traversable as Traversable
-import qualified Data.Pool as Pool
 import Data.Time (NominalDiffTime)
 import Data.Time.Calendar (Day(..))
+import qualified Data.Traversable as Traversable
 #ifdef HIGH_PRECISION_DATE
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 #endif
@@ -145,8 +154,14 @@ import Network.Socket (HostName)
 import Numeric (readHex)
 import System.Environment (lookupEnv)
 import Unsafe.Coerce (unsafeCoerce)
+import Web.HttpApiData
+       ( FromHttpApiData(..)
+       , ToHttpApiData(..)
+       , parseUrlPieceMaybe
+       , parseUrlPieceWithPrefix
+       , readTextData
+       )
 import Web.PathPieces (PathPiece(..))
-import Web.HttpApiData (ToHttpApiData(..), FromHttpApiData(..), parseUrlPieceMaybe, parseUrlPieceWithPrefix, readTextData)
 
 #ifdef DEBUG
 import FileLocation (debug)
@@ -156,8 +171,8 @@ import qualified Database.MongoDB as DB
 import Database.MongoDB.Query (Database)
 
 import Database.Persist
-import qualified Database.Persist.Sql as Sql
 import Database.Persist.EntityDef.Internal (toEmbedEntityDef)
+import qualified Database.Persist.Sql as Sql
 
 instance HasPersistBackend DB.MongoContext where
     type BaseBackend DB.MongoContext = DB.MongoContext
