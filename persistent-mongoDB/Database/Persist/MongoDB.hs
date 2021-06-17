@@ -989,13 +989,13 @@ orderPersistValues entDef castDoc =
     -- another application may use fields we don't care about
     -- our own application may set extra fields with the raw driver
     match [] _ values = values
-    match ((fieldName, medef) : columns) fields values =
+    match ((fName, medef) : columns) fields values =
         let
             ((_, pv) , unused) =
                 matchOne fields []
         in
             match columns unused $
-                values ++ [(fieldName, nestedOrder medef pv)]
+                values ++ [(fName, nestedOrder medef pv)]
       where
         nestedOrder (Just _) (PersistMap m) =
             PersistMap m
@@ -1005,9 +1005,7 @@ orderPersistValues entDef castDoc =
             found
 
         matchOne (field:fs) tried =
-            if fieldName == fst field
-                -- snd drops the name now that it has been used to make the match
-                -- persistent will add the field name later
+            if fName == fst field
                 then (field, tried ++ fs)
                 else matchOne fs (field:tried)
         -- if field is not found, assume it was a Nothing
@@ -1016,7 +1014,7 @@ orderPersistValues entDef castDoc =
         -- instead, we want to store no field at all: that takes less space.
         -- Also, another ORM may be doing the same
         -- Also, this adding a Maybe field means no migration required
-        matchOne [] tried = ((fieldName, PersistNull), tried)
+        matchOne [] tried = ((fName, PersistNull), tried)
 
 assocListFromDoc :: DB.Document -> [(Text, PersistValue)]
 assocListFromDoc = Prelude.map (\f -> ( (DB.label f), cast (DB.value f) ) )
