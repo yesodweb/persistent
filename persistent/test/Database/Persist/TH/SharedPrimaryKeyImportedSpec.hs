@@ -21,10 +21,17 @@ import Database.Persist
 import Database.Persist.Sql
 import Database.Persist.Sql.Util
 import Database.Persist.TH
+import Language.Haskell.TH
+import Control.Monad.IO.Class
 
 import Database.Persist.TH.SharedPrimaryKeySpec (User, UserId)
 
-share [ mkPersist sqlSettings ] [persistLowerCase|
+share
+    [ mkPersistWith sqlSettings [entityDef (Proxy @User)]
+    , \_ -> do
+        liftIO $ traverse (print . getEntityHaskellName) $(discoverEntities)
+        pure []
+    ] [persistLowerCase|
 
 Profile
     Id      UserId
@@ -57,3 +64,14 @@ spec = describe "Shared Primary Keys Imported" $ do
             getSqlType (Proxy @User)
                 `shouldBe`
                     getSqlType (Proxy @Profile)
+
+
+    describe "foreign reference should work" $ do
+        it "should have a foreign reference" $ do
+            let
+                Just fd =
+                    getEntityIdField (entityDef (Proxy @Profile))
+            fieldReference fd
+                `shouldBe`
+                    (ForeignRef (EntityNameHS "User"))
+

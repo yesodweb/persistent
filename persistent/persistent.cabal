@@ -164,6 +164,9 @@ test-suite test
         Database.Persist.TH.DiscoverEntitiesSpec
         Database.Persist.TH.EmbedSpec
         Database.Persist.TH.ForeignRefSpec
+        Database.Persist.TH.PersistWith.Model
+        Database.Persist.TH.PersistWith.Model2
+        Database.Persist.TH.PersistWithSpec
         Database.Persist.TH.ImplicitIdColSpec
         Database.Persist.TH.JsonEncodingSpec
         Database.Persist.TH.KindEntitiesSpec
