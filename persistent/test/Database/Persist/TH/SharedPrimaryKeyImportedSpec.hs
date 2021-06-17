@@ -28,9 +28,6 @@ import Database.Persist.TH.SharedPrimaryKeySpec (User, UserId)
 
 share
     [ mkPersistWith sqlSettings [entityDef (Proxy @User)]
-    , \_ -> do
-        liftIO $ traverse (print . getEntityHaskellName) $(discoverEntities)
-        pure []
     ] [persistLowerCase|
 
 Profile
@@ -68,10 +65,10 @@ spec = describe "Shared Primary Keys Imported" $ do
 
     describe "foreign reference should work" $ do
         it "should have a foreign reference" $ do
+            pendingWith "issue #1289"
             let
                 Just fd =
                     getEntityIdField (entityDef (Proxy @Profile))
             fieldReference fd
                 `shouldBe`
-                    (ForeignRef (EntityNameHS "User"))
-
+                    ForeignRef (EntityNameHS "User")

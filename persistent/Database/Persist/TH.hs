@@ -237,8 +237,6 @@ embedEntityDefsMap existingEnts rawEnts =
     (embedEntityMap, noCycleEnts)
   where
     noCycleEnts = entsWithEmbeds
-    -- every EntityDef could reference each-other (as an EmbedRef)
-    -- let Haskell tie the knot
     embedEntityMap = constructEmbedEntityMap entsWithEmbeds
     entsWithEmbeds = fmap setEmbedEntity (rawEnts <> map unbindEntityDef existingEnts)
     setEmbedEntity ubEnt =
@@ -773,7 +771,11 @@ mkPersistWith mps preexistingEntities ents' = do
             $ predefs
         entityMap =
             constructEntityMap allEnts
-    ents <- filterM shouldGenerateCode allEnts
+        newEnts =
+            Set.toList $
+                Set.fromList allEnts
+                Set.\\ Set.fromList (map unbindEntityDef preexistingEntities)
+    ents <- filterM shouldGenerateCode newEnts
     requireExtensions
         [ [TypeFamilies], [GADTs, ExistentialQuantification]
         , [DerivingStrategies], [GeneralizedNewtypeDeriving], [StandaloneDeriving]
