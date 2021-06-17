@@ -26,9 +26,7 @@ import Control.Monad.IO.Class
 
 import Database.Persist.TH.SharedPrimaryKeySpec (User, UserId)
 
-share
-    [ mkPersistWith sqlSettings [entityDef (Proxy @User)]
-    ] [persistLowerCase|
+mkPersistWith sqlSettings $(discoverEntities) [persistLowerCase|
 
 Profile
     Id      UserId
