@@ -2758,7 +2758,7 @@ mkSymbolToFieldInstances mps entityMap (fixEntityDef -> ed) = do
             lowerFirstIfId xs = xs
 
             fieldTypeT
-                | fieldHaskellName == FieldNameHS "Id" = do
+                | fieldHaskellName == FieldNameHS "Id" =
                     conT ''Key `appT` recordNameT
                 | otherwise =
                     pure $ maybeIdType mps entityMap fieldDef Nothing Nothing

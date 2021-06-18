@@ -19,7 +19,7 @@ import Database.Persist.TH.PersistWith.Model (IceCreamId)
 import Data.List (find)
 import Language.Haskell.TH as TH
 
-mkPersistWith sqlSettings { mpsGeneric = False } $(discoverEntities) [persistLowerCase|
+mkPersistWith sqlSettings $(discoverEntities) [persistLowerCase|
 
 BestTopping
     iceCream IceCreamId
