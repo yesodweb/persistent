@@ -55,6 +55,7 @@ test-suite test
                      PgIntervalTest
                      UpsertWhere
                      ImplicitUuidSpec
+                     MigrationReferenceSpec
     ghc-options:     -Wall
 
     build-depends:   base                 >= 4.9 && < 5
