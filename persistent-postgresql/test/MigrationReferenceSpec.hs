@@ -47,12 +47,10 @@ spec = describe "MigrationReferenceSpec" $ do
             isReference :: Text -> Bool
             isReference migration = "REFERENCES" `isInfixOf` migration
 
-        liftIO $ putStrLn "\n\nMigrating noForeignKeys\n\n"
         runMigration
             $ mapWriterT (censor noForeignKeys)
             $ referenceMigrate
 
-        liftIO $ putStrLn "\n\nMigrating onlyForeignKeys\n\n"
         runMigration
             $ mapWriterT (censor onlyForeignKeys)
             $ referenceMigrate
