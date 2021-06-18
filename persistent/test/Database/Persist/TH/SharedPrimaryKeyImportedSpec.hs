@@ -21,12 +21,14 @@ import Database.Persist
 import Database.Persist.Sql
 import Database.Persist.Sql.Util
 import Database.Persist.TH
+import Language.Haskell.TH
+import Control.Monad.IO.Class
 
 import Database.Persist.TH.SharedPrimaryKeySpec (User, UserId)
 
-share [ mkPersist sqlSettings ] [persistLowerCase|
+mkPersistWith sqlSettings $(discoverEntities) [persistLowerCase|
 
-Profile
+ProfileX
     Id      UserId
     email   String
 
@@ -42,7 +44,7 @@ spec = describe "Shared Primary Keys Imported" $ do
         it "should match underlying key" $ do
             sqlType (Proxy @UserId)
                 `shouldBe`
-                    sqlType (Proxy @ProfileId)
+                    sqlType (Proxy @ProfileXId)
 
     describe "getEntityId FieldDef" $ do
         it "should match underlying primary key" $ do
@@ -56,4 +58,15 @@ spec = describe "Shared Primary Keys Imported" $ do
                             SqlOther "Composite Key"
             getSqlType (Proxy @User)
                 `shouldBe`
-                    getSqlType (Proxy @Profile)
+                    getSqlType (Proxy @ProfileX)
+
+
+    describe "foreign reference should work" $ do
+        it "should have a foreign reference" $ do
+            pendingWith "issue #1289"
+            let
+                Just fd =
+                    getEntityIdField (entityDef (Proxy @ProfileX))
+            fieldReference fd
+                `shouldBe`
+                    ForeignRef (EntityNameHS "User")
