@@ -1268,7 +1268,7 @@ findAlters defs edef col@(Column name isNull sqltype def _gen _defConstraintName
                             | Just _oldName /= fmap fieldDB (getEntityIdField edef)
                             ->
                             [AddReference
-                                (getEntityDBName edef)
+                                (crTableName colRef)
                                 (crConstraintName colRef)
                                 [name]
                                 (NEL.toList $ Util.dbIdColumnsEsc escapeF refdef)

@@ -57,6 +57,7 @@ import qualified CustomConstraintTest
 import qualified LongIdentifierTest
 import qualified PgIntervalTest
 import qualified GeneratedColumnTestSQL
+import qualified MigrationReferenceSpec
 
 type Tuple = (,)
 
@@ -138,6 +139,7 @@ main = do
 
   hspec $ do
       ImplicitUuidSpec.spec
+      MigrationReferenceSpec.spec
       RenameTest.specsWith runConnAssert
       DataTypeTest.specsWith runConnAssert
           (Just (runMigrationSilent dataTypeMigrate))
