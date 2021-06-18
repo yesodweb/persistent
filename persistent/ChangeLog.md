@@ -3,7 +3,10 @@
 ## 2.13.0.3
 
 * [#1287](https://github.com/yesodweb/persistent/pull/1287)
-    * Fix the duplicate entity check for transitive dependencies
+    * Fix the duplicate entity check for transitive dependencies.
+    * Fixes an issue where generating code would refer to the `ModelName` when
+      making a reference to another table when the explicit code only refers to
+      `ModelNameId`.
 
 ## 2.13.0.2
 

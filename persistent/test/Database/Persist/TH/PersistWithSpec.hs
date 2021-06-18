@@ -15,10 +15,11 @@
 module Database.Persist.TH.PersistWithSpec where
 
 import TemplateTestImports
-import Database.Persist.TH.PersistWith.Model
+import Database.Persist.TH.PersistWith.Model (IceCreamId)
 import Data.List (find)
+import Language.Haskell.TH as TH
 
-mkPersistWith sqlSettings $(discoverEntities) [persistLowerCase|
+mkPersistWith sqlSettings { mpsGeneric = False } $(discoverEntities) [persistLowerCase|
 
 BestTopping
     iceCream IceCreamId
@@ -36,4 +37,3 @@ spec = describe "mkPersistWith" $ do
         fieldReference iceCreamField
             `shouldBe`
                 ForeignRef (EntityNameHS "IceCream")
-
