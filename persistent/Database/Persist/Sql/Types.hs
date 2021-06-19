@@ -63,7 +63,7 @@ type SqlPersistM = SqlPersistT (NoLoggingT (ResourceT IO))
 
 type Sql = Text
 
--- A list of SQL operations, marked with a safety flag. If the 'Bool' is
+-- | A list of SQL operations, marked with a safety flag. If the 'Bool' is
 -- 'True', then the operation is *unsafe* - it might be destructive, or
 -- otherwise not idempotent. If the 'Bool' is 'False', then the operation
 -- is *safe*, and can be run repeatedly without issues.
