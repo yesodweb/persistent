@@ -112,31 +112,40 @@ module Database.Persist.MongoDB
     , module Database.Persist
     ) where
 
-import qualified Data.List.NonEmpty as NEL
 import Control.Exception (throw, throwIO)
-import Control.Monad (liftM, (>=>), forM_, unless)
+import Control.Monad (forM_, liftM, unless, (>=>))
 import Control.Monad.IO.Class (liftIO)
 import qualified Control.Monad.IO.Class as Trans
 import Control.Monad.IO.Unlift (MonadUnliftIO, withRunInIO)
 import Control.Monad.Trans.Reader (ask, runReaderT)
+import qualified Data.List.NonEmpty as NEL
 
 import Data.Acquire (mkAcquire)
-import Data.Aeson (Value (Number), (.:), (.:?), (.!=), FromJSON(..), ToJSON(..), withText, withObject)
+import Data.Aeson
+       ( FromJSON(..)
+       , ToJSON(..)
+       , Value(Number)
+       , withObject
+       , withText
+       , (.!=)
+       , (.:)
+       , (.:?)
+       )
 import Data.Aeson.Types (modifyFailure)
 import Data.Bits (shiftR)
 import Data.Bson (ObjectId(..))
 import qualified Data.ByteString as BS
 import Data.Conduit
-import Data.Maybe (mapMaybe, fromJust)
+import Data.Maybe (fromJust, mapMaybe)
 import Data.Monoid (mappend)
+import qualified Data.Pool as Pool
 import qualified Data.Serialize as Serialize
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as E
-import qualified Data.Traversable as Traversable
-import qualified Data.Pool as Pool
 import Data.Time (NominalDiffTime)
 import Data.Time.Calendar (Day(..))
+import qualified Data.Traversable as Traversable
 #ifdef HIGH_PRECISION_DATE
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 #endif
@@ -145,8 +154,14 @@ import Network.Socket (HostName)
 import Numeric (readHex)
 import System.Environment (lookupEnv)
 import Unsafe.Coerce (unsafeCoerce)
+import Web.HttpApiData
+       ( FromHttpApiData(..)
+       , ToHttpApiData(..)
+       , parseUrlPieceMaybe
+       , parseUrlPieceWithPrefix
+       , readTextData
+       )
 import Web.PathPieces (PathPiece(..))
-import Web.HttpApiData (ToHttpApiData(..), FromHttpApiData(..), parseUrlPieceMaybe, parseUrlPieceWithPrefix, readTextData)
 
 #ifdef DEBUG
 import FileLocation (debug)
@@ -156,8 +171,8 @@ import qualified Database.MongoDB as DB
 import Database.MongoDB.Query (Database)
 
 import Database.Persist
-import qualified Database.Persist.Sql as Sql
 import Database.Persist.EntityDef.Internal (toEmbedEntityDef)
+import qualified Database.Persist.Sql as Sql
 
 instance HasPersistBackend DB.MongoContext where
     type BaseBackend DB.MongoContext = DB.MongoContext
@@ -430,7 +445,7 @@ toInsertDoc record =
                 DB.:=
                     embeddedVal pv
         )
-        $ filter (\(_, pv) -> isNull pv)
+        $ filter (\(_, pv) -> not $ isNull pv)
         $ zip xs ys
       where
         isNull PersistNull = True
@@ -438,7 +453,10 @@ toInsertDoc record =
         isNull (PersistList l) = null l
         isNull _ = False
 
-    -- make sure to removed nulls from embedded entities also
+    -- make sure to removed nulls from embedded entities also.
+    -- note that persistent no longer supports embedded maps
+    -- with fields. This means any embedded bson object will
+    -- insert null. But top level will not.
     embeddedVal :: PersistValue -> DB.Value
     embeddedVal (PersistMap m) =
         DB.Doc $ fmap (\(k, v) -> k DB.:= DB.val v) $ m
@@ -989,25 +1007,24 @@ orderPersistValues entDef castDoc =
     -- another application may use fields we don't care about
     -- our own application may set extra fields with the raw driver
     match [] _ values = values
-    match ((fieldName, medef) : columns) fields values =
+    match ((fName, medef) : columns) fields values =
         let
             ((_, pv) , unused) =
                 matchOne fields []
         in
             match columns unused $
-                values ++ [(fieldName, nestedOrder medef pv)]
+                values ++ [(fName, nestedOrder medef pv)]
       where
-        nestedOrder (Just _) (PersistMap m) =
-            PersistMap m
-        nestedOrder (Just em) (PersistList l) =
-            PersistList $ map (nestedOrder (Just em)) l
-        nestedOrder Nothing found =
-            found
+        -- support for embedding other persistent objects into a schema for
+        -- mongodb cannot be currently supported in persistent.
+        -- The order will be undetermined but that's ok because there is no
+        -- schema migration for mongodb anyways.
+        -- nestedOrder (Just _) (PersistMap m) = PersistMap m
+        nestedOrder (Just em) (PersistList l) = PersistList $ map (nestedOrder (Just em)) l
+        nestedOrder _ found = found
 
         matchOne (field:fs) tried =
-            if fieldName == fst field
-                -- snd drops the name now that it has been used to make the match
-                -- persistent will add the field name later
+            if fName == fst field
                 then (field, tried ++ fs)
                 else matchOne fs (field:tried)
         -- if field is not found, assume it was a Nothing
@@ -1016,7 +1033,7 @@ orderPersistValues entDef castDoc =
         -- instead, we want to store no field at all: that takes less space.
         -- Also, another ORM may be doing the same
         -- Also, this adding a Maybe field means no migration required
-        matchOne [] tried = ((fieldName, PersistNull), tried)
+        matchOne [] tried = ((fName, PersistNull), tried)
 
 assocListFromDoc :: DB.Document -> [(Text, PersistValue)]
 assocListFromDoc = Prelude.map (\f -> ( (DB.label f), cast (DB.value f) ) )
@@ -1057,8 +1074,7 @@ instance DB.Val PersistValue where
   val (PersistRational _)   = throw $ PersistMongoDBUnsupported "PersistRational not implemented for the MongoDB backend"
   val (PersistArray a)      = DB.val $ PersistList a
   val (PersistDbSpecific _)   = throw $ PersistMongoDBUnsupported "PersistDbSpecific not implemented for the MongoDB backend"
-  val (PersistLiteral _)   = throw $ PersistMongoDBUnsupported "PersistLiteral not implemented for the MongoDB backend"
-  val (PersistLiteralEscaped _) = throw $ PersistMongoDBUnsupported "PersistLiteralEscaped not implemented for the MongoDB backend"
+  val (PersistLiteral_ _ _)   = throw $ PersistMongoDBUnsupported "PersistLiteral not implemented for the MongoDB backend"
   cast' (DB.Float x)  = Just (PersistDouble x)
   cast' (DB.Int32 x)  = Just $ PersistInt64 $ fromIntegral x
   cast' (DB.Int64 x)  = Just $ PersistInt64 x
