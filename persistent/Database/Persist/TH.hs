@@ -31,16 +31,6 @@ module Database.Persist.TH
     , mkPersist
     , mkPersistWith
     , MkPersistSettings
-    , derivePersist
-    , stripEntityNamePrefix
-    , OptionalText(..)
-    , DeriveFieldDef(..)
-    , DeriveEntityDef(..)
-    , DeriveForeignKey(..)
-    , DeriveUniqueDef(..)
-    , mkDeriveEntityDef
-    , mkDeriveFieldDef
-    , mkDeriveUniqueDef
     , mpsBackend
     , mpsGeneric
     , mpsPrefixFields
@@ -50,6 +40,7 @@ module Database.Persist.TH
     , mpsGenerateLenses
     , mpsDeriveInstances
     , mpsRecordFieldToHaskellName
+    , mpsCreateDataType
     , EntityJSON(..)
     , mkPersistSettings
     , sqlSettings
@@ -102,7 +93,6 @@ import Data.Either
 import qualified Data.HashMap.Strict as HM
 import Data.Int (Int64)
 import Data.Ix (Ix)
-import Data.String (IsString(..))
 import Data.List (foldl')
 import qualified Data.List as List
 import Data.List.NonEmpty (NonEmpty(..))
@@ -122,8 +112,6 @@ import Instances.TH.Lift ()
     -- instance on pre-1.2.4 versions of `text`
 import Data.Foldable (toList)
 import qualified Data.Set as Set
-import Language.Haskell.TH.Datatype
-import qualified Language.Haskell.TH.Datatype as THD
 import Language.Haskell.TH.Lib
        (appT, conE, conK, conT, litT, strTyLit, varE, varP, varT)
 import Language.Haskell.TH.Quote
@@ -286,211 +274,6 @@ preprocessUnboundDefs preexistingEntities unboundDefs =
   where
     (embedEntityMap, noCycleEnts) =
         embedEntityDefsMap preexistingEntities unboundDefs
-
--- | Include entities that are related to each other in one call
-derivePersist :: MkPersistSettings -> PersistSettings -> [DeriveEntityDef] -> Q [Dec]
-derivePersist mps ps defs = do
-    ents <- mapM (\ded -> datatypeToEntityDef mps ps ded <$> reifyDatatype (entityTypeName ded)) defs
-    let mps' = mps {mpsCreateDataType = False}
-    mkPersist mps' ents
-
--- | Helper data type for better ergonomics.
--- Overriding a string with it does not need Just, which makes it easier to use than @Maybe Text@.
-newtype OptionalText = OptionalText {
-    fromOptionalText :: Maybe Text
-}
-instance IsString OptionalText where
-  fromString = OptionalText . Just . pack
-
-data DeriveFieldDef = DeriveFieldDef
-    { fieldRecordName :: Name
-    , sqlNameOverride :: OptionalText
-    , sqlTypeOverride :: OptionalText
-    , generatedOverride :: OptionalText
-    , fieldCascadeOverride :: Maybe FieldCascade
-    , fieldAttrOverride :: [FieldAttr]
-    }
-
-data DeriveEntityDef = DeriveEntityDef
-    { entityTypeName :: Name
-    , primaryId :: Maybe (Either DeriveFieldDef [Name])
-    , deriveEntityDB :: OptionalText
-    , uniques :: [DeriveUniqueDef]
-    , deriveFields :: [DeriveFieldDef]
-    , foreignKeys :: [DeriveForeignKey]
-    }
-
-mkDeriveEntityDef :: Name -> DeriveEntityDef
-mkDeriveEntityDef name = DeriveEntityDef
-    { entityTypeName = name
-    , primaryId = Nothing
-    , deriveEntityDB = OptionalText Nothing
-    , uniques = []
-    , deriveFields = []
-    , foreignKeys = []
-    }
-
-data DeriveUniqueDef = DeriveUniqueDef
-    { uniqueHaskellName :: Text
-    , deriveUniqueDBName :: OptionalText
-    , deriveUniqueFields :: [Name]
-    , forceNullableFields :: Bool
-    }
-
-mkDeriveUniqueDef :: Text -> [Name] -> DeriveUniqueDef
-mkDeriveUniqueDef name fields = DeriveUniqueDef
-    { uniqueHaskellName = name
-    , deriveUniqueDBName = OptionalText Nothing
-    , deriveUniqueFields = fields
-    , forceNullableFields = False
-    }
-
-mkDeriveFieldDef :: Name -> DeriveFieldDef
-mkDeriveFieldDef name = DeriveFieldDef
-    { fieldRecordName = name
-    , sqlNameOverride = OptionalText Nothing
-    , sqlTypeOverride = OptionalText Nothing
-    , generatedOverride = OptionalText Nothing
-    , fieldCascadeOverride = Nothing
-    , fieldAttrOverride = []
-    }  
-
-data DeriveForeignKey = DeriveForeignKey
-    { otherEntity :: Name
-    , constraintName :: Text
-    , ourFields :: [Name]
-    , parentFields :: Maybe [Name]
-    }
-
-stripEntityNamePrefix :: Text -> Text -> Text
-stripEntityNamePrefix entName fieldName = if T.toLower entName `T.isPrefixOf` T.toLower fieldName
-    then T.drop (T.length entName) fieldName
-    else fieldName
-
-datatypeToEntityDef :: MkPersistSettings -> PersistSettings -> DeriveEntityDef -> DatatypeInfo -> UnboundEntityDef
-datatypeToEntityDef mps ps@PersistSettings{..} ded DatatypeInfo{..} = unbound' where
-    unbound = unbindEntityDef ent
-    unbound' = unbound {
-        unboundForeignDefs = foreigns,
-        unboundPrimarySpec = case entityIdField of
-            EntityIdNaturalKey _ -> unboundPrimarySpec unbound
-            -- unbindEntityDef never creates a DefaultKey, so we do it here
-            EntityIdField f -> DefaultKey $ fieldDB f
-    }
-    ent = EntityDef
-        { entityHaskell = EntityNameHS entName
-        , entityDB = EntityNameDB tableName
-        , entityId = entityIdField
-        , entityAttrs = []
-        , entityFields = map snd fields 
-        , entityUniques = entityUniques'
-        , entityForeigns = []
-        , entityDerives = []
-        , entityExtra = mempty
-        , entitySum = False 
-        , entityComments = Nothing
-    }
-    entName = pack $ nameBase datatypeName
-    tableName = fromMaybe (psToDBName entName) (fromOptionalText $ deriveEntityDB ded)
-
-    fields = fieldToFieldDefs mps ps ded $ case datatypeCons of
-        [c] -> c
-        _ -> error $ show entName <> ": data type must have a single constructor"
-
-    entityIdField = case primaryId ded of
-        Nothing -> EntityIdField $ mkAutoIdField' (FieldNameDB psIdName) (EntityNameHS entName) SqlInt64
-        Just (Right names) | null names -> error "No fields on primary composite key."
-        Just (Right names) -> EntityIdNaturalKey $ CompositeDef (getFieldByName <$> NEL.fromList names) []
-        Just (Left primaryOverride) ->
-            -- Only the id column name can be adjusted
-            EntityIdField $ mkAutoIdField' (FieldNameDB $ fromMaybe psIdName $ fromOptionalText $ sqlNameOverride primaryOverride) (EntityNameHS entName) SqlInt64
-
-    getFieldByName :: Name -> FieldDef
-    getFieldByName name = case lookup name fields of
-        Just field -> field
-        Nothing -> error $ "datatypeToEntityDef: entity " <> show entName <> "  does not have field " <> show name
-
-    entityUniques' = map mkUniqueDef (uniques ded)
-
-    mkUniqueDef :: DeriveUniqueDef -> UniqueDef
-    mkUniqueDef DeriveUniqueDef{..} = UniqueDef {..} where
-        uniqueError :: String -> a
-        uniqueError msg = error $ "Invalid unique constraint on table[" ++ unpack entName ++ "]: " ++ msg
-
-        uniqueFields = case NEL.nonEmpty deriveUniqueFields of
-            Just uniqueFields' -> fmap ((\f -> (fieldHaskell f, fieldDB f)) . getFieldByName) uniqueFields'
-            Nothing -> uniqueError "list of fields cannot be empty"
-        uniqueHaskell = if isCapitalizedText uniqueHaskellName
-            then ConstraintNameHS uniqueHaskellName
-            else uniqueError $ "expecting an uppercase constraint name, found =" ++ unpack uniqueHaskellName
-        uniqueDBName = ConstraintNameDB $ fromMaybe (psToDBName (tableName `T.append` uniqueHaskellName)) (fromOptionalText deriveUniqueDBName)
-        uniqueAttrs = ["!force" | forceNullableFields]
-
-    foreigns = map mkForeign (foreignKeys ded)
-
-    mkForeign :: DeriveForeignKey -> UnboundForeignDef
-    mkForeign DeriveForeignKey{..} = UnboundForeignDef foreignFields $ ForeignDef
-        { foreignRefTableHaskell = EntityNameHS $ pack $ nameBase otherEntity
-        , foreignRefTableDBName = EntityNameDB $ psToDBName $ pack $ nameBase otherEntity
-        , foreignConstraintNameHaskell = ConstraintNameHS constraintName
-        , foreignConstraintNameDBName =
-            ConstraintNameDB $ psToDBName (entName `T.append` constraintName)
-        , foreignFieldCascade = FieldCascade
-            { fcOnDelete = Nothing
-            , fcOnUpdate = Nothing
-            }
-        , foreignFields = []
-        , foreignAttrs = []
-        , foreignNullable = False
-        , foreignToPrimary = null parentFields
-        } where
-            foreignFields = FieldListImpliedId $ NEL.fromList $ map toFieldHaskell ourFields
-    toFieldHaskell name = FieldNameHS $
-        mpsRecordFieldToHaskellName mps entName (pack $ nameBase name)
-
-fieldToFieldDefs :: MkPersistSettings -> PersistSettings -> DeriveEntityDef -> ConstructorInfo -> [(Name, FieldDef)]
-fieldToFieldDefs mps PersistSettings{..} ded ConstructorInfo{..} = case constructorVariant of
-    RecordConstructor names -> zipWith3 (\name -> toFieldDef name (lookupFieldOverride name)) names constructorFields constructorStrictness
-    _ -> error "Data type must have a record constructor"
-    where
-    lookupFieldOverride :: Name -> Maybe DeriveFieldDef
-    lookupFieldOverride =
-        let fieldMap = M.fromList $ map (\f -> (fieldRecordName f, f)) $ deriveFields ded
-        in flip M.lookup fieldMap
-
-    toFieldDef :: Name -> Maybe DeriveFieldDef -> Type -> FieldStrictness -> (Name, FieldDef)
-    toFieldDef name maybeDef typ strictness = (name, FieldDef{
-          fieldHaskell = FieldNameHS fieldHaskell
-        , fieldDB = FieldNameDB $ fromMaybe (psToDBName fieldHaskell) (maybeDef >>= fromOptionalText . sqlNameOverride)
-        , fieldType = fieldType
-        , fieldSqlType = SqlOther $ "SqlType unset for " `mappend` pack (show name)
-        , fieldAttrs = recordNameAttr: sqlTypeAttr <> nullableAttr <> maybe [] fieldAttrOverride maybeDef
-        , fieldStrict = fieldStrictness strictness == THD.Strict
-        , fieldReference = NoReference
-        , fieldComments = Nothing
-        , fieldCascade = FieldCascade (maybeDef >>= fieldCascadeOverride >>= fcOnUpdate) (maybeDef >>= fieldCascadeOverride >>= fcOnDelete)
-        , fieldGenerated = maybeDef >>= fromOptionalText . generatedOverride
-        , fieldIsImplicitIdColumn = False
-        }) where
-        -- Save the field name for code generation. It cannot always be inferred from fieldHaskell.
-        recordNameAttr = FieldAttrOther $ "recordName=" <> pack (nameBase name)
-        entName = pack $ nameBase $ entityTypeName ded
-        fieldHaskell = mpsRecordFieldToHaskellName mps entName (pack $ nameBase name)
-        (fieldType, isNullable) = decomposeFieldType typ
-        sqlTypeAttr = maybe [] (\t -> [FieldAttrSqltype t]) (maybeDef >>= fromOptionalText . sqlTypeOverride)
-        nullableAttr = [FieldAttrMaybe | isNullable]
-
-decomposeFieldType :: Type -> (FieldType, Bool)
-decomposeFieldType = unwrapMaybe where
-    unwrapMaybe (AppT t1 t2) | t1 == ConT ''Maybe = (go t2, True)
-    unwrapMaybe t = (go t, False)
-
-    go (ConT name) = FTTypeCon Nothing (pack $ nameBase name)
-    go (ParensT t) = go t
-    go (AppT ListT t) = FTList (go t)
-    go (AppT t1 t2) | t1 == ConT ''Maybe = go t2
-    go (AppT t1 t2) = FTApp (go t1) (go t2)
-    go t = error $ "Cannot process type: " <> show t
 
 stripId :: FieldType -> Maybe Text
 stripId (FTTypeCon Nothing t) = stripSuffix "Id" t
@@ -1154,8 +937,6 @@ data MkPersistSettings = MkPersistSettings
     --
     -- @since 2.13.0.0
     , mpsCreateDataType :: !Bool
-    -- ^ Create data type for the entity
-    , mpsFieldSqlType :: FieldDef -> SqlTypeExp
     , mpsRecordFieldToHaskellName :: Text -> Text -> Text
     -- ^ Derive the Haskell names using the entity and field name. The result
     -- should be a valid haskell indentifier (start with an lower cased letter).
@@ -1204,7 +985,6 @@ mkPersistSettings backend = MkPersistSettings
     , mpsImplicitIdDef =
         autoIncrementingInteger
     , mpsCreateDataType = True
-    , mpsFieldSqlType = SqlType' . fieldSqlType
     , mpsRecordFieldToHaskellName = \_ fName -> fName
     }
 

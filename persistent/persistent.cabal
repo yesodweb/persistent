@@ -63,6 +63,7 @@ library
         Database.Persist.ImplicitIdDef
         Database.Persist.ImplicitIdDef.Internal
         Database.Persist.TH
+        Database.Persist.DerivePersist
 
         Database.Persist.Quasi
         Database.Persist.Quasi.Internal

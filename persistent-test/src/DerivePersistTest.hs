@@ -2,7 +2,8 @@
 
 module DerivePersistTest where
 
-import Database.Persist.TH (mkDeleteCascade, derivePersist, persistLowerCase, stripEntityNamePrefix, DeriveEntityDef(..), DeriveFieldDef(..), DeriveForeignKey(..), DeriveUniqueDef(..), mkDeriveEntityDef, mkDeriveFieldDef, mkDeriveUniqueDef)
+import Database.Persist.TH (mkDeleteCascade, persistLowerCase)
+import Database.Persist.DerivePersist
 import Database.Persist.Quasi (lowerCaseSettings)
 import Data.Maybe (isJust)
 
@@ -129,9 +130,7 @@ specsWith runDb = describe "derivePersist" $ do
     k3 <- insert m3
     m3' <- get k3
     m3' @== Just m3
-    res <- rawSql "SELECT * FROM menu_object" []
-    liftIO $ print (res :: [(Single Text, Single Text)])
-  
+
   it "Supports composite keys" $ runDb $ do
     -- copy from CompositeTest
     let p1 = TestParent2 "a1" "b1" 11 "p1"
