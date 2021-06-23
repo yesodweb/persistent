@@ -1,5 +1,9 @@
 ## Unreleased changes
 
+## 2.13.0.3
+
+* Accidentally released 2.13.0.2 with some testing changes.
+
 ## 2.13.0.2
 
 * [#1275](https://github.com/yesodweb/persistent/pull/1275)

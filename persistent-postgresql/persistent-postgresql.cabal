@@ -1,5 +1,5 @@
 name:            persistent-postgresql
-version:         2.13.0.1
+version:         2.13.0.3
 license:         MIT
 license-file:    LICENSE
 author:          Felipe Lessa, Michael Snoyman <michael@snoyman.com>
@@ -55,6 +55,7 @@ test-suite test
                      PgIntervalTest
                      UpsertWhere
                      ImplicitUuidSpec
+                     MigrationReferenceSpec
     ghc-options:     -Wall
 
     build-depends:   base                 >= 4.9 && < 5
