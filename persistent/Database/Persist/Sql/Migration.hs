@@ -22,20 +22,20 @@ module Database.Persist.Sql.Migration
 import Control.Exception (throwIO)
 import Control.Monad (liftM, unless)
 import Control.Monad.IO.Unlift
-import Control.Monad.Trans.Class (MonadTrans (..))
-import Control.Monad.Trans.Reader (ReaderT (..), ask)
+import Control.Monad.Trans.Class (MonadTrans(..))
+import Control.Monad.Trans.Reader (ReaderT(..), ask)
 import Control.Monad.Trans.Writer
-import Data.Text (Text, unpack, snoc, isPrefixOf, pack)
+import Data.Text (Text, isPrefixOf, pack, snoc, unpack)
 import qualified Data.Text.IO
+import GHC.Stack
 import System.IO
 import System.IO.Silently (hSilence)
-import GHC.Stack
 
+import Database.Persist.Sql.Orphan.PersistStore ()
+import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Types.Internal
-import Database.Persist.Sql.Raw
 import Database.Persist.Types
-import Database.Persist.Sql.Orphan.PersistStore()
 
 allSql :: CautiousMigration -> [Sql]
 allSql = map snd
@@ -195,12 +195,14 @@ reportErrors = tell
 -- @since 2.9.2
 addMigration
     :: Bool
-    -- ^ Is the migration safe to run? (eg a non-destructive and idempotent
-    -- update on the schema)
+    -- ^ Is the migration unsafe to run? (eg a destructive or non-idempotent
+    -- update on the schema). If 'True', the migration is *unsafe*, and will
+    -- need to be run manually later. If 'False', the migration is *safe*, and
+    -- can be run any number of times.
     -> Sql
     -- ^ A 'Text' value representing the command to run on the database.
     -> Migration
-addMigration isSafe sql = lift (tell [(isSafe, sql)])
+addMigration isUnsafe sql = lift (tell [(isUnsafe, sql)])
 
 -- | Add a 'CautiousMigration' (aka a @[('Bool', 'Text')]@) to the
 -- migration plan.

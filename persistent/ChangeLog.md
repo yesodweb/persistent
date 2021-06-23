@@ -1,5 +1,11 @@
 # Changelog for persistent
 
+## 2.13.0.4
+
+* [#1277](https://github.com/yesodweb/persistent/pull/1277)
+    * Corrected the documentation of `addMigration` to match the actual
+      behaviour - this will not change the behaviour of your code.
+
 ## 2.13.0.3
 
 * [#1287](https://github.com/yesodweb/persistent/pull/1287)
@@ -7,6 +13,7 @@
     * Fixes an issue where generating code would refer to the `ModelName` when
       making a reference to another table when the explicit code only refers to
       `ModelNameId`.
+
 
 ## 2.13.0.2
 
