@@ -42,6 +42,7 @@ import qualified MaxLenTest
 import qualified MaybeFieldDefsTest
 import qualified MigrationColumnLengthTest
 import qualified MigrationOnlyTest
+import qualified MigrationReferenceSpec
 import qualified MigrationTest
 import qualified MpsCustomPrefixTest
 import qualified MpsNoPrefixTest
@@ -59,6 +60,7 @@ import qualified TreeTest
 import qualified UniqueTest
 import qualified UpsertTest
 import qualified UpsertWhere
+import qualified PgIntervalTest
 
 type Tuple = (,)
 
@@ -141,6 +143,7 @@ main = do
 
   hspec $ do
       ImplicitUuidSpec.spec
+      MigrationReferenceSpec.spec
       RenameTest.specsWith runConnAssert
       DataTypeTest.specsWith runConnAssert
           (Just (runMigrationSilent dataTypeMigrate))

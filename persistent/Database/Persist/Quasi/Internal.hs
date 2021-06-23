@@ -423,7 +423,7 @@ data UnboundEntityDef
     --
     -- @since 2.13.0.0
     }
-    deriving (Show, Lift)
+    deriving (Eq, Ord, Show, Lift)
 
 -- | Convert an 'EntityDef' into an 'UnboundEntityDef'. This "forgets"
 -- information about the 'EntityDef', but it is all kept present on the
@@ -544,7 +544,7 @@ data UnboundFieldDef
     --
     -- @since 2.13.0.0
     }
-    deriving (Eq, Show, Lift)
+    deriving (Eq, Ord, Show, Lift)
 
 -- | Forget innformation about a 'FieldDef' so it can beused as an
 -- 'UnboundFieldDef'.
@@ -626,7 +626,7 @@ data PrimarySpec
     -- have a 'DefaultKey'.
     --
     -- @since 2.13.0.0
-    deriving (Show, Lift)
+    deriving (Eq, Ord, Show, Lift)
 
 -- | Construct an entity definition.
 mkUnboundEntityDef
@@ -982,7 +982,7 @@ data UnboundIdDef = UnboundIdDef
     , unboundIdCascade :: FieldCascade
     , unboundIdType :: Maybe FieldType
     }
-    deriving (Show, Lift)
+    deriving (Eq, Ord, Show, Lift)
 
 -- TODO: this is hacky (the double takeCols, the setFieldDef stuff, and setIdName.
 -- need to re-work takeCols function
@@ -1027,7 +1027,7 @@ data UnboundCompositeDef = UnboundCompositeDef
     --
     -- @since 2.13.0.0
     }
-    deriving (Show, Lift)
+    deriving (Eq, Ord, Show, Lift)
 
 takeComposite
     :: [FieldNameHS]
@@ -1148,7 +1148,7 @@ data UnboundForeignDef
     --
     -- @since 2.13.0.0
     }
-    deriving (Eq, Show, Lift)
+    deriving (Eq, Ord, Show, Lift)
 
 -- | A list of fields present on the foreign reference.
 data UnboundForeignFieldList
@@ -1176,7 +1176,7 @@ data UnboundForeignFieldList
     -- @
     --
     -- @since 2.13.0.0
-    deriving (Eq, Show, Lift)
+    deriving (Eq, Ord, Show, Lift)
 
 -- | A pairing of the 'FieldNameHS' for the source table to the 'FieldNameHS'
 -- for the target table.
@@ -1193,7 +1193,7 @@ data ForeignFieldReference =
     --
     -- @since 2.13.0.0
     }
-    deriving (Eq, Show, Lift)
+    deriving (Eq, Ord, Show, Lift)
 
 unbindForeignDef :: ForeignDef -> UnboundForeignDef
 unbindForeignDef fd =

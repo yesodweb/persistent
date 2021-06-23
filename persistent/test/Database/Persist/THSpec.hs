@@ -45,6 +45,8 @@ import Database.Persist.Sql.Util
 import Database.Persist.TH
 import TemplateTestImports
 
+
+import qualified Database.Persist.TH.PersistWithSpec as PersistWithSpec
 import qualified Database.Persist.TH.DiscoverEntitiesSpec as DiscoverEntitiesSpec
 import qualified Database.Persist.TH.EmbedSpec as EmbedSpec
 import qualified Database.Persist.TH.ForeignRefSpec as ForeignRefSpec
@@ -173,6 +175,7 @@ instance Arbitrary Address where
 
 spec :: Spec
 spec = describe "THSpec" $ do
+    PersistWithSpec.spec
     KindEntitiesSpec.spec
     OverloadedLabelSpec.spec
     SharedPrimaryKeySpec.spec

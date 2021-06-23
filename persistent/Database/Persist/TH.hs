@@ -237,8 +237,6 @@ embedEntityDefsMap existingEnts rawEnts =
     (embedEntityMap, noCycleEnts)
   where
     noCycleEnts = entsWithEmbeds
-    -- every EntityDef could reference each-other (as an EmbedRef)
-    -- let Haskell tie the knot
     embedEntityMap = constructEmbedEntityMap entsWithEmbeds
     entsWithEmbeds = fmap setEmbedEntity (rawEnts <> map unbindEntityDef existingEnts)
     setEmbedEntity ubEnt =
@@ -773,7 +771,13 @@ mkPersistWith mps preexistingEntities ents' = do
             $ predefs
         entityMap =
             constructEntityMap allEnts
-    ents <- filterM shouldGenerateCode allEnts
+        preexistingSet =
+            Set.fromList $ map getEntityHaskellName preexistingEntities
+        newEnts =
+            filter
+                (\e -> getUnboundEntityNameHS e `Set.notMember` preexistingSet)
+                allEnts
+    ents <- filterM shouldGenerateCode newEnts
     requireExtensions
         [ [TypeFamilies], [GADTs, ExistentialQuantification]
         , [DerivingStrategies], [GeneralizedNewtypeDeriving], [StandaloneDeriving]
@@ -1037,9 +1041,15 @@ dataTypeDec mps entityMap entDef = do
     cols :: [VarBangType]
     cols = do
         fieldDef <- getUnboundFieldDefs entDef
-        let recordName = fieldDefToRecordName mps entDef fieldDef
-            strictness = if unboundFieldStrict fieldDef then isStrict else notStrict
-            fieldIdType = maybeIdType mps entityMap fieldDef Nothing Nothing
+        let
+            recordName =
+                fieldDefToRecordName mps entDef fieldDef
+            strictness =
+                if unboundFieldStrict fieldDef
+                then isStrict
+                else notStrict
+            fieldIdType =
+                maybeIdType mps entityMap fieldDef Nothing Nothing
         pure (recordName, strictness, fieldIdType)
 
     constrs
@@ -1097,6 +1107,45 @@ mkUnique mps entityMap entDef (UniqueDef constr _ fields attrs) =
               , "on the end of the line that defines your uniqueness "
               , "constraint in order to disable this check. ***" ]
 
+-- | This function renders a Template Haskell 'Type' for an 'UnboundFieldDef'.
+-- It takes care to respect the 'mpsGeneric' setting to render an Id faithfully,
+-- and it also ensures that the generated Haskell type is 'Maybe' if the
+-- database column has that attribute.
+--
+-- For a database schema with @'mpsGeneric' = False@, this is simple - it uses
+-- the @ModelNameId@ type directly. This resolves just fine.
+--
+-- If 'mpsGeneric' is @True@, then we have to do something a bit more
+-- complicated. We can't refer to a @ModelNameId@ directly, because that @Id@
+-- alias hides the backend type variable. Instead, we need to refer to:
+--
+-- > Key (ModelNameGeneric backend)
+--
+-- This means that the client code will need both the term @ModelNameId@ in
+-- scope, as well as the @ModelNameGeneric@ constructor, despite the fact that
+-- the @ModelNameId@ is the only term explicitly used (and imported).
+--
+-- However, we're not guaranteed to have @ModelName@ in scope - we've only
+-- referenced @ModelNameId@ in code, and so code generation *should* work even
+-- without this. Consider an explicit-style import:
+--
+-- @
+-- import Model.Foo (FooId)
+--
+-- mkPersistWith sqlSettings $(discoverEntities) [persistLowerCase|
+--   Bar
+--     foo FooId
+-- |]
+-- @
+--
+-- This looks like it ought to work, but it would fail with @mpsGeneric@ being
+-- enabled. One hacky work-around is to perform a @'lookupTypeName' :: String ->
+-- Q (Maybe Name)@ on the @"ModelNameId"@ type string. If the @Id@ is
+-- a reference in the 'EntityMap' and @lookupTypeName@ returns @'Just' name@,
+-- then that 'Name' contains the fully qualified information needed to use the
+-- 'Name' without importing it at the client-site. Then we can perform a bit of
+-- surgery on the 'Name' to strip the @Id@ suffix, turn it into a 'Type', and
+-- apply the 'Key' constructor.
 maybeIdType
     :: MkPersistSettings
     -> EntityMap
@@ -1113,25 +1162,90 @@ maybeIdType mps entityMap fieldDef mbackend mnull =
                 True
             _ ->
                 maybeNullable fieldDef
-    idType = fromMaybe (ftToType $ unboundFieldType fieldDef) $ do
-        typ <- extractForeignRef entityMap fieldDef
-        pure $
-            ConT ''Key
-            `AppT` genericDataType mps typ (VarT $ fromMaybe backendName mbackend)
+    idType =
+        fromMaybe (ftToType $ unboundFieldType fieldDef) $ do
+            typ <- extractForeignRef entityMap fieldDef
+            guard ((mpsGeneric mps))
+            pure $
+                ConT ''Key
+                `AppT` genericDataType mps typ (VarT $ fromMaybe backendName mbackend)
+
+    -- TODO: if we keep mpsGeneric, this needs to check 'mpsGeneric' and then
+    -- append Generic to the model name, probably
+    _removeIdFromTypeSuffix :: Name -> Type
+    _removeIdFromTypeSuffix oldName@(Name (OccName nm) nameFlavor) =
+        case stripSuffix "Id" (T.pack nm) of
+            Nothing ->
+                ConT oldName
+            Just name ->
+                ConT ''Key
+                `AppT` do
+                    ConT $ Name (OccName (T.unpack name)) nameFlavor
+
+    -- | TODO: if we keep mpsGeneric, let's incorporate this behavior here, so
+    -- end users don't need to import the constructor type as well as the id type
+    --
+    -- Returns 'Nothing' if the given text does not appear to be a table reference.
+    -- In that case, do the usual thing for generating a type name.
+    --
+    -- Returns a @Just typ@ if the text appears to be a model name, and if the
+    -- @ModelId@ type is in scope. The 'Type' is a fully qualified reference to
+    -- @'Key' ModelName@ such that end users won't have to import it directly.
+    _lookupReferencedTable :: EntityMap -> Text -> Q (Maybe Type)
+    _lookupReferencedTable em fieldTypeText = do
+        let
+            mmodelIdString = do
+                fieldTypeNoId <- stripSuffix "Id" fieldTypeText
+                _ <- M.lookup (EntityNameHS fieldTypeNoId) em
+                pure (T.unpack fieldTypeText)
+        case mmodelIdString of
+            Nothing ->
+                pure Nothing
+            Just modelIdString -> do
+                mIdName <- lookupTypeName modelIdString
+                pure $ fmap _removeIdFromTypeSuffix mIdName
+
+    _fieldNameEndsWithId :: UnboundFieldDef -> Maybe String
+    _fieldNameEndsWithId ufd = go (unboundFieldType ufd)
+      where
+        go = \case
+            FTTypeCon mmodule name -> do
+                a <- stripSuffix "Id" name
+                pure $
+                    T.unpack $ mconcat
+                        [ case mmodule of
+                            Nothing ->
+                                ""
+                            Just m ->
+                                mconcat [m, "."]
+                        ,  a
+                        , "Id"
+                        ]
+            _ ->
+                Nothing
 
 backendDataType :: MkPersistSettings -> Type
 backendDataType mps
     | mpsGeneric mps = backendT
     | otherwise = mpsBackend mps
 
+-- | TODO:
+--
+-- if we keep mpsGeneric
+-- then
+--      let's make this fully qualify the generic name
+-- else
+--      let's delete it
 genericDataType
     :: MkPersistSettings
     -> EntityNameHS
     -> Type -- ^ backend
     -> Type
 genericDataType mps name backend
-    | mpsGeneric mps = ConT (mkEntityNameHSGenericName name) `AppT` backend
-    | otherwise = ConT $ mkEntityNameHSName name
+    | mpsGeneric mps =
+        ConT (mkEntityNameHSGenericName name) `AppT` backend
+    | otherwise =
+        ConT $ mkEntityNameHSName name
 
 degen :: [Clause] -> [Clause]
 degen [] =
@@ -2429,8 +2543,10 @@ mkField mps entityMap et fieldDef = do
         con =
             ForallC
                 []
-                [mkEqualP (VarT $ mkName "typ") $ maybeIdType mps entityMap fieldDef Nothing Nothing]
+                [mkEqualP (VarT $ mkName "typ") fieldT]
                 $ NormalC name []
+        fieldT =
+            maybeIdType mps entityMap fieldDef Nothing Nothing
     bod <- mkLookupEntityField et (unboundFieldNameHS fieldDef)
     let cla = normalClause
                 [ConP name []]
@@ -2678,7 +2794,6 @@ mkSymbolToFieldInstances mps entityMap (fixEntityDef -> ed) = do
             instance SymbolToField $(fieldNameT) $(recordNameT) $(fieldTypeT) where
                 symbolToField = $(entityFieldConstr)
             |]
-
 
 -- | Pass in a list of lists of extensions, where any of the given
 -- extensions will satisfy it. For example, you might need either GADTs or

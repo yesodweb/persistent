@@ -239,3 +239,5 @@ cleanDB = do
   deleteWhere ([] :: [Filter (OutdoorPetGeneric backend)])
   deleteWhere ([] :: [Filter (UserPTGeneric backend)])
   deleteWhere ([] :: [Filter (EmailPTGeneric backend)])
+  deleteWhere ([] :: [Filter (UpsertGeneric backend)])
+  deleteWhere ([] :: [Filter (UpsertByGeneric backend)])

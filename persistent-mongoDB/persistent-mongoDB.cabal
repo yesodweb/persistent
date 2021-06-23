@@ -1,9 +1,9 @@
 name:            persistent-mongoDB
-version:         2.12.0.0
+version:         2.13.0.0
 license:         MIT
 license-file:    LICENSE
 author:          Greg Weber <greg@gregweber.info>
-maintainer:      Greg Weber <greg@gregweber.info>
+maintainer:      Andres Schmois <andres@itpro.tv>
 synopsis:        Backend for the persistent library using mongoDB.
 category:        Database
 stability:       Experimental
