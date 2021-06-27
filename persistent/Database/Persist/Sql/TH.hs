@@ -39,12 +39,12 @@ fromN n = do
     names <- replicateM n $ newName "x"
     let arg = [TupP . map VarP $ names]
     pure ( AppT (AppT ArrowT $ flatTupleT names) (nestedTupleT names)
-         , LamE arg . TupE . map tupleOrSingleE $ pairedList names
+         , LamE arg . TupE . map (Just . tupleOrSingleE) $ pairedList names
          )
 
     where
         tupleOrSingleE :: [Name] -> Exp
-        tupleOrSingleE [a, b] = TupE $ map VarE [a, b]
+        tupleOrSingleE [a, b] = TupE $ map (Just . VarE) [a, b]
         tupleOrSingleE [a] = VarE a
         tupleOrSingleE x = error $ "tupleOrSingleE failed to convert: " <> show x
 
@@ -53,7 +53,7 @@ toN n = do
     names <- replicateM n $ newName "x"
     let arg = [TupP . map tupleOrSingleP $ pairedList names]
     pure ( AppT (AppT ArrowT $ nestedTupleT names) (flatTupleT names)
-         , LamE arg . TupE $ map VarE names
+         , LamE arg . TupE $ map (Just . VarE) names
          )
 
     where

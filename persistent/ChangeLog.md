@@ -1,5 +1,10 @@
 # Changelog for persistent
 
+## 2.13.0.5
+
+* [#1291](https://github.com/yesodweb/persistent/pull/1291)
+    * Use TemplateHaskell to generate `RawSql` instances
+
 ## 2.13.0.4
 
 * [#1277](https://github.com/yesodweb/persistent/pull/1277)
