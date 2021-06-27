@@ -98,6 +98,7 @@ library
         Database.Persist.Sql.Orphan.PersistQuery
         Database.Persist.Sql.Orphan.PersistStore
         Database.Persist.Sql.Orphan.PersistUnique
+        Database.Persist.Sql.TH
 
     -- These modules only make sense for compilers with access to DerivingVia
     if impl(ghc >= 8.6.1)
