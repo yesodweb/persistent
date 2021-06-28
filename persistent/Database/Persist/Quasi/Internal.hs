@@ -24,6 +24,7 @@ module Database.Persist.Quasi.Internal
     , Line (..)
     , preparse
     , parseLine
+    , isCapitalizedText
     , parseFieldType
     , associateLines
     , LinesWithComments(..)

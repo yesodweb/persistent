@@ -39,6 +39,8 @@ module Database.Persist.TH
     , mpsEntityJSON
     , mpsGenerateLenses
     , mpsDeriveInstances
+    , mpsRecordFieldToHaskellName
+    , mpsCreateDataType
     , EntityJSON(..)
     , mkPersistSettings
     , sqlSettings
@@ -491,6 +493,11 @@ getFieldDef :: FieldNameHS -> FieldStore -> Maybe UnboundFieldDef
 getFieldDef fieldNameHS fs =
     M.lookup fieldNameHS (fieldStoreMap fs)
 
+getFieldDef' :: FieldNameHS -> FieldStore -> UnboundFieldDef
+getFieldDef' fieldNameHS fs = case getFieldDef fieldNameHS fs of
+    Nothing -> error $ "Cannot find field " <> show fieldNameHS <> " in " <> show (fieldStoreEntity fs)
+    Just fd -> fd
+
 extractForeignRef :: EntityMap -> UnboundFieldDef -> Maybe EntityNameHS
 extractForeignRef entityMap fieldDef = do
     refName <- guessFieldReference fieldDef
@@ -933,6 +940,10 @@ data MkPersistSettings = MkPersistSettings
     -- ^ TODO: document
     --
     -- @since 2.13.0.0
+    , mpsCreateDataType :: !Bool
+    , mpsRecordFieldToHaskellName :: Text -> Text -> Text
+    -- ^ Derive the Haskell names using the entity and field name. The result
+    -- should be a valid haskell indentifier (start with an lower cased letter).
     }
 
 {-# DEPRECATED mpsGeneric "The mpsGeneric function adds a considerable amount of overhead and complexity to the library without bringing significant benefit. We would like to remove it. If you require this feature, please comment on the linked GitHub issue, and we'll either keep it around, or we can figure out a nicer way to solve your problem.\n\n Github: https://github.com/yesodweb/persistent/issues/1204" #-}
@@ -977,6 +988,8 @@ mkPersistSettings backend = MkPersistSettings
     , mpsDeriveInstances = []
     , mpsImplicitIdDef =
         autoIncrementingInteger
+    , mpsCreateDataType = True
+    , mpsRecordFieldToHaskellName = \_ fName -> fName
     }
 
 -- | Use the 'SqlPersist' backend.
@@ -1734,6 +1747,8 @@ mkEntity embedEntityMap entityMap mps preDef = do
     let
         entDef =
             fixEntityDef preDef
+        fieldStore =
+            mkFieldStore entDef
     fields <- mkFields mps entityMap entDef
     let name = mkEntityDefName entDef
     let clazz = ConT ''PersistEntity `AppT` genDataType
@@ -1769,7 +1784,7 @@ mkEntity embedEntityMap entityMap mps preDef = do
                     keyCon =
                         keyConName entDef
                     keyFields' =
-                        fieldNameToRecordName mps entDef <$> unboundCompositeCols ucd
+                        (fieldDefToRecordName mps entDef . flip getFieldDef' fieldStore) <$> unboundCompositeCols ucd
                     constr =
                         foldl'
                             AppE
@@ -1788,14 +1803,17 @@ mkEntity embedEntityMap entityMap mps preDef = do
             _ ->
                 [d|$(varP 'keyFromRecordM) = Nothing|]
 
-    dtd <- dataTypeDec mps entityMap entDef
+    addDtd <- if mpsCreateDataType mps
+        then (:) <$> dataTypeDec mps entityMap entDef
+        else pure id
+
     let
         allEntDefs =
             entityFieldTHCon <$> efthAllFields fields
         allEntDefClauses =
             entityFieldTHClause <$> efthAllFields fields
-    return $ addSyn $
-       dtd : mconcat fkc `mappend`
+    return $ addSyn $ addDtd $
+       mconcat fkc `mappend`
       ( [ TySynD (keyIdName entDef) [] $
             ConT ''Key `AppT` ConT name
       , instanceD instanceConstraint clazz
@@ -2088,9 +2106,10 @@ mkForeignKeysComposite mps entDef foreignDef
     | foreignToPrimary (unboundForeignDef foreignDef) = do
         let
             fieldName =
-                fieldNameToRecordName mps entDef
+                fieldDefToRecordName mps entDef . flip getFieldDef' fieldStore
             fname =
-                fieldName $ constraintToField $ foreignConstraintNameHaskell $ unboundForeignDef foreignDef
+                mkRecordName mps Nothing (entityHaskell (unboundEntityDef entDef)) $
+                    constraintToField $ foreignConstraintNameHaskell $ unboundForeignDef foreignDef
             reftableString =
                 unpack $ unEntityNameHS $ foreignRefTableHaskell $ unboundForeignDef foreignDef
             reftableKeyName =
@@ -2855,24 +2874,23 @@ entityDefConE :: UnboundEntityDef -> Exp
 entityDefConE = ConE . mkEntityDefName
 
 -- | creates a TH Name for an entity's field, based on the entity
--- name and the field name, so for example:
+-- name and the field definition, so for example:
 --
 -- Customer
 --   name Text
 --
 -- This would generate `customerName` as a TH Name
-fieldNameToRecordName :: MkPersistSettings -> UnboundEntityDef -> FieldNameHS -> Name
-fieldNameToRecordName mps entDef fieldName =
-    mkRecordName mps mUnderscore (entityHaskell (unboundEntityDef entDef)) fieldName
-  where
+fieldDefToRecordName :: MkPersistSettings -> UnboundEntityDef -> UnboundFieldDef -> Name
+fieldDefToRecordName mps entDef fieldDef = case maybeRecordName of
+    Nothing -> mkRecordName mps mUnderscore (entityHaskell (unboundEntityDef entDef)) (unboundFieldNameHS fieldDef)
+    Just recordName -> mkName $ T.unpack recordName
+    where
+    maybeRecordName = listToMaybe $ mapMaybe getAttrRecordName $ unboundFieldAttrs fieldDef
+    getAttrRecordName (FieldAttrOther other) = T.stripPrefix "recordName=" other
+    getAttrRecordName _ = Nothing
     mUnderscore
         | mpsGenerateLenses mps = Just "_"
         | otherwise = Nothing
-
--- | as above, only takes a `FieldDef`
-fieldDefToRecordName :: MkPersistSettings -> UnboundEntityDef -> UnboundFieldDef -> Name
-fieldDefToRecordName mps entDef fieldDef =
-    fieldNameToRecordName mps entDef (unboundFieldNameHS fieldDef)
 
 -- | creates a TH Name for a lens on an entity's field, based on the entity
 -- name and the field name, so as above but for the Lens
