@@ -16,15 +16,6 @@ module Database.Persist.TH.CommentSpec where
 
 import TemplateTestImports
 
-import Data.Text (Text)
-import qualified Data.Map as M
-import qualified Data.Text as T
-
-import Database.Persist.ImplicitIdDef
-import Database.Persist.ImplicitIdDef.Internal (fieldTypeFromTypeable)
-import Database.Persist.Types
-import Database.Persist.Types
-import Database.Persist.EntityDef
 import Database.Persist.EntityDef.Internal (EntityDef(..))
 import Database.Persist.FieldDef.Internal (FieldDef(..))
 
@@ -48,7 +39,7 @@ asIO :: IO a -> IO a
 asIO = id
 
 spec :: Spec
-spec = fdescribe "CommentSpec" $ do
+spec = describe "CommentSpec" $ do
     let
         ed =
             entityDef (Proxy @CommentModel)
