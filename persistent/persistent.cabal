@@ -167,6 +167,7 @@ test-suite test
         Database.Persist.TH.PersistWith.Model
         Database.Persist.TH.PersistWith.Model2
         Database.Persist.TH.PersistWithSpec
+        Database.Persist.TH.CommentSpec
         Database.Persist.TH.ImplicitIdColSpec
         Database.Persist.TH.JsonEncodingSpec
         Database.Persist.TH.KindEntitiesSpec
