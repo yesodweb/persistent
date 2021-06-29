@@ -789,7 +789,7 @@ associateComments ps x (!acc, !comments) =
         Just (DocComment comment) ->
             (acc, comment : comments)
         _ ->
-            case (setFieldComments comments <$> takeColsEx ps (tokenText <$> x)) of
+            case (setFieldComments (reverse comments) <$> takeColsEx ps (tokenText <$> x)) of
               Just sm ->
                   (sm : acc, [])
               Nothing ->

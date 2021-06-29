@@ -33,8 +33,8 @@ mkPersist sqlSettings [persistLowerCase|
 -- | Doc comments work.
 -- | Has multiple lines.
 CommentModel
-    -- | First line of comment on column
-    -- | Second line of comment on column
+    -- | First line of comment on column.
+    -- | Second line of comment on column.
     name String
 
     deriving Eq Show
