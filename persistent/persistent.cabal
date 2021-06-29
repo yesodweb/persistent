@@ -172,6 +172,7 @@ test-suite test
         Database.Persist.TH.KindEntitiesSpec
         Database.Persist.TH.KindEntitiesSpecImports
         Database.Persist.TH.MigrationOnlySpec
+        Database.Persist.TH.MaybeFieldDefsSpec
         Database.Persist.TH.MultiBlockSpec
         Database.Persist.TH.MultiBlockSpec.Model
         Database.Persist.TH.OverloadedLabelSpec

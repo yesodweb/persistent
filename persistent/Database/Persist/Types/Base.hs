@@ -108,6 +108,12 @@ data IsNullable
     | NotNullable
     deriving (Eq, Show)
 
+fieldAttrsContainsNullable :: [FieldAttr] -> IsNullable
+fieldAttrsContainsNullable s
+    | FieldAttrMaybe    `elem` s = Nullable ByMaybeAttr
+    | FieldAttrNullable `elem` s = Nullable ByNullableAttr
+    | otherwise = NotNullable
+
 -- | The reason why a field is 'nullable' is very important.  A
 -- field that is nullable because of a @Maybe@ tag will have its
 -- type changed from @A@ to @Maybe A@.  OTOH, a field that is

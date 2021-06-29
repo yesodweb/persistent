@@ -1,18 +1,18 @@
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE DerivingStrategies #-}
 {-# OPTIONS_GHC -fno-warn-unused-top-binds #-}
 
 import SqliteInit
@@ -21,21 +21,23 @@ import qualified CompositeTest
 import qualified CustomPersistFieldTest
 import qualified CustomPrimaryKeyReferenceTest
 import qualified DataTypeTest
-import qualified EmptyEntityTest
 import qualified EmbedOrderTest
 import qualified EmbedTest
+import qualified EmptyEntityTest
 import qualified EquivalentTypeTest
 import qualified ForeignKey
+import qualified GeneratedColumnTestSQL
 import qualified HtmlTest
 import qualified LargeNumberTest
+import qualified LongIdentifierTest
 import qualified MaxLenTest
-import qualified MpsNoPrefixTest
-import qualified MpsCustomPrefixTest
+import qualified MaybeFieldDefsTest
 import qualified MigrationColumnLengthTest
 import qualified MigrationOnlyTest
-import qualified PersistentTest
-import qualified GeneratedColumnTestSQL
+import qualified MpsCustomPrefixTest
+import qualified MpsNoPrefixTest
 import qualified PersistUniqueTest
+import qualified PersistentTest
 import qualified PrimaryTest
 import qualified RawSqlTest
 import qualified ReadWriteTest
@@ -45,15 +47,14 @@ import qualified SumTypeTest
 import qualified TransactionLevelTest
 import qualified UniqueTest
 import qualified UpsertTest
-import qualified LongIdentifierTest
 
-import Control.Exception (handle, IOException, throwIO)
+import Control.Exception (IOException, handle, throwIO)
 import Control.Monad.Catch (catch)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (MonadReader)
 import Control.Monad.Trans.Resource (MonadResource)
 import qualified Data.ByteString as BS
-import Data.Conduit ((.|), runConduit)
+import Data.Conduit (runConduit, (.|))
 import qualified Data.Conduit.List as CL
 import Data.Fixed
 import Data.IntMap (IntMap)
@@ -62,9 +63,9 @@ import Data.Time
 import Filesystem (removeFile)
 import Filesystem.Path.CurrentOS (fromText)
 import qualified Lens.Micro as Lens
-import Test.QuickCheck.Arbitrary (Arbitrary, arbitrary)
 import System.IO (hClose)
 import System.IO.Temp (withSystemTempFile)
+import Test.QuickCheck.Arbitrary (Arbitrary, arbitrary)
 
 import Database.Persist.Sqlite
 import qualified Database.Sqlite as Sqlite
@@ -160,6 +161,7 @@ main = do
             , LargeNumberTest.numberMigrate
             , UniqueTest.uniqueMigrate
             , MaxLenTest.maxlenMigrate
+            , MaybeFieldDefsTest.maybeFieldDefMigrate
             , Recursive.recursiveMigrate
             , CompositeTest.compositeMigrate
             , MigrationTest.migrationMigrate
@@ -206,6 +208,7 @@ main = do
         LargeNumberTest.specsWith db
         UniqueTest.specsWith db
         MaxLenTest.specsWith db
+        MaybeFieldDefsTest.specsWith db
         Recursive.specsWith db
         SumTypeTest.specsWith db (Just (runMigrationSilent SumTypeTest.sumTypeMigrate))
         MigrationOnlyTest.specsWith db

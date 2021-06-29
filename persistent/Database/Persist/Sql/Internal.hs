@@ -20,7 +20,6 @@ import qualified Data.Text as T
 
 import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
 import Database.Persist.EntityDef
-import Database.Persist.Quasi
 import Database.Persist.Sql.Types
 import Database.Persist.Types
 
@@ -140,7 +139,10 @@ mkColumns allDefs t overrides =
     go fd =
         Column
             { cName = fieldDB fd
-            , cNull = nullable (fieldAttrs fd) /= NotNullable || isEntitySum t
+            , cNull =
+                case isFieldNullable fd of
+                    Nullable _ -> True
+                    NotNullable -> isFieldMaybe fd || isEntitySum t
             , cSqlType = fieldSqlType fd
             , cDefault = defaultAttribute $ fieldAttrs fd
             , cGenerated = fieldGenerated fd
