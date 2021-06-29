@@ -71,8 +71,6 @@ module Database.Persist.TH
 
 import Prelude hiding (concat, exp, splitAt, take, (++))
 
-import GHC.Stack (HasCallStack)
-import Data.Coerce
 import Control.Monad
 import Data.Aeson
        ( FromJSON(parseJSON)
@@ -86,6 +84,7 @@ import Data.Aeson
        )
 import qualified Data.ByteString as BS
 import Data.Char (toLower, toUpper)
+import Data.Coerce
 import Data.Data (Data)
 import Data.Either
 import qualified Data.HashMap.Strict as HM
@@ -104,6 +103,7 @@ import Data.Text.Encoding (decodeUtf8)
 import qualified Data.Text.Encoding as TE
 import Data.Typeable (Typeable)
 import GHC.Generics (Generic)
+import GHC.Stack (HasCallStack)
 import GHC.TypeLits
 import Instances.TH.Lift ()
     -- Bring `Lift (fmap k v)` instance into scope, as well as `Lift Text`
@@ -387,14 +387,14 @@ liftAndFixKeys mps emEntities entityMap unboundEnt =
                     , withDbName parentFieldStore ffrTargetField
                     )
             fixForeignNullable =
-                all ((NotNullable /=) . isFieldNullable) foreignFieldNames
+                all ((NotNullable /=) . isForeignNullable) foreignFieldNames
               where
-                isFieldNullable fieldNameHS =
+                isForeignNullable fieldNameHS =
                     case getFieldDef fieldNameHS fieldStore of
                         Nothing ->
                             error "Field name not present in map"
                         Just a ->
-                            nullable (unboundFieldAttrs a)
+                            isUnboundFieldNullable a
 
             fieldStore =
                 mkFieldStore unboundEnt
@@ -1093,7 +1093,7 @@ mkUnique mps entityMap entDef (UniqueDef constr _ fields attrs) =
         error $ unpack $ "Column not found: " ++ s ++ " in unique " ++ unConstraintNameHS constr
     lookup3 x (fd:rest)
         | x == unFieldNameHS (unboundFieldNameHS fd) =
-            (fd, nullable $ unboundFieldAttrs fd)
+            (fd, isUnboundFieldNullable fd)
         | otherwise =
             lookup3 x rest
 
@@ -2273,7 +2273,7 @@ mkDeleteCascade mps defs = do
                         { depTarget = name
                         , depSourceTable = entityHaskell (unboundEntityDef def)
                         , depSourceField = unboundFieldNameHS field
-                        , depSourceNull  = nullable (unboundFieldAttrs field)
+                        , depSourceNull  = isUnboundFieldNullable field
                         }
                 Nothing ->
                     []
@@ -2607,7 +2607,7 @@ mkLookupEntityField ued ufd =
     entityName = mkEntityNameHSName (getUnboundEntityNameHS ued)
 
 maybeNullable :: UnboundFieldDef -> Bool
-maybeNullable fd = nullable (unboundFieldAttrs fd) == Nullable ByMaybeAttr
+maybeNullable fd = isUnboundFieldNullable fd == Nullable ByMaybeAttr
 
 ftToType :: FieldType -> Type
 ftToType = \case
@@ -3125,7 +3125,7 @@ setNull (fd :| fds) =
         nullSetting =
             isNull fd
         isNull =
-            (NotNullable /=) . nullable . unboundFieldAttrs
+            (NotNullable /=) . isUnboundFieldNullable
     in
         if all ((nullSetting ==) . isNull) fds
         then nullSetting

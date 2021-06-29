@@ -19,7 +19,6 @@ module Database.Persist.Quasi.Internal
     , upperCaseSettings
     , lowerCaseSettings
     , toFKNameInfixed
-    , nullable
     , Token (..)
     , Line (..)
     , preparse
@@ -40,6 +39,7 @@ module Database.Persist.Quasi.Internal
     , UnboundCompositeDef(..)
     , UnboundIdDef(..)
     , unbindFieldDef
+    , isUnboundFieldNullable
     , unboundIdDefToFieldDef
     , PrimarySpec(..)
     , mkAutoIdField'
@@ -77,6 +77,7 @@ parseFieldType t0 =
         PSFail err -> Left $ "PSFail " ++ err
         other -> Left $ show other
   where
+    parseApplyFT :: Text -> ParseState FieldType
     parseApplyFT t =
         case goMany id t of
             PSSuccess (ft:fts) t' -> PSSuccess (foldl' FTApp ft fts) t'
@@ -93,6 +94,7 @@ parseFieldType t0 =
               (x, y) -> PSFail $ show (b, x, y)
           x -> PSFail $ show x
 
+    parse1 :: Text -> ParseState FieldType
     parse1 t =
         case T.uncons t of
             Nothing -> PSDone
@@ -105,6 +107,7 @@ parseFieldType t0 =
                      in PSSuccess (parseFieldTypePiece c a) b
                 | otherwise -> PSFail $ show (c, t')
 
+    goMany :: ([FieldType] -> a) -> Text -> ParseState a
     goMany front t =
         case parse1 t of
             PSSuccess x t' -> goMany (front . (x:)) t'
@@ -217,12 +220,14 @@ tokenize t
         let (token, rest) = T.break isSpace t
          in Token token : tokenize rest
   where
+    findMidToken :: Text -> Maybe (Text, Text)
     findMidToken t' =
         case T.break (== '=') t' of
             (x, T.drop 1 -> y)
                 | "\"" `T.isPrefixOf` y || "(" `T.isPrefixOf` y -> Just (x, y)
             _ -> Nothing
 
+    quotes :: Text -> ([Text] -> [Text]) -> [Token]
     quotes t' front
         | T.null t' = error $ T.unpack $ T.concat $
             "Unterminated quoted string starting with " : front []
@@ -232,6 +237,8 @@ tokenize t
         | otherwise =
             let (x, y) = T.break (`elem` ['\\','\"']) t'
              in quotes y (front . (x:))
+
+    parens :: Int -> Text -> ([Text] -> [Text]) -> [Token]
     parens count t' front
         | T.null t' = error $ T.unpack $ T.concat $
             "Unterminated parens string starting with " : front []
@@ -376,7 +383,7 @@ associateLines lines =
             else
                 lwc : lwc' : lwcs
 
-
+    minimumIndentOf :: LinesWithComments -> Int
     minimumIndentOf = lowestIndent . lwcLines
 
 -- | An 'EntityDef' produced by the QuasiQuoter. It contains information that
@@ -563,6 +570,10 @@ unbindFieldDef fd = UnboundFieldDef
         fieldGenerated fd
     }
 
+isUnboundFieldNullable :: UnboundFieldDef -> IsNullable
+isUnboundFieldNullable =
+    fieldAttrsContainsNullable . unboundFieldAttrs
+
 -- | The specification for how an entity's primary key should be formed.
 --
 -- Persistent requires that every table have a primary key. By default, an
@@ -691,22 +702,13 @@ mkUnboundEntityDef ps parsedEntDef =
             textAttribs
 
     cols :: [UnboundFieldDef]
-    cols = reverse . fst . foldr k ([], []) $ reverse attribs
+    cols = reverse . fst . foldr (associateComments ps) ([], []) $ reverse attribs
 
-    k x (!acc, !comments) =
-        case listToMaybe x of
-            Just (DocComment comment) ->
-                (acc, comment : comments)
-            _ ->
-                case (setFieldComments comments <$> takeColsEx ps (tokenText <$> x)) of
-                  Just sm ->
-                      (sm : acc, [])
-                  Nothing ->
-                      (acc, [])
-
+    autoIdField :: FieldDef
     autoIdField =
         mkAutoIdField ps entNameHS idSqlType
 
+    idSqlType :: SqlType
     idSqlType =
         maybe SqlInt64 (const $ SqlOther "Primary Key") primaryComposite
 
@@ -776,6 +778,22 @@ unbindIdDef entityName fd =
         , unboundIdType =
             Just $ fieldType fd
         }
+
+associateComments
+    :: PersistSettings
+    -> [Token]
+    -> ([UnboundFieldDef], [Text])
+    -> ([UnboundFieldDef], [Text])
+associateComments ps x (!acc, !comments) =
+    case listToMaybe x of
+        Just (DocComment comment) ->
+            (acc, comment : comments)
+        _ ->
+            case (setFieldComments comments <$> takeColsEx ps (tokenText <$> x)) of
+              Just sm ->
+                  (sm : acc, [])
+              Nothing ->
+                  (acc, [])
 
 setFieldComments :: [Text] -> UnboundFieldDef -> UnboundFieldDef
 setFieldComments xs fld =
@@ -1358,13 +1376,6 @@ parseCascadeAction prfx text = do
 takeDerives :: [Text] -> Maybe [Text]
 takeDerives ("deriving":rest) = Just rest
 takeDerives _ = Nothing
-
-nullable :: [FieldAttr] -> IsNullable
-nullable s
-    | FieldAttrMaybe    `elem` s = Nullable ByMaybeAttr
-    | FieldAttrNullable `elem` s = Nullable ByNullableAttr
-    | otherwise = NotNullable
-
 
 -- | Returns 'True' if the 'UnboundFieldDef' does not have a 'MigrationOnly' or
 -- 'SafeToRemove' flag from the QuasiQuoter.

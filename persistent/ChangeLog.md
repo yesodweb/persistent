@@ -1,5 +1,10 @@
 # Changelog for persistent
 
+## 2.13.1.0
+
+* [#1264](https://github.com/yesodweb/persistent/pull/1264)
+    * Support declaring Maybe before the type in model definitions
+
 ## 2.13.0.4
 
 * [#1277](https://github.com/yesodweb/persistent/pull/1277)
@@ -13,7 +18,6 @@
     * Fixes an issue where generating code would refer to the `ModelName` when
       making a reference to another table when the explicit code only refers to
       `ModelNameId`.
-
 
 ## 2.13.0.2
 

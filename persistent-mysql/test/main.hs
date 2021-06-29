@@ -36,6 +36,7 @@ import qualified HtmlTest
 import qualified InsertDuplicateUpdate
 import qualified LargeNumberTest
 import qualified MaxLenTest
+import qualified MaybeFieldDefsTest
 import qualified MigrationColumnLengthTest
 import qualified MigrationIdempotencyTest
 import qualified MigrationOnlyTest
@@ -124,6 +125,7 @@ main = do
             , LargeNumberTest.numberMigrate
             , UniqueTest.uniqueMigrate
             , MaxLenTest.maxlenMigrate
+            , MaybeFieldDefsTest.maybeFieldDefMigrate
             , Recursive.recursiveMigrate
             , CompositeTest.compositeMigrate
             , PersistUniqueTest.migration
@@ -171,6 +173,7 @@ main = do
         EmbedOrderTest.specsWith db
         LargeNumberTest.specsWith db
         UniqueTest.specsWith db
+        MaybeFieldDefsTest.specsWith db
         MaxLenTest.specsWith db
         Recursive.specsWith db
         SumTypeTest.specsWith db (Just (runMigrationSilent SumTypeTest.sumTypeMigrate))

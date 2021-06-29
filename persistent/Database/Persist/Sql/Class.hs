@@ -1237,6 +1237,8 @@ instance PersistFieldSql TimeOfDay where
     sqlType _ = SqlTime
 instance PersistFieldSql UTCTime where
     sqlType _ = SqlDayTime
+instance PersistFieldSql a => PersistFieldSql (Maybe a) where
+    sqlType _ = sqlType (Proxy :: Proxy a)
 instance {-# OVERLAPPABLE #-} PersistFieldSql a => PersistFieldSql [a] where
     sqlType _ = SqlString
 instance PersistFieldSql a => PersistFieldSql (V.Vector a) where
