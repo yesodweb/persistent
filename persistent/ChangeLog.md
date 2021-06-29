@@ -1,5 +1,11 @@
 # Changelog for persistent
 
+## 2.13.1.1
+
+* [#1294](https://github.com/yesodweb/persistent/pull/1294)
+    * Fix an issue where documentation comments on fields are in reverse line
+      order.
+
 ## 2.13.1.0
 
 * [#1264](https://github.com/yesodweb/persistent/pull/1264)

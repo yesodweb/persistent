@@ -60,11 +60,7 @@ import qualified Database.Persist.TH.OverloadedLabelSpec as OverloadedLabelSpec
 import qualified Database.Persist.TH.SharedPrimaryKeyImportedSpec as SharedPrimaryKeyImportedSpec
 import qualified Database.Persist.TH.SharedPrimaryKeySpec as SharedPrimaryKeySpec
 import qualified Database.Persist.TH.ToFromPersistValuesSpec as ToFromPersistValuesSpec
-import qualified Database.Persist.TH.KindEntitiesSpec as KindEntitiesSpec
-import qualified Database.Persist.TH.OverloadedLabelSpec as OverloadedLabelSpec
-import qualified Database.Persist.TH.SharedPrimaryKeyImportedSpec as SharedPrimaryKeyImportedSpec
-import qualified Database.Persist.TH.SharedPrimaryKeySpec as SharedPrimaryKeySpec
-import qualified Database.Persist.TH.ToFromPersistValuesSpec as ToFromPersistValuesSpec
+import qualified Database.Persist.TH.CommentSpec as CommentSpec
 
 -- test to ensure we can have types ending in Id that don't trash the TH
 -- machinery
@@ -189,6 +185,7 @@ spec = describe "THSpec" $ do
     ForeignRefSpec.spec
     ToFromPersistValuesSpec.spec
     JsonEncodingSpec.spec
+    CommentSpec.spec
     describe "TestDefaultKeyCol" $ do
         let EntityIdField FieldDef{..} =
                 entityId (entityDef (Proxy @TestDefaultKeyCol))
