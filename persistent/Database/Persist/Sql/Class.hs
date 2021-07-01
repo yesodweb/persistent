@@ -9,8 +9,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 module Database.Persist.Sql.Class
-    ( RawSql (..)
-    , PersistFieldSql (..)
+    ( PersistFieldSql (..)
     , EntityWithPrefix(..)
     , unPrefix
     ) where
@@ -39,19 +38,6 @@ import Database.Persist.Sql.TH
 import Database.Persist.Sql.Types
 
 
--- | Class for data types that may be retrived from a 'rawSql'
--- query.
-class RawSql a where
-    -- | Number of columns that this data type needs and the list
-    -- of substitutions for @SELECT@ placeholders @??@.
-    rawSqlCols :: (Text -> Text) -> a -> (Int, [Text])
-
-    -- | A string telling the user why the column count is what
-    -- it is.
-    rawSqlColCountReason :: a -> String
-
-    -- | Transform a row of the result into the data type.
-    rawSqlProcessRow :: [PersistValue] -> Either Text a
 
 instance PersistField a => RawSql (Single a) where
     rawSqlCols _ _         = (1, [])

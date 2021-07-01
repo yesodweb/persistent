@@ -6,6 +6,7 @@ module Database.Persist.Sql.Types
     , SqlBackendCanRead, SqlBackendCanWrite, SqlReadT, SqlWriteT, IsSqlBackend
     , OverflowNatural(..)
     , ConnectionPoolConfig(..)
+    , RawSql(..)
     ) where
 
 import Control.Exception (Exception(..))
@@ -182,3 +183,18 @@ instance Show PersistUnsafeMigrationException where
       displayMigration (False, s) = "    " ++ unpack s ++ ";"
 
 instance Exception PersistUnsafeMigrationException
+
+-- | Class for data types that may be retrived from a 'rawSql'
+-- query.
+class RawSql a where
+    -- | Number of columns that this data type needs and the list
+    -- of substitutions for @SELECT@ placeholders @??@.
+    rawSqlCols :: (Text -> Text) -> a -> (Int, [Text])
+
+    -- | A string telling the user why the column count is what
+    -- it is.
+    rawSqlColCountReason :: a -> String
+
+    -- | Transform a row of the result into the data type.
+    rawSqlProcessRow :: [PersistValue] -> Either Text a
+
