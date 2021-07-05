@@ -16,7 +16,10 @@ module Database.Persist.Sql.Orphan.PersistQuery
 
 import Control.Exception (throwIO)
 import Control.Monad.IO.Class
+import Control.Monad.Trans.Class (MonadTrans(lift))
 import Control.Monad.Trans.Reader (ReaderT, ask)
+import Control.Monad.Trans.Resource (release)
+import Data.Acquire (allocateAcquire)
 import Data.ByteString.Char8 (readInteger)
 import Data.Conduit
 import qualified Data.Conduit.List as CL
@@ -177,6 +180,47 @@ instance PersistQueryRead SqlWriteBackend where
     exists filts = withBaseBackend $ exists filts
     selectSourceRes filts opts = withBaseBackend $ selectSourceRes filts opts
     selectKeysRes filts opts = withBaseBackend $ selectKeysRes filts opts
+
+instance PersistQueryStream SqlBackend where
+    selectSourceStream filts opts = do
+        srcRes <- lift $ liftPersist $ do
+            conn <- ask
+            srcRes <- rawQueryResFromCursor (sql conn) (getFiltsValues conn filts)
+            return $ fmap (.| CL.mapM parse) srcRes
+        (releaseKey, src) <- allocateAcquire srcRes
+        src
+        release releaseKey
+      where
+        (limit, offset, orders) = limitOffsetOrder opts
+    
+        parse vals =
+            case parseEntityValues t vals of
+                Left s ->
+                    liftIO $ throwIO $
+                        PersistMarshalError ("selectSourceStream: " <> s <> ", vals: " <> T.pack (show vals ))
+                Right row ->
+                    return row
+        t = entityDef $ dummyFromFilts filts
+        wher conn = if null filts
+                    then ""
+                    else filterClause Nothing conn filts
+        ord conn =
+            case map (orderClause False conn) orders of
+                [] -> ""
+                ords -> " ORDER BY " <> T.intercalate "," ords
+        cols = commaSeparated . toList . keyAndEntityColumnNames t
+        sql conn = connLimitOffset conn (limit,offset) $ mconcat
+            [ "SELECT "
+            , cols conn
+            , " FROM "
+            , connEscapeTableName conn t
+            , wher conn
+            , ord conn
+            ]
+instance PersistQueryStream SqlReadBackend where
+  selectSourceStream filts opts = transPipe withBaseBackend $ selectSourceStream filts opts
+instance PersistQueryStream SqlWriteBackend where
+  selectSourceStream filts opts = transPipe withBaseBackend $ selectSourceStream filts opts
 
 instance PersistQueryWrite SqlBackend where
     deleteWhere filts = do

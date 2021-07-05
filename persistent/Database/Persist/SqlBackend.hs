@@ -22,6 +22,7 @@ module Database.Persist.SqlBackend
     , setConnInsertManySql
     , setConnUpsertSql
     , setConnPutManySql
+    , setConnPrepareCursor
     ) where
 
 import Control.Monad.Reader
@@ -30,6 +31,7 @@ import Database.Persist.Class.PersistStore (BackendCompatible(..))
 import Database.Persist.SqlBackend.Internal
 import qualified Database.Persist.SqlBackend.Internal as SqlBackend
        (SqlBackend(..))
+import Database.Persist.SqlBackend.Internal.Statement
 import Database.Persist.SqlBackend.Internal.MkSqlBackend as Mk (MkSqlBackendArgs(..))
 import Database.Persist.Types.Base
 import Database.Persist.Names
@@ -188,3 +190,9 @@ setConnPutManySql
     -> SqlBackend
 setConnPutManySql  mkQuery sb =
     sb { connPutManySql = Just mkQuery }
+
+setConnPrepareCursor
+    :: (Text -> IO Statement)
+    -> SqlBackend
+    -> SqlBackend
+setConnPrepareCursor f sb = sb { connPrepareCursor = Just f }

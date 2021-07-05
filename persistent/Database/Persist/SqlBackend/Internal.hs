@@ -132,6 +132,10 @@ data SqlBackend = SqlBackend
     -- When left as 'Nothing', we default to using 'defaultRepsertMany'.
     --
     -- @since 2.9.0
+
+    , connPrepareCursor :: Maybe (Text -> IO Statement)
+    --  /^ Some databases support opening a cursor into a particular query (with a specific name)
+    -- @since TODO: version
     }
 
 -- | A function for creating a value of the 'SqlBackend' type. You should prefer
@@ -148,6 +152,7 @@ mkSqlBackend MkSqlBackendArgs {..} =
         , connPutManySql = Nothing
         , connUpsertSql = Nothing
         , connInsertManySql = Nothing
+        , connPrepareCursor = Nothing
         , ..
         }
 

@@ -44,6 +44,22 @@ rawQueryRes sql vals = do
         stmt <- mkAcquire make stmtReset
         stmtQuery stmt vals
 
+rawQueryResFromCursor
+    :: (MonadIO m1, MonadIO m2, BackendCompatible SqlBackend env)
+    => Text
+    -> [PersistValue]
+    -> ReaderT env m1 (Acquire (ConduitM () [PersistValue] m2 ()))
+rawQueryResFromCursor sql vals = do
+    conn <- projectBackend `liftM` ask
+    let make = do
+            runLoggingT (logDebugNS (pack "SQL") $ T.append sql $ pack $ "; " ++ show vals)
+                (connLogFunc conn)
+            getStmtConn' True conn sql
+    return $ do
+        stmt <- mkAcquire make stmtReset
+        stmtQuery stmt vals
+
+
 -- | Execute a raw SQL statement
 rawExecute :: (MonadIO m, BackendCompatible SqlBackend backend)
            => Text            -- ^ SQL statement, possibly with placeholders.
@@ -74,12 +90,18 @@ getStmt sql = do
     liftIO $ getStmtConn conn sql
 
 getStmtConn :: SqlBackend -> Text -> IO Statement
-getStmtConn conn sql = do
+getStmtConn = getStmtConn' False
+
+getStmtConn' :: Bool -> SqlBackend -> Text -> IO Statement
+getStmtConn' useCursorIfPossible conn sql = do
     smap <- liftIO $ readIORef $ connStmtMap conn
     case Map.lookup sql smap of
         Just stmt -> return stmt
         Nothing -> do
-            stmt' <- liftIO $ connPrepare conn sql
+            stmt' <- liftIO $
+                case connPrepareCursor conn of
+                    Just prepareCursor | useCursorIfPossible -> prepareCursor sql
+                    _ -> connPrepare conn sql
             iactive <- liftIO $ newIORef True
             let stmt = Statement
                     { stmtFinalize = do
