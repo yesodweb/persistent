@@ -135,7 +135,7 @@ data SqlBackend = SqlBackend
 
     , connPrepareCursor :: Maybe (Text -> IO Statement)
     --  /^ Some databases support opening a cursor into a particular query (with a specific name)
-    -- @since TODO: version
+    -- @since 2.13.2.0
     }
 
 -- | A function for creating a value of the 'SqlBackend' type. You should prefer

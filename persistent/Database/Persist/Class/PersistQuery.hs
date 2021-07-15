@@ -59,6 +59,8 @@ class (PersistCore backend, PersistStoreRead backend) => PersistQueryRead backen
 
 -- | Backends supporting conditional read operations, which may also support
 -- streaming the results in a memory-constant way.
+--
+-- @since 2.13.2.0
 class (PersistQueryRead backend) => PersistQueryStream backend where
     -- | Get all records matching the given criterion in the specified order.
     --
@@ -67,6 +69,8 @@ class (PersistQueryRead backend) => PersistQueryStream backend where
     -- query sets, but avoids allocating all the results in memory at once.
     --
     -- By default, this behaves identically to 'selectSourceRes'.
+    --
+    -- @since 2.13.2.0
     selectSourceStream
         :: (PersistRecordBackend record backend, MonadResource m)
         => [Filter record]
@@ -133,6 +137,8 @@ selectKeysList filts opts = do
 -- | Get all records matching the given criterion in the specified order. Uses
 -- streaming where possible, based on the 'PersistQueryStream' instance for the
 -- backend.
+--
+-- @since 2.13.2.0
 selectStream :: forall record backend m. (PersistQueryStream backend, MonadResource m, PersistRecordBackend record backend, MonadReader backend m)
              => [Filter record]
              -> [SelectOpt record]
