@@ -4,7 +4,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE StandaloneDeriving #-}
@@ -30,7 +29,7 @@ StreamableNumber
 |]
 
 numberOfRows :: Int
-numberOfRows = 1_000_000
+numberOfRows = 1000000
 
 numbers :: Monad m => ConduitT () StreamableNumber m ()
 numbers = CC.unfold (\n -> if n >= numberOfRows then Nothing else Just (StreamableNumber n, n + 1)) 1
