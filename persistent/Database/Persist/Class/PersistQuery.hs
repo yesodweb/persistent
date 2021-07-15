@@ -11,15 +11,15 @@ module Database.Persist.Class.PersistQuery
     ) where
 
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.Reader   (ReaderT, MonadReader(ask), lift)
+import Control.Monad.Reader (MonadReader(ask), ReaderT, lift)
 import Control.Monad.Trans.Resource (MonadResource, release)
 import Data.Acquire (Acquire, allocateAcquire, with)
-import Data.Conduit (ConduitM, (.|), await, runConduit)
+import Data.Conduit (ConduitM, await, runConduit, (.|))
 import Data.Conduit.Lift (runReaderC)
 import qualified Data.Conduit.List as CL
 
-import Database.Persist.Class.PersistStore
 import Database.Persist.Class.PersistEntity
+import Database.Persist.Class.PersistStore
 
 -- | Backends supporting conditional read operations.
 class (PersistCore backend, PersistStoreRead backend) => PersistQueryRead backend where
@@ -61,7 +61,7 @@ class (PersistCore backend, PersistStoreRead backend) => PersistQueryRead backen
 -- streaming the results in a memory-constant way.
 class (PersistQueryRead backend) => PersistQueryStream backend where
     -- | Get all records matching the given criterion in the specified order.
-    -- 
+    --
     -- A version of 'selectSourceRes' which specifically streams the results,
     -- for SQL backends that support it. Streaming may be slower for small
     -- query sets, but avoids allocating all the results in memory at once.

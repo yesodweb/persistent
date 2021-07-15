@@ -26,17 +26,18 @@ module Database.Persist.SqlBackend
     ) where
 
 import Control.Monad.Reader
+import Data.List.NonEmpty (NonEmpty)
 import Data.Text (Text)
 import Database.Persist.Class.PersistStore (BackendCompatible(..))
+import Database.Persist.Names
 import Database.Persist.SqlBackend.Internal
 import qualified Database.Persist.SqlBackend.Internal as SqlBackend
        (SqlBackend(..))
-import Database.Persist.SqlBackend.Internal.Statement
-import Database.Persist.SqlBackend.Internal.MkSqlBackend as Mk (MkSqlBackendArgs(..))
-import Database.Persist.Types.Base
-import Database.Persist.Names
 import Database.Persist.SqlBackend.Internal.InsertSqlResult
-import Data.List.NonEmpty (NonEmpty)
+import Database.Persist.SqlBackend.Internal.MkSqlBackend as Mk
+       (MkSqlBackendArgs(..))
+import Database.Persist.SqlBackend.Internal.Statement
+import Database.Persist.Types.Base
 
 -- $utilities
 --

@@ -56,8 +56,6 @@ import qualified Database.PostgreSQL.Simple.Transaction as PG
 import qualified Database.PostgreSQL.Simple.TypeInfo.Static as PS
 import qualified Database.PostgreSQL.Simple.Types as PG
 
-import Data.Proxy (Proxy(..))
-import qualified Data.List.NonEmpty as NEL
 import Control.Arrow
 import Control.Exception (Exception, throw, throwIO)
 import Control.Monad
@@ -66,6 +64,8 @@ import Control.Monad.IO.Unlift (MonadIO(..), MonadUnliftIO)
 import Control.Monad.Logger (MonadLoggerIO, runNoLoggingT)
 import Control.Monad.Trans.Reader (ReaderT(..), asks, runReaderT)
 import Control.Monad.Trans.Writer (WriterT(..), runWriterT)
+import qualified Data.List.NonEmpty as NEL
+import Data.Proxy (Proxy(..))
 
 import qualified Blaze.ByteString.Builder.Char8 as BBB
 import Data.Acquire (Acquire, mkAcquire, with)
@@ -106,8 +106,8 @@ import Data.Time (NominalDiffTime, localTimeToUTC, utc)
 import System.Environment (getEnvironment)
 
 import Database.Persist.Sql
-import Database.Persist.SqlBackend
 import qualified Database.Persist.Sql.Util as Util
+import Database.Persist.SqlBackend
 
 -- | A @libpq@ connection string.  A simple example of connection
 -- string would be @\"host=localhost port=5432 user=test

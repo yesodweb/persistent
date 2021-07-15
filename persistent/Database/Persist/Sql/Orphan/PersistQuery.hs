@@ -23,13 +23,13 @@ import Data.Acquire (allocateAcquire)
 import Data.ByteString.Char8 (readInteger)
 import Data.Conduit
 import qualified Data.Conduit.List as CL
+import Data.Foldable (toList)
 import Data.Int (Int64)
 import Data.List (find, inits, transpose)
 import Data.Maybe (isJust)
 import Data.Monoid (Monoid(..))
 import Data.Text (Text)
 import qualified Data.Text as T
-import Data.Foldable (toList)
 
 import Database.Persist hiding (updateField)
 import Database.Persist.Sql.Orphan.PersistStore (withRawQuery)
@@ -39,8 +39,8 @@ import Database.Persist.Sql.Types.Internal
 import Database.Persist.Sql.Util
        ( commaSeparated
        , dbIdColumns
-       , keyAndEntityColumnNames
        , isIdField
+       , keyAndEntityColumnNames
        , mkUpdateText
        , parseEntityValues
        , updatePersistValue
@@ -192,7 +192,7 @@ instance PersistQueryStream SqlBackend where
         release releaseKey
       where
         (limit, offset, orders) = limitOffsetOrder opts
-    
+
         parse vals =
             case parseEntityValues t vals of
                 Left s ->

@@ -61,7 +61,6 @@ import qualified TreeTest
 import qualified UniqueTest
 import qualified UpsertTest
 import qualified UpsertWhere
-import qualified PgIntervalTest
 
 type Tuple = (,)
 
