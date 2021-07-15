@@ -1,5 +1,10 @@
 # Changelog for persistent-postgresql
 
+## 2.13.1.0
+* [#1298](https://github.com/yesodweb/persistent/pull/1298)
+    * Made the implementation of `PersistQueryStream` use cursors internally,
+      allowing for memory-constant access of large result sets.
+
 ## 2.13.0.3
 
 * [#1290](https://github.com/yesodweb/persistent/pull/1290)
