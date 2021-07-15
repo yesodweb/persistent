@@ -47,6 +47,7 @@ module Database.Persist.Postgresql
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 
 import qualified Database.PostgreSQL.Simple as PG
+import qualified Database.PostgreSQL.Simple.Cursor as PGC
 import qualified Database.PostgreSQL.Simple.FromField as PGFF
 import qualified Database.PostgreSQL.Simple.Internal as PG
 import Database.PostgreSQL.Simple.Ok (Ok(..))
@@ -55,8 +56,6 @@ import qualified Database.PostgreSQL.Simple.Transaction as PG
 import qualified Database.PostgreSQL.Simple.TypeInfo.Static as PS
 import qualified Database.PostgreSQL.Simple.Types as PG
 
-import Data.Proxy (Proxy(..))
-import qualified Data.List.NonEmpty as NEL
 import Control.Arrow
 import Control.Exception (Exception, throw, throwIO)
 import Control.Monad
@@ -65,6 +64,8 @@ import Control.Monad.IO.Unlift (MonadIO(..), MonadUnliftIO)
 import Control.Monad.Logger (MonadLoggerIO, runNoLoggingT)
 import Control.Monad.Trans.Reader (ReaderT(..), asks, runReaderT)
 import Control.Monad.Trans.Writer (WriterT(..), runWriterT)
+import qualified Data.List.NonEmpty as NEL
+import Data.Proxy (Proxy(..))
 
 import qualified Blaze.ByteString.Builder.Char8 as BBB
 import Data.Acquire (Acquire, mkAcquire, with)
@@ -105,8 +106,8 @@ import Data.Time (NominalDiffTime, localTimeToUTC, utc)
 import System.Environment (getEnvironment)
 
 import Database.Persist.Sql
-import Database.Persist.SqlBackend
 import qualified Database.Persist.Sql.Util as Util
+import Database.Persist.SqlBackend
 
 -- | A @libpq@ connection string.  A simple example of connection
 -- string would be @\"host=localhost port=5432 user=test
@@ -356,6 +357,7 @@ createBackend logFunc serverVersion smap conn =
     maybe id setConnUpsertSql (upsertFunction upsertSql' serverVersion) $
     setConnInsertManySql insertManySql' $
     maybe id setConnRepsertManySql (upsertFunction repsertManySql serverVersion) $
+    setConnPrepareCursor (prepareCursorStmt' conn) $
     mkSqlBackend MkSqlBackendArgs
         { connPrepare    = prepare' conn
         , connStmtMap    = smap
@@ -388,6 +390,16 @@ prepare' conn sql = do
         , stmtReset = return ()
         , stmtExecute = execute' conn query
         , stmtQuery = withStmt' conn query
+        }
+
+prepareCursorStmt' :: PG.Connection -> Text -> IO Statement
+prepareCursorStmt' conn sql = do
+    let query = PG.Query (T.encodeUtf8 sql)
+    return Statement
+        { stmtFinalize = return ()
+        , stmtReset = return ()
+        , stmtExecute = error "Database.Persist.Postgresql.prepareCursorStmt': Tried to execute a read-only select. Use select/query/stmtQuery"
+        , stmtQuery = withCursorStmt' conn query
         }
 
 insertSql' :: EntityDef -> [PersistValue] -> InsertSqlResult
@@ -496,7 +508,7 @@ withStmt' conn query vals =
                 rowCount <- LibPQ.ntuples ret
                 return (ret, rowRef, rowCount, oids)
       let getters
-            = map (\(col, oid) -> getGetter conn oid $ PG.Field rt col oid) ids
+            = map (\(col, oid) -> getGetter oid $ PG.Field rt col oid) ids
       return (rt, rr, rc, getters)
 
     closeS (ret, _, _, _) = LibPQ.unsafeFreeResult ret
@@ -527,9 +539,30 @@ withStmt' conn query vals =
                                                         Errors [] -> error "Got an Errors, but no exceptions"
                                                         Ok v  -> return v
 
--- | Avoid orphan instances.
-newtype P = P PersistValue
+withCursorStmt' :: MonadIO m
+          => PG.Connection
+          -> PG.Query
+          -> [PersistValue]
+          -> Acquire (ConduitM () [PersistValue] m ())
+withCursorStmt' conn query vals =
+    foldWithCursor `fmap` mkAcquire openC closeC
+  where
+    openC = do
+        rawquery <- liftIO $ PG.formatQuery conn query (map P vals)
+        PGC.declareCursor conn (PG.Query rawquery)
+    closeC = PGC.closeCursor
+    foldWithCursor cursor = go
+      where
+        go = do
+            -- 256 is the default chunk size used for fetching
+            rows <- liftIO $ PGC.foldForward cursor 256 processRow []
+            case rows of
+                Left final -> CL.sourceList final
+                Right nonfinal -> CL.sourceList nonfinal >> go
+    processRow s row = pure $ s <> [map unP row]
 
+-- | To avoid orphan instances.
+newtype P = P { unP :: PersistValue }
 
 instance PGTF.ToField P where
     toField (P (PersistText t))        = PGTF.toField t
@@ -552,6 +585,13 @@ instance PGTF.ToField P where
     toField (P (PersistArray a))       = PGTF.toField $ PG.PGArray $ P <$> a
     toField (P (PersistObjectId _))    =
         error "Refusing to serialize a PersistObjectId to a PostgreSQL value"
+
+instance PGFF.FromField P where
+    fromField field mdata = fmap P $ case mdata of
+      -- If we try to simply decode based on oid, we will hit unexpected null
+      -- errors.
+      Nothing -> pure PersistNull
+      data' -> getGetter (PGFF.typeOid field) field data'
 
 -- | Represent Postgres interval using NominalDiffTime
 --
@@ -753,8 +793,8 @@ builtinGetters = I.fromList
         listOf f = convertPV (PersistList . map (nullable f) . PG.fromPGArray)
           where nullable = maybe PersistNull
 
-getGetter :: PG.Connection -> PG.Oid -> Getter PersistValue
-getGetter _conn oid
+getGetter :: PG.Oid -> Getter PersistValue
+getGetter oid
   = fromMaybe defaultGetter $ I.lookup (PG.oid2int oid) builtinGetters
   where defaultGetter = convertPV (PersistLiteralEscaped . unUnknown)
 

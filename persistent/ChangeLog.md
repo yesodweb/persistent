@@ -1,5 +1,12 @@
 # Changelog for persistent
 
+## 2.13.2.0
+* [#1298](https://github.com/yesodweb/persistent/pull/1298)
+    * Added a new class, `PersistQueryStream`, and a new function, `selectStream`,
+      for backends which *may* stream results in constant memory.
+    * Added a new field `connPrepareCursor` to `SqlBackend`, for SQL backends
+      which support running statements using cursors to iterate over the results.
+
 ## 2.13.1.1
 
 * [#1294](https://github.com/yesodweb/persistent/pull/1294)

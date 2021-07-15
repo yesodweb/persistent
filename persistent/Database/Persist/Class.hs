@@ -106,11 +106,13 @@ module Database.Persist.Class
     -- * PersistQuery
     , PersistQuery
     , PersistQueryRead (..)
+    , PersistQueryStream (..)
     , PersistQueryWrite (..)
     , selectSource
     , selectKeys
     , selectList
     , selectKeysList
+    , selectStream
 
     -- * DeleteCascade
     , DeleteCascade (..)

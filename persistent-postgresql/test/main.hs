@@ -54,13 +54,13 @@ import qualified RawSqlTest
 import qualified ReadWriteTest
 import qualified Recursive
 import qualified RenameTest
+import qualified Streaming
 import qualified SumTypeTest
 import qualified TransactionLevelTest
 import qualified TreeTest
 import qualified UniqueTest
 import qualified UpsertTest
 import qualified UpsertWhere
-import qualified PgIntervalTest
 
 type Tuple = (,)
 
@@ -137,6 +137,7 @@ main = do
       , PgIntervalTest.pgIntervalMigrate
       , UpsertWhere.upsertWhereMigrate
       , ImplicitUuidSpec.implicitUuidMigrate
+      , Streaming.streamingMigrate
       ]
     PersistentTest.cleanDB
     ForeignKey.cleanDB
@@ -211,3 +212,4 @@ main = do
       PgIntervalTest.specs
       ArrayAggTest.specs
       GeneratedColumnTestSQL.specsWith runConnAssert
+      Streaming.specs

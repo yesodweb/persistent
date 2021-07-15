@@ -1,23 +1,23 @@
 module Database.Persist.Sql.Raw where
 
 import Control.Exception (throwIO)
-import Control.Monad (when, liftM)
+import Control.Monad (liftM, when)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Logger (logDebugNS, runLoggingT)
-import Control.Monad.Reader (ReaderT, ask, MonadReader)
-import Control.Monad.Trans.Resource (MonadResource,release)
-import Data.Acquire (allocateAcquire, Acquire, mkAcquire, with)
+import Control.Monad.Reader (MonadReader, ReaderT, ask)
+import Control.Monad.Trans.Resource (MonadResource, release)
+import Data.Acquire (Acquire, allocateAcquire, mkAcquire, with)
 import Data.Conduit
-import Data.IORef (writeIORef, readIORef, newIORef)
-import qualified Data.Map as Map
+import Data.IORef (newIORef, readIORef, writeIORef)
 import Data.Int (Int64)
+import qualified Data.Map as Map
 import Data.Text (Text, pack)
 import qualified Data.Text as T
 
 import Database.Persist
+import Database.Persist.Sql.Class
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Types.Internal
-import Database.Persist.Sql.Class
 
 rawQuery :: (MonadResource m, MonadReader env m, BackendCompatible SqlBackend env)
          => Text
@@ -43,6 +43,22 @@ rawQueryRes sql vals = do
     return $ do
         stmt <- mkAcquire make stmtReset
         stmtQuery stmt vals
+
+rawQueryResFromCursor
+    :: (MonadIO m1, MonadIO m2, BackendCompatible SqlBackend env)
+    => Text
+    -> [PersistValue]
+    -> ReaderT env m1 (Acquire (ConduitM () [PersistValue] m2 ()))
+rawQueryResFromCursor sql vals = do
+    conn <- projectBackend `liftM` ask
+    let make = do
+            runLoggingT (logDebugNS (pack "SQL") $ T.append sql $ pack $ "; " ++ show vals)
+                (connLogFunc conn)
+            getStmtConn' True conn sql
+    return $ do
+        stmt <- mkAcquire make stmtReset
+        stmtQuery stmt vals
+
 
 -- | Execute a raw SQL statement
 rawExecute :: (MonadIO m, BackendCompatible SqlBackend backend)
@@ -74,12 +90,18 @@ getStmt sql = do
     liftIO $ getStmtConn conn sql
 
 getStmtConn :: SqlBackend -> Text -> IO Statement
-getStmtConn conn sql = do
+getStmtConn = getStmtConn' False
+
+getStmtConn' :: Bool -> SqlBackend -> Text -> IO Statement
+getStmtConn' useCursorIfPossible conn sql = do
     smap <- liftIO $ readIORef $ connStmtMap conn
     case Map.lookup sql smap of
         Just stmt -> return stmt
         Nothing -> do
-            stmt' <- liftIO $ connPrepare conn sql
+            stmt' <- liftIO $
+                case connPrepareCursor conn of
+                    Just prepareCursor | useCursorIfPossible -> prepareCursor sql
+                    _ -> connPrepare conn sql
             iactive <- liftIO $ newIORef True
             let stmt = Statement
                     { stmtFinalize = do

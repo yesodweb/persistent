@@ -1,19 +1,19 @@
-{-# language RecordWildCards #-}
-{-# language RankNTypes #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Database.Persist.SqlBackend.Internal where
 
-import Data.Map (Map)
+import Data.IORef
 import Data.List.NonEmpty (NonEmpty)
+import Data.Map (Map)
 import Data.Text (Text)
 import Database.Persist.Class.PersistStore
-import Database.Persist.Types.Base
 import Database.Persist.Names
-import Data.IORef
-import Database.Persist.SqlBackend.Internal.MkSqlBackend
-import Database.Persist.SqlBackend.Internal.Statement
 import Database.Persist.SqlBackend.Internal.InsertSqlResult
 import Database.Persist.SqlBackend.Internal.IsolationLevel
+import Database.Persist.SqlBackend.Internal.MkSqlBackend
+import Database.Persist.SqlBackend.Internal.Statement
+import Database.Persist.Types.Base
 
 -- | A 'SqlBackend' represents a handle or connection to a database. It
 -- contains functions and values that allow databases to have more
@@ -132,6 +132,10 @@ data SqlBackend = SqlBackend
     -- When left as 'Nothing', we default to using 'defaultRepsertMany'.
     --
     -- @since 2.9.0
+
+    , connPrepareCursor :: Maybe (Text -> IO Statement)
+    --  /^ Some databases support opening a cursor into a particular query (with a specific name)
+    -- @since 2.13.2.0
     }
 
 -- | A function for creating a value of the 'SqlBackend' type. You should prefer
@@ -148,6 +152,7 @@ mkSqlBackend MkSqlBackendArgs {..} =
         , connPutManySql = Nothing
         , connUpsertSql = Nothing
         , connInsertManySql = Nothing
+        , connPrepareCursor = Nothing
         , ..
         }
 
