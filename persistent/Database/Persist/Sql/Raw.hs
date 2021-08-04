@@ -54,7 +54,7 @@ rawQueryResFromCursor sql vals = do
     let make = do
             runLoggingT (logDebugNS (pack "SQL") $ T.append sql $ pack $ "; " ++ show vals)
                 (connLogFunc conn)
-            getStmtConn' True conn sql
+            getStmtConn' UseCursorIfPossible conn sql
     return $ do
         stmt <- mkAcquire make stmtReset
         stmtQuery stmt vals
@@ -90,17 +90,31 @@ getStmt sql = do
     liftIO $ getStmtConn conn sql
 
 getStmtConn :: SqlBackend -> Text -> IO Statement
-getStmtConn = getStmtConn' False
+getStmtConn = getStmtConn' DontUseCursor
 
-getStmtConn' :: Bool -> SqlBackend -> Text -> IO Statement
-getStmtConn' useCursorIfPossible conn sql = do
+-- | How cursors should be used to retrieve the results of a query.
+--
+-- Cursors allow for memory-constant access to large result sets. However,
+-- they can also slow down queries - especially if those queries have small
+-- result sets that would fit in memory anyways. So it's not always correct
+-- to use cursors.
+data CursorUsage
+  = UseCursorIfPossible
+  -- ^ Try to use a cursor to access results in a memory-constant way, if the
+  -- 'SqlBackend' supports cursors.
+  | DontUseCursor
+  -- ^ Never use a cursor to access the results, even if the 'SqlBackend'
+  -- supports cursors.
+
+getStmtConn' :: CursorUsage -> SqlBackend -> Text -> IO Statement
+getStmtConn' cursorUsage conn sql = do
     smap <- liftIO $ readIORef $ connStmtMap conn
     case Map.lookup sql smap of
         Just stmt -> return stmt
         Nothing -> do
             stmt' <- liftIO $
                 case connPrepareCursor conn of
-                    Just prepareCursor | useCursorIfPossible -> prepareCursor sql
+                    Just prepareCursor | UseCursorIfPossible <- cursorUsage -> prepareCursor sql
                     _ -> connPrepare conn sql
             iactive <- liftIO $ newIORef True
             let stmt = Statement
