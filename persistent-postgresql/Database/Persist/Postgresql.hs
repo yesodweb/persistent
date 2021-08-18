@@ -1,15 +1,25 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
+
+#if MIN_VERSION_base(4,12,0)
+{-# LANGUAGE DerivingVia #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE UndecidableInstances #-}
+#endif
 
 -- | A postgresql backend for persistent.
 module Database.Persist.Postgresql
@@ -42,6 +52,14 @@ module Database.Persist.Postgresql
     , migrateEnableExtension
     , PostgresConfHooks(..)
     , defaultPostgresConfHooks
+
+    , RawPostgresql
+    , persistentBackend
+    , rawPostgresqlConnection
+    , createRawPostgresqlPool
+    , createRawPostgresqlPoolModified
+    , createRawPostgresqlPoolModifiedWithVersion
+    , createRawPostgresqlPoolWithConf
     ) where
 
 import qualified Database.PostgreSQL.LibPQ as LibPQ
@@ -102,8 +120,10 @@ import qualified Data.Text.Encoding as T
 import qualified Data.Text.IO as T
 import Data.Text.Read (rational)
 import Data.Time (NominalDiffTime, localTimeToUTC, utc)
+import Lens.Micro.TH (makeLenses)
 import System.Environment (getEnvironment)
 
+import Database.Persist.Compatible
 import Database.Persist.Sql
 import Database.Persist.SqlBackend
 import qualified Database.Persist.Sql.Util as Util
@@ -161,7 +181,7 @@ withPostgresqlPoolWithVersion :: (MonadUnliftIO m, MonadLoggerIO m)
                               -> m a
 withPostgresqlPoolWithVersion getVerDouble ci = do
   let getVer = oldGetVersionToNew getVerDouble
-  withSqlPool $ open' (const $ return ()) getVer ci
+  withSqlPool $ open' (const $ return ()) getVer id ci
 
 -- | Same as 'withPostgresqlPool', but can be configured with 'PostgresConf' and 'PostgresConfHooks'.
 --
@@ -176,7 +196,7 @@ withPostgresqlPoolWithConf :: (MonadUnliftIO m, MonadLoggerIO m)
 withPostgresqlPoolWithConf conf hooks = do
   let getVer = pgConfHooksGetServerVersion hooks
       modConn = pgConfHooksAfterCreate hooks
-  let logFuncToBackend = open' modConn getVer (pgConnStr conf)
+  let logFuncToBackend = open' modConn getVer id (pgConnStr conf)
   withSqlPoolWithConfig logFuncToBackend (postgresConfToConnectionPoolConfig conf)
 
 -- | Create a PostgreSQL connection pool.  Note that it's your
@@ -222,7 +242,7 @@ createPostgresqlPoolModifiedWithVersion
     -> m (Pool SqlBackend)
 createPostgresqlPoolModifiedWithVersion getVerDouble modConn ci = do
   let getVer = oldGetVersionToNew getVerDouble
-  createSqlPool $ open' modConn getVer ci
+  createSqlPool $ open' modConn getVer id ci
 
 -- | Same as 'createPostgresqlPool', but can be configured with 'PostgresConf' and 'PostgresConfHooks'.
 --
@@ -235,7 +255,7 @@ createPostgresqlPoolWithConf
 createPostgresqlPoolWithConf conf hooks = do
   let getVer = pgConfHooksGetServerVersion hooks
       modConn = pgConfHooksAfterCreate hooks
-  createSqlPoolWithConfig (open' modConn getVer (pgConnStr conf)) (postgresConfToConnectionPoolConfig conf)
+  createSqlPoolWithConfig (open' modConn getVer id (pgConnStr conf)) (postgresConfToConnectionPoolConfig conf)
 
 postgresConfToConnectionPoolConfig :: PostgresConf -> ConnectionPoolConfig
 postgresConfToConnectionPoolConfig conf =
@@ -264,18 +284,23 @@ withPostgresqlConnWithVersion :: (MonadUnliftIO m, MonadLoggerIO m)
                               -> m a
 withPostgresqlConnWithVersion getVerDouble = do
   let getVer = oldGetVersionToNew getVerDouble
-  withSqlConn . open' (const $ return ()) getVer
+  withSqlConn . open' (const $ return ()) getVer id
 
 open'
     :: (PG.Connection -> IO ())
     -> (PG.Connection -> IO (NonEmpty Word))
-    -> ConnectionString -> LogFunc -> IO SqlBackend
-open' modConn getVer cstr logFunc = do
+    -> ((PG.Connection -> SqlBackend) -> PG.Connection -> backend)
+    -- ^ How to construct the actual backend type desired. For most uses,
+    -- this is just 'id', since the desired backend type is 'SqlBackend'.
+    -- But some callers want a @'RawPostgresql' 'SqlBackend'@, and will
+    -- pass in 'withRawConnection'.
+    -> ConnectionString -> LogFunc -> IO backend
+open' modConn getVer constructor cstr logFunc = do
     conn <- PG.connectPostgreSQL cstr
     modConn conn
     ver <- getVer conn
     smap <- newIORef $ Map.empty
-    return $ createBackend logFunc ver smap conn
+    return $ constructor (createBackend logFunc ver smap) conn
 
 -- | Gets the PostgreSQL server version
 getServerVersion :: PG.Connection -> IO (Maybe Double)
@@ -2039,3 +2064,151 @@ postgresMkColumns :: [EntityDef] -> EntityDef -> ([Column], [UniqueDef], [Foreig
 postgresMkColumns allDefs t =
     mkColumns allDefs t
     $ setBackendSpecificForeignKeyName refName emptyBackendSpecificOverrides
+
+-- | Wrapper for persistent SqlBackends that carry the corresponding
+-- `Postgresql.Connection`.
+--
+-- @since 2.13.1.0
+data RawPostgresql backend = RawPostgresql
+    { _persistentBackend :: backend -- ^ The persistent backend
+    , _rawPostgresqlConnection :: PG.Connection -- ^ The underlying `PG.Connection`
+    }
+
+instance BackendCompatible b (RawPostgresql b) where
+    projectBackend = _persistentBackend
+
+withRawConnection
+    :: (PG.Connection -> SqlBackend)
+    -> PG.Connection
+    -> RawPostgresql SqlBackend
+withRawConnection f conn = RawPostgresql
+    { _persistentBackend = f conn
+    , _rawPostgresqlConnection = conn
+    }
+
+-- | Create a PostgreSQL connection pool which also exposes the
+-- raw connection. The raw counterpart to 'createPostgresqlPool'.
+--
+-- @since 2.13.1.0
+createRawPostgresqlPool :: (MonadUnliftIO m, MonadLoggerIO m)
+                     => ConnectionString
+                     -- ^ Connection string to the database.
+                     -> Int
+                     -- ^ Number of connections to be kept open
+                     -- in the pool.
+                     -> m (Pool (RawPostgresql SqlBackend))
+createRawPostgresqlPool = createRawPostgresqlPoolModified (const $ return ())
+
+-- | The raw counterpart to 'createPostgresqlPoolModified'.
+--
+-- @since 2.13.1.0
+createRawPostgresqlPoolModified
+    :: (MonadUnliftIO m, MonadLoggerIO m)
+    => (PG.Connection -> IO ()) -- ^ Action to perform after connection is created.
+    -> ConnectionString -- ^ Connection string to the database.
+    -> Int -- ^ Number of connections to be kept open in the pool.
+    -> m (Pool (RawPostgresql SqlBackend))
+createRawPostgresqlPoolModified = createRawPostgresqlPoolModifiedWithVersion getServerVersion
+
+-- | The raw counterpart to 'createPostgresqlPoolModifiedWithVersion'.
+--
+-- @since 2.13.1.0
+createRawPostgresqlPoolModifiedWithVersion
+    :: (MonadUnliftIO m, MonadLoggerIO m)
+    => (PG.Connection -> IO (Maybe Double)) -- ^ Action to perform to get the server version.
+    -> (PG.Connection -> IO ()) -- ^ Action to perform after connection is created.
+    -> ConnectionString -- ^ Connection string to the database.
+    -> Int -- ^ Number of connections to be kept open in the pool.
+    -> m (Pool (RawPostgresql SqlBackend))
+createRawPostgresqlPoolModifiedWithVersion getVerDouble modConn ci = do
+  let getVer = oldGetVersionToNew getVerDouble
+  createSqlPool $ open' modConn getVer withRawConnection ci
+
+-- | The raw counterpart to 'createPostgresqlPoolWithConf'.
+--
+-- @since 2.13.1.0
+createRawPostgresqlPoolWithConf
+    :: (MonadUnliftIO m, MonadLoggerIO m)
+    => PostgresConf -- ^ Configuration for connecting to Postgres
+    -> PostgresConfHooks -- ^ Record of callback functions
+    -> m (Pool (RawPostgresql SqlBackend))
+createRawPostgresqlPoolWithConf conf hooks = do
+  let getVer = pgConfHooksGetServerVersion hooks
+      modConn = pgConfHooksAfterCreate hooks
+  createSqlPoolWithConfig (open' modConn getVer withRawConnection (pgConnStr conf)) (postgresConfToConnectionPoolConfig conf)
+
+#if MIN_VERSION_base(4,12,0)
+instance (PersistCore b) => PersistCore (RawPostgresql b) where
+  newtype BackendKey (RawPostgresql b) = RawPostgresqlKey { unRawPostgresqlKey :: BackendKey (Compatible b (RawPostgresql b)) }
+
+makeCompatibleKeyInstances [t| forall b. Compatible b (RawPostgresql b) |]
+#else
+instance (PersistCore b) => PersistCore (RawPostgresql b) where
+  newtype BackendKey (RawPostgresql b) = RawPostgresqlKey { unRawPostgresqlKey :: BackendKey (RawPostgresql b) }
+
+deriving instance (Show (BackendKey b)) => Show (BackendKey (RawPostgresql b))
+deriving instance (Read (BackendKey b)) => Read (BackendKey (RawPostgresql b))
+deriving instance (Eq (BackendKey b)) => Eq (BackendKey (RawPostgresql b))
+deriving instance (Ord (BackendKey b)) => Ord (BackendKey (RawPostgresql b))
+deriving instance (Num (BackendKey b)) => Num (BackendKey (RawPostgresql b))
+deriving instance (Integral (BackendKey b)) => Integral (BackendKey (RawPostgresql b))
+deriving instance (PersistField (BackendKey b)) => PersistField (BackendKey (RawPostgresql b))
+deriving instance (PersistFieldSql (BackendKey b)) => PersistFieldSql (BackendKey (RawPostgresql b))
+deriving instance (Real (BackendKey b)) => Real (BackendKey (RawPostgresql b))
+deriving instance (Enum (BackendKey b)) => Enum (BackendKey (RawPostgresql b))
+deriving instance (Bounded (BackendKey b)) => Bounded (BackendKey (RawPostgresql b))
+deriving instance (ToJSON (BackendKey b)) => ToJSON (BackendKey (RawPostgresql b))
+deriving instance (FromJSON (BackendKey b)) => FromJSON (BackendKey (RawPostgresql b))
+#endif
+
+
+#if MIN_VERSION_base(4,12,0)
+$(pure [])
+
+makeCompatibleInstances [t| forall b. Compatible b (RawPostgresql b) |]
+#else
+instance HasPersistBackend b => HasPersistBackend (RawPostgresql b) where
+    type BaseBackend (RawPostgresql b) = BaseBackend b
+    persistBackend = persistBackend . _persistentBackend
+
+instance (PersistStoreRead b) => PersistStoreRead (RawPostgresql b) where
+    get = withReaderT _persistentBackend . get
+    getMany = withReaderT _persistentBackend . getMany
+
+instance (PersistQueryRead b) => PersistQueryRead (RawPostgresql b) where
+    selectSourceRes filts opts = withReaderT _persistentBackend $ selectSourceRes filts opts
+    selectFirst filts opts = withReaderT _persistentBackend $ selectFirst filts opts
+    selectKeysRes filts opts = withReaderT _persistentBackend $ selectKeysRes filts opts
+    count = withReaderT _persistentBackend . count
+    exists = withReaderT _persistentBackend . exists
+
+instance (PersistQueryWrite b) => PersistQueryWrite (RawPostgresql b) where
+    updateWhere filts updates = withReaderT _persistentBackend $ updateWhere filts updates
+    deleteWhere = withReaderT _persistentBackend . deleteWhere
+
+instance (PersistUniqueRead b) => PersistUniqueRead (RawPostgresql b) where
+    getBy = withReaderT _persistentBackend . getBy
+
+instance (PersistStoreWrite b) => PersistStoreWrite (RawPostgresql b) where
+    insert = withReaderT _persistentBackend . insert
+    insert_ = withReaderT _persistentBackend . insert_
+    insertMany = withReaderT _persistentBackend . insertMany
+    insertMany_ = withReaderT _persistentBackend . insertMany_
+    insertEntityMany = withReaderT _persistentBackend . insertEntityMany
+    insertKey k = withReaderT _persistentBackend . insertKey k
+    repsert k = withReaderT _persistentBackend . repsert k
+    repsertMany = withReaderT _persistentBackend . repsertMany
+    replace k = withReaderT _persistentBackend . replace k
+    delete = withReaderT _persistentBackend . delete
+    update k = withReaderT _persistentBackend . update k
+    updateGet k = withReaderT _persistentBackend . updateGet k
+
+instance (PersistUniqueWrite b) => PersistUniqueWrite (RawPostgresql b) where
+    deleteBy = withReaderT _persistentBackend . deleteBy
+    insertUnique = withReaderT _persistentBackend . insertUnique
+    upsert rec = withReaderT _persistentBackend . upsert rec
+    upsertBy uniq rec = withReaderT _persistentBackend . upsertBy uniq rec
+    putMany = withReaderT _persistentBackend . putMany
+#endif
+
+makeLenses ''RawPostgresql
