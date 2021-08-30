@@ -134,7 +134,73 @@ This makes a unique index requiring `phone` to be unique across `Person` rows. O
 
 ## Primary and Foreign keys
 
-The [tests for this feature](https://github.com/yesodweb/persistent/blob/master/persistent-test/src/CompositeTest.hs#L53) demonstrates their usage
+The [tests for composite keys][composite tests] and [tests for foreign keys][foreign tests] have some additional examples.
+
+[composite tests]: https://github.com/yesodweb/persistent/blob/master/persistent-test/src/CompositeTest.hs#L53
+[foreign tests]: https://github.com/yesodweb/persistent/blob/master/persistent-test/src/ForeignKey.hs
+
+### Primary keys
+
+Use `Primary yourColumnNames` like so:
+
+```
+Alias
+  namespace Text
+  aliasName Text
+  -- Compound key of (namespace, aliasName)
+  Primary namespace aliasName
+```
+
+Then in Haskell, you can use `get (AliasKey someNamespace someAliasName)` to
+get a particular `Alias`, for instance.
+
+
+### Foreign keys
+
+Persistent allows for creating foreign keys to link tables together at the
+database level.
+
+Cascade behaviour can be set with `OnDelete[SomeAction]` or
+`OnUpdate[SomeAction]` where `[SomeAction]` is `Cascade`, `Restrict`, `SetNull`
+or `SetDefault`. See `CascadeAction` in the API documentation for details on
+this.
+
+Example:
+
+```
+Product
+  upc Text
+  Primary upc
+
+Price
+  market Text
+  product Text
+  Foreign Product OnDeleteCascade foreignProduct product
+```
+
+This creates a foreign key on the `Price` table asserting that `product` points
+at the primary key of the `Product` table. If a `Product` is deleted, that
+deletion will cascade to delete all the `Price`s referencing it since
+`OnDeleteCascade` is set.
+
+#### References
+
+The `References` parameter on `Foreign` can be used to reference a specific
+field rather than the primary key of the other table.
+
+Example:
+
+```
+Product
+  upc Text
+  myProductId Text
+  Primary myProductId
+
+Price
+  market Text
+  priceUpc Text
+  Foreign Product OnDeleteCascade foreignProduct priceUpc References upc
+```
 
 ### constraint=
 
