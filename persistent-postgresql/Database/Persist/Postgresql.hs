@@ -53,9 +53,7 @@ module Database.Persist.Postgresql
     , PostgresConfHooks(..)
     , defaultPostgresConfHooks
 
-    , RawPostgresql
-    , persistentBackend
-    , rawPostgresqlConnection
+    , RawPostgresql(..)
     , createRawPostgresqlPool
     , createRawPostgresqlPoolModified
     , createRawPostgresqlPoolModifiedWithVersion
@@ -120,7 +118,6 @@ import qualified Data.Text.Encoding as T
 import qualified Data.Text.IO as T
 import Data.Text.Read (rational)
 import Data.Time (NominalDiffTime, localTimeToUTC, utc)
-import Lens.Micro.TH (makeLenses)
 import System.Environment (getEnvironment)
 
 import Database.Persist.Compatible
@@ -2070,20 +2067,26 @@ postgresMkColumns allDefs t =
 --
 -- @since 2.13.1.0
 data RawPostgresql backend = RawPostgresql
-    { _persistentBackend :: backend -- ^ The persistent backend
-    , _rawPostgresqlConnection :: PG.Connection -- ^ The underlying `PG.Connection`
+    { persistentBackend :: backend 
+    -- ^ The persistent backend
+    --
+    -- @since 2.13.1.0
+    , rawPostgresqlConnection :: PG.Connection 
+    -- ^ The underlying `PG.Connection`
+    -- 
+    -- @since 2.13.1.0
     }
 
 instance BackendCompatible b (RawPostgresql b) where
-    projectBackend = _persistentBackend
+    projectBackend = persistentBackend
 
 withRawConnection
     :: (PG.Connection -> SqlBackend)
     -> PG.Connection
     -> RawPostgresql SqlBackend
 withRawConnection f conn = RawPostgresql
-    { _persistentBackend = f conn
-    , _rawPostgresqlConnection = conn
+    { persistentBackend = f conn
+    , rawPostgresqlConnection = conn
     }
 
 -- | Create a PostgreSQL connection pool which also exposes the
@@ -2169,46 +2172,45 @@ makeCompatibleInstances [t| forall b. Compatible b (RawPostgresql b) |]
 #else
 instance HasPersistBackend b => HasPersistBackend (RawPostgresql b) where
     type BaseBackend (RawPostgresql b) = BaseBackend b
-    persistBackend = persistBackend . _persistentBackend
+    persistBackend = persistBackend . persistentBackend
 
 instance (PersistStoreRead b) => PersistStoreRead (RawPostgresql b) where
-    get = withReaderT _persistentBackend . get
-    getMany = withReaderT _persistentBackend . getMany
+    get = withReaderT persistentBackend . get
+    getMany = withReaderT persistentBackend . getMany
 
 instance (PersistQueryRead b) => PersistQueryRead (RawPostgresql b) where
-    selectSourceRes filts opts = withReaderT _persistentBackend $ selectSourceRes filts opts
-    selectFirst filts opts = withReaderT _persistentBackend $ selectFirst filts opts
-    selectKeysRes filts opts = withReaderT _persistentBackend $ selectKeysRes filts opts
-    count = withReaderT _persistentBackend . count
-    exists = withReaderT _persistentBackend . exists
+    selectSourceRes filts opts = withReaderT persistentBackend $ selectSourceRes filts opts
+    selectFirst filts opts = withReaderT persistentBackend $ selectFirst filts opts
+    selectKeysRes filts opts = withReaderT persistentBackend $ selectKeysRes filts opts
+    count = withReaderT persistentBackend . count
+    exists = withReaderT persistentBackend . exists
 
 instance (PersistQueryWrite b) => PersistQueryWrite (RawPostgresql b) where
-    updateWhere filts updates = withReaderT _persistentBackend $ updateWhere filts updates
-    deleteWhere = withReaderT _persistentBackend . deleteWhere
+    updateWhere filts updates = withReaderT persistentBackend $ updateWhere filts updates
+    deleteWhere = withReaderT persistentBackend . deleteWhere
 
 instance (PersistUniqueRead b) => PersistUniqueRead (RawPostgresql b) where
-    getBy = withReaderT _persistentBackend . getBy
+    getBy = withReaderT persistentBackend . getBy
 
 instance (PersistStoreWrite b) => PersistStoreWrite (RawPostgresql b) where
-    insert = withReaderT _persistentBackend . insert
-    insert_ = withReaderT _persistentBackend . insert_
-    insertMany = withReaderT _persistentBackend . insertMany
-    insertMany_ = withReaderT _persistentBackend . insertMany_
-    insertEntityMany = withReaderT _persistentBackend . insertEntityMany
-    insertKey k = withReaderT _persistentBackend . insertKey k
-    repsert k = withReaderT _persistentBackend . repsert k
-    repsertMany = withReaderT _persistentBackend . repsertMany
-    replace k = withReaderT _persistentBackend . replace k
-    delete = withReaderT _persistentBackend . delete
-    update k = withReaderT _persistentBackend . update k
-    updateGet k = withReaderT _persistentBackend . updateGet k
+    insert = withReaderT persistentBackend . insert
+    insert_ = withReaderT persistentBackend . insert_
+    insertMany = withReaderT persistentBackend . insertMany
+    insertMany_ = withReaderT persistentBackend . insertMany_
+    insertEntityMany = withReaderT persistentBackend . insertEntityMany
+    insertKey k = withReaderT persistentBackend . insertKey k
+    repsert k = withReaderT persistentBackend . repsert k
+    repsertMany = withReaderT persistentBackend . repsertMany
+    replace k = withReaderT persistentBackend . replace k
+    delete = withReaderT persistentBackend . delete
+    update k = withReaderT persistentBackend . update k
+    updateGet k = withReaderT persistentBackend . updateGet k
 
 instance (PersistUniqueWrite b) => PersistUniqueWrite (RawPostgresql b) where
-    deleteBy = withReaderT _persistentBackend . deleteBy
-    insertUnique = withReaderT _persistentBackend . insertUnique
-    upsert rec = withReaderT _persistentBackend . upsert rec
-    upsertBy uniq rec = withReaderT _persistentBackend . upsertBy uniq rec
-    putMany = withReaderT _persistentBackend . putMany
+    deleteBy = withReaderT persistentBackend . deleteBy
+    insertUnique = withReaderT persistentBackend . insertUnique
+    upsert rec = withReaderT persistentBackend . upsert rec
+    upsertBy uniq rec = withReaderT persistentBackend . upsertBy uniq rec
+    putMany = withReaderT persistentBackend . putMany
 #endif
 
-makeLenses ''RawPostgresql

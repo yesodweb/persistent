@@ -23,7 +23,6 @@ library
                    , bytestring            >= 0.10
                    , conduit               >= 1.2.12
                    , containers            >= 0.5
-                   , microlens-th          >= 0.4.1.1
                    , monad-logger          >= 0.3.25
                    , mtl
                    , postgresql-simple     >= 0.6.1    && < 0.7
