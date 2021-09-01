@@ -1,5 +1,11 @@
 # Changelog for persistent
 
+## Unreleased
+
+* [#1308](https://github.com/yesodweb/persistent/pull/1308)
+    * Consolidate the documentation for the Persistent quasiquoter in
+      Database.Persist.Quasi.
+
 ## 2.13.1.1
 
 * [#1294](https://github.com/yesodweb/persistent/pull/1294)
