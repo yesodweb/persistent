@@ -759,7 +759,7 @@ getColumn connectInfo getter tname [ PersistText cname
             ,   "UPDATE_RULE "
             , "FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE AS KCU "
             , "INNER JOIN INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS AS RC "
-            , "  ON KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME "
+            , "  USING (CONSTRAINT_SCHEMA, CONSTRAINT_NAME) "
             , "WHERE KCU.TABLE_SCHEMA = ? "
             ,   "AND KCU.TABLE_NAME   = ? "
             ,   "AND KCU.COLUMN_NAME  = ? "
