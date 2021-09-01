@@ -1,8 +1,17 @@
+-- | This module documents tools and utilities for running SQL migrations.
+--
+-- A 'Migration' is (currently) an alias for a 'WriterT' of
 module Database.Persist.Sql.Migration
-  ( parseMigration
+  (
+    -- * Types
+    Migration
+  , CautiousMigration
+  , Sql
+    -- * Using a 'Migration'
+  , showMigration
+  , parseMigration
   , parseMigration'
   , printMigration
-  , showMigration
   , getMigration
   , runMigration
   , runMigrationQuiet
@@ -11,11 +20,38 @@ module Database.Persist.Sql.Migration
   , runMigrationUnsafeQuiet
   , migrate
   -- * Utilities for constructing migrations
+  -- | While 'migrate' is capable of creating a 'Migration' for you, it's not
+  -- the only way you can write migrations. You can use these utilities to write
+  -- extra steps in your migrations.
+  --
+  -- As an example, let's say we want to enable the @citext@ extension on
+  -- @postgres@ as part of our migrations.
+  --
+  -- @
+  -- 'Database.Persist.TH.share' ['Database.Persist.TH.mkPersist' sqlSettings, 'Database.Persist.TH.mkMigration' "migrateAll"] ...
+  --
+  -- migration :: 'Migration'
+  -- migration = do
+  --     'runSqlCommand' $
+  --         'rawExecute_' "CREATE EXTENSION IF NOT EXISTS \"citext\";"
+  --     migrateAll
+  -- @
+  --
+  -- For raw commands, you can also just write 'addMigration':
+  --
+  -- @
+  -- migration :: 'Migration'
+  -- migration = do
+  --     'addMigration' "CREATE EXTENSION IF NOT EXISTS \"citext\";"
+  --     migrateAll
+  -- @
   , reportErrors
   , reportError
   , addMigrations
   , addMigration
   , runSqlCommand
+  -- * If something goes wrong...
+  , PersistUnsafeMigrationException(..)
   ) where
 
 
@@ -36,9 +72,29 @@ import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Types.Internal
 import Database.Persist.Types
+import Control.Exception (Exception(..))
+
+type Sql = Text
+
+-- | A list of SQL operations, marked with a safety flag. If the 'Bool' is
+-- 'True', then the operation is *unsafe* - it might be destructive, or
+-- otherwise not idempotent. If the 'Bool' is 'False', then the operation
+-- is *safe*, and can be run repeatedly without issues.
+type CautiousMigration = [(Bool, Sql)]
+
+-- | A 'Migration' is a four level monad stack consisting of:
+--
+-- * @'WriterT' ['Text']@ representing a log of errors in the migrations.
+-- * @'WriterT' 'CautiousMigration'@ representing a list of migrations to
+--   run, along with whether or not they are safe.
+-- * @'ReaderT' 'SqlBackend'@, aka the 'SqlPersistT' transformer for
+--   database interop.
+-- * @'IO'@ for arbitrary IO.
+type Migration = WriterT [Text] (WriterT CautiousMigration (ReaderT SqlBackend IO)) ()
 
 allSql :: CautiousMigration -> [Sql]
 allSql = map snd
+
 safeSql :: CautiousMigration -> [Sql]
 safeSql = allSql . filter (not . fst)
 
@@ -55,7 +111,7 @@ parseMigration =
 
 -- | Like 'parseMigration', but instead of returning the value in an
 -- 'Either' value, it calls 'error' on the error values.
-parseMigration' :: (HasCallStack, MonadIO m) => Migration -> ReaderT SqlBackend m (CautiousMigration)
+parseMigration' :: (HasCallStack, MonadIO m) => Migration -> ReaderT SqlBackend m CautiousMigration
 parseMigration' m = do
   x <- parseMigration m
   case x of
@@ -82,7 +138,6 @@ getMigration m = do
 -- | Runs a migration. If the migration fails to parse or if any of the
 -- migrations are unsafe, then this throws a 'PersistUnsafeMigrationException'.
 runMigration :: MonadIO m
-
              => Migration
              -> ReaderT SqlBackend m ()
 runMigration m = runMigration' m False >> return ()
@@ -223,3 +278,29 @@ addMigrations = lift . tell
 -- @since 2.13.0.0
 runSqlCommand :: SqlPersistT IO () -> Migration
 runSqlCommand = lift . lift
+
+-- | An exception indicating that Persistent refused to run some unsafe
+-- migrations. Contains a list of pairs where the Bool tracks whether the
+-- migration was unsafe (True means unsafe), and the Sql is the sql statement
+-- for the migration.
+--
+-- @since 2.11.1.0
+newtype PersistUnsafeMigrationException
+  = PersistUnsafeMigrationException [(Bool, Sql)]
+
+-- | This 'Show' instance renders an error message suitable for printing to the
+-- console. This is a little dodgy, but since GHC uses Show instances when
+-- displaying uncaught exceptions, we have little choice.
+instance Show PersistUnsafeMigrationException where
+  show (PersistUnsafeMigrationException mig) =
+    concat
+      [ "\n\nDatabase migration: manual intervention required.\n"
+      , "The unsafe actions are prefixed by '***' below:\n\n"
+      , unlines $ map displayMigration mig
+      ]
+    where
+      displayMigration :: (Bool, Sql) -> String
+      displayMigration (True,  s) = "*** " ++ unpack s ++ ";"
+      displayMigration (False, s) = "    " ++ unpack s ++ ";"
+
+instance Exception PersistUnsafeMigrationException

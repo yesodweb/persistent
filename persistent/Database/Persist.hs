@@ -1,37 +1,91 @@
 {-# LANGUAGE ExistentialQuantification #-}
 
+-- | Welcome to @persistent@!
+--
+-- This library intends to provide an easy, flexible, and convenient interface
+-- to various data storage backends. Backends include SQL databases, like
+-- @mysql@, @postgresql@, and @sqlite@, as well as NoSQL databases, like
+-- @mongodb@ and @redis@.
+--
+-- If you intend on using a SQL database, then check out "Database.Persist.Sql".
 module Database.Persist
-    ( module Database.Persist.Class
+    (
+-- * Defining Database Models
+--
+-- | @persistent@ lets you define your database models using a special syntax.
+-- This syntax allows you to customize the resulting Haskell datatypes and
+-- database schema. See "Database.Persist.Quasi" for details on that definition
+-- language.
+--
+-- ** Reference Schema & Dataset
+--
+-- | For a quick example of the syntax, we'll introduce this database schema, and
+-- we'll use it to explain the update and filter combinators.
+--
+-- @
+-- 'share' ['mkPersist' 'sqlSettings', 'mkMigrate' "migrateAll"] ['persistLowerCase'|
+-- User
+--     name String
+--     age Int
+--     deriving Show
+-- |]
+-- @
+--
+-- This creates a Haskell datatpe that looks like this:
+--
+-- @
+-- data User = User
+--     { userName :: String
+--     , userAge :: Int
+--     }
+--     deriving Show
+-- @
+--
+-- In a SQL database, we'd get a migration like this:
+--
+-- @
+-- CREATE TABLE "user" (
+--      id    SERIAL PRIMARY KEY,
+--      name  TEXT NOT NULL,
+--      age   INT NOT NULL
+-- );
+-- @
+--
+-- The examples below will refer to this as dataset-1.
+--
+-- #dataset#
+--
+-- > +-----+-----+-----+
+-- > |id   |name |age  |
+-- > +-----+-----+-----+
+-- > |1    |SPJ  |40   |
+-- > +-----+-----+-----+
+-- > |2    |Simon|41   |
+-- > +-----+-----+-----+
+
+        -- * Database Operations
+      -- | The module "Database.Persist.Class" defines how to operate with
+        -- @persistent@ database models. Check that module out for basic
+        -- operations, like 'get', 'insert', and 'selectList'.
+      module Database.Persist.Class
+      -- * Types
+      -- | This module re-export contains a lot of the important types for
+      -- working with @persistent@ datatypes and underlying values.
     , module Database.Persist.Types
 
-    -- * Reference Schema & Dataset
-    -- |
-    --
-    -- All the combinators present here will be explained based on this schema:
-    --
-    -- > share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
-    -- > User
-    -- >     name String
-    -- >     age Int
-    -- >     deriving Show
-    -- > |]
-    --
-    -- and this dataset. The examples below will refer to this as dataset-1.
-    --
-    -- #dataset#
-    --
-    -- > +-----+-----+-----+
-    -- > |id   |name |age  |
-    -- > +-----+-----+-----+
-    -- > |1    |SPJ  |40   |
-    -- > +-----+-----+-----+
-    -- > |2    |Simon|41   |
-    -- > +-----+-----+-----+
+      -- * Query Operators
+      -- | A convention that @persistent@ tries to follow is that operators on
+      -- Database types correspond to a Haskell (or database) operator with a @.@
+      -- character at the end. So to do @a || b@ , you'd write @a '||.' b@. To
 
-    -- * Query update combinators
+      -- ** Query update combinators
+      -- | These operations are used when performing updates against the database.
+      --  Functions like 'upsert' use them to provide new or modified values.
     , (=.), (+=.), (-=.), (*=.), (/=.)
 
-      -- * Query filter combinators
+      -- ** Query filter combinators
+      -- | These functions are useful in the 'PersistQuery' class, like
+      -- 'selectList', 'updateWhere', etc.
     , (==.), (!=.), (<.), (>.), (<=.), (>=.), (<-.), (/<-.), (||.)
 
       -- * JSON Utilities
@@ -60,7 +114,7 @@ infixr 3 =., +=., -=., *=., /=.
 
 -- | Assign a field a value.
 --
--- === __Example usage__
+-- === Examples
 --
 -- @
 -- updateAge :: MonadIO m => ReaderT SqlBackend m ()
@@ -83,7 +137,7 @@ f =. a = Update f a Assign
 
 -- | Assign a field by addition (@+=@).
 --
--- === __Example usage__
+-- === Examples
 --
 -- @
 -- addAge :: MonadIO m => ReaderT SqlBackend m ()
@@ -105,7 +159,7 @@ f +=. a = Update f a Add
 
 -- | Assign a field by subtraction (@-=@).
 --
--- === __Example usage__
+-- === Examples
 --
 -- @
 -- subtractAge :: MonadIO m => ReaderT SqlBackend m ()
@@ -126,7 +180,7 @@ f -=. a = Update f a Subtract
 
 -- | Assign a field by multiplication (@*=@).
 --
--- === __Example usage__
+-- === Examples
 --
 -- @
 -- multiplyAge :: MonadIO m => ReaderT SqlBackend m ()
@@ -148,7 +202,7 @@ f *=. a = Update f a Multiply
 
 -- | Assign a field by division (@/=@).
 --
--- === __Example usage__
+-- === Examples
 --
 -- @
 -- divideAge :: MonadIO m => ReaderT SqlBackend m ()
@@ -173,7 +227,7 @@ infix 4 ==., <., <=., >., >=., !=.
 
 -- | Check for equality.
 --
--- === __Example usage__
+-- === Examples
 --
 -- @
 -- selectSPJ :: MonadIO m => ReaderT SqlBackend m [Entity User]
@@ -192,7 +246,7 @@ f ==. a  = Filter f (FilterValue a) Eq
 
 -- | Non-equality check.
 --
--- === __Example usage__
+-- === Examples
 --
 -- @
 -- selectSimon :: MonadIO m => ReaderT SqlBackend m [Entity User]
@@ -211,7 +265,7 @@ f !=. a = Filter f (FilterValue a) Ne
 
 -- | Less-than check.
 --
--- === __Example usage__
+-- === Examples
 --
 -- @
 -- selectLessAge :: MonadIO m => ReaderT SqlBackend m [Entity User]
@@ -230,7 +284,7 @@ f <. a  = Filter f (FilterValue a) Lt
 
 -- | Less-than or equal check.
 --
--- === __Example usage__
+-- === Examples
 --
 -- @
 -- selectLessEqualAge :: MonadIO m => ReaderT SqlBackend m [Entity User]
@@ -249,7 +303,7 @@ f <=. a  = Filter f (FilterValue a) Le
 
 -- | Greater-than check.
 --
--- === __Example usage__
+-- === Examples
 --
 -- @
 -- selectGreaterAge :: MonadIO m => ReaderT SqlBackend m [Entity User]
@@ -268,7 +322,7 @@ f >. a  = Filter f (FilterValue a) Gt
 
 -- | Greater-than or equal check.
 --
--- === __Example usage__
+-- === Examples
 --
 -- @
 -- selectGreaterEqualAge :: MonadIO m => ReaderT SqlBackend m [Entity User]
@@ -290,7 +344,7 @@ infix 4 <-., /<-.
 
 -- | Check if value is in given list.
 --
--- === __Example usage__
+-- === Examples
 --
 -- @
 -- selectUsers :: MonadIO m => ReaderT SqlBackend m [Entity User]
@@ -325,7 +379,7 @@ f <-. a = Filter f (FilterValues a) In
 
 -- | Check if value is not in given list.
 --
--- === __Example usage__
+-- === Examples
 --
 -- @
 -- selectSimon :: MonadIO m => ReaderT SqlBackend m [Entity User]

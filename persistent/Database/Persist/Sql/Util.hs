@@ -49,10 +49,9 @@ import Database.Persist
        , toPersistValue
        )
 
-import Database.Persist.Sql.Types (Sql)
 import Database.Persist.SqlBackend.Internal (SqlBackend(..))
 
-keyAndEntityColumnNames :: EntityDef -> SqlBackend -> NonEmpty Sql
+keyAndEntityColumnNames :: EntityDef -> SqlBackend -> NonEmpty Text
 keyAndEntityColumnNames ent conn =
     fmap (connEscapeFieldName conn . fieldDB) (keyAndEntityFields ent)
 
