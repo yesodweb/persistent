@@ -61,24 +61,6 @@ type SqlPersistT = ReaderT SqlBackend
 
 type SqlPersistM = SqlPersistT (NoLoggingT (ResourceT IO))
 
-type Sql = Text
-
--- | A list of SQL operations, marked with a safety flag. If the 'Bool' is
--- 'True', then the operation is *unsafe* - it might be destructive, or
--- otherwise not idempotent. If the 'Bool' is 'False', then the operation
--- is *safe*, and can be run repeatedly without issues.
-type CautiousMigration = [(Bool, Sql)]
-
--- | A 'Migration' is a four level monad stack consisting of:
---
--- * @'WriterT' ['Text']@ representing a log of errors in the migrations.
--- * @'WriterT' 'CautiousMigration'@ representing a list of migrations to
---   run, along with whether or not they are safe.
--- * @'ReaderT' 'SqlBackend'@, aka the 'SqlPersistT' transformer for
---   database interop.
--- * @'IO'@ for arbitrary IO.
-type Migration = WriterT [Text] (WriterT CautiousMigration (ReaderT SqlBackend IO)) ()
-
 type ConnectionPool = Pool SqlBackend
 
 -- | Values to configure a pool of database connections. See "Data.Pool" for details.
@@ -157,28 +139,3 @@ defaultConnectionPoolConfig = ConnectionPoolConfig 1 600 10
 newtype Single a = Single {unSingle :: a}
     deriving (Eq, Ord, Show, Read)
 
--- | An exception indicating that Persistent refused to run some unsafe
--- migrations. Contains a list of pairs where the Bool tracks whether the
--- migration was unsafe (True means unsafe), and the Sql is the sql statement
--- for the migration.
---
--- @since 2.11.1.0
-newtype PersistUnsafeMigrationException
-  = PersistUnsafeMigrationException [(Bool, Sql)]
-
--- | This 'Show' instance renders an error message suitable for printing to the
--- console. This is a little dodgy, but since GHC uses Show instances when
--- displaying uncaught exceptions, we have little choice.
-instance Show PersistUnsafeMigrationException where
-  show (PersistUnsafeMigrationException mig) =
-    concat
-      [ "\n\nDatabase migration: manual intervention required.\n"
-      , "The unsafe actions are prefixed by '***' below:\n\n"
-      , unlines $ map displayMigration mig
-      ]
-    where
-      displayMigration :: (Bool, Sql) -> String
-      displayMigration (True,  s) = "*** " ++ unpack s ++ ";"
-      displayMigration (False, s) = "    " ++ unpack s ++ ";"
-
-instance Exception PersistUnsafeMigrationException

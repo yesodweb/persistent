@@ -67,8 +67,9 @@ library
         Database.Persist.Quasi.Internal
 
         Database.Persist.Sql
-        Database.Persist.Sql.Util
+        Database.Persist.Sql.Migration
         Database.Persist.Sql.Types.Internal
+        Database.Persist.Sql.Util
 
         Database.Persist.SqlBackend
         Database.Persist.SqlBackend.Internal
@@ -89,7 +90,6 @@ library
     other-modules:   
         Database.Persist.Types.Base
 
-        Database.Persist.Sql.Migration
         Database.Persist.Sql.Internal
         Database.Persist.Sql.Types
         Database.Persist.Sql.Raw

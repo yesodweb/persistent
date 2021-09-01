@@ -1,10 +1,13 @@
 # Changelog for persistent
 
-## Unreleased
+## 2.13.1.2
 
 * [#1308](https://github.com/yesodweb/persistent/pull/1308)
     * Consolidate the documentation for the Persistent quasiquoter in
       Database.Persist.Quasi.
+* [#1312](https://github.com/yesodweb/persistent/pull/1312)
+    * Reorganize documentation and link to more modules.
+    * Expose `Database.Persist.Sql.Migration`
 
 ## 2.13.1.1
 
