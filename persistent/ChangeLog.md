@@ -5,6 +5,9 @@
 * [#1308](https://github.com/yesodweb/persistent/pull/1308)
     * Consolidate the documentation for the Persistent quasiquoter in
       Database.Persist.Quasi.
+* [#asdf](https://github.com/yesodweb/persistent/pull/asdf)
+    * Reorganize documentation and link to more modules.
+    * Expose `Database.Persist.Sql.Migration`
 
 ## 2.13.1.1
 
