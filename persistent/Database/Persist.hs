@@ -16,7 +16,7 @@ module Database.Persist
 -- This syntax allows you to customize the resulting Haskell datatypes and
 -- database schema. See "Database.Persist.Quasi" for details on that definition
 -- language.
---
+
 -- ** Reference Schema & Dataset
 --
 -- | For a quick example of the syntax, we'll introduce this database schema, and
@@ -31,7 +31,7 @@ module Database.Persist
 -- |]
 -- @
 --
--- This creates a Haskell datatpe that looks like this:
+-- This creates a Haskell datatype that looks like this:
 --
 -- @
 -- data User = User
