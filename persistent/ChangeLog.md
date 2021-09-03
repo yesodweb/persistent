@@ -1,5 +1,11 @@
 # Changelog for persistent
 
+## Unreleased
+
+* [#1314](https://github.com/yesodweb/persistent/pull/1314)
+    * Fix typos and minor documentation issues in Database.Persist and
+      Database.Persist.Quasi.
+
 ## 2.13.1.2
 
 * [#1308](https://github.com/yesodweb/persistent/pull/1308)
