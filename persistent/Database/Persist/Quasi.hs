@@ -203,7 +203,7 @@ You can automatically get ToJSON and FromJSON instances for any entity by adding
 Person json
     name Text
 @
-Requires @{-# LANGUAGE FlexibleInstances #-}@
+Requires @\{\-\# LANGUAGE FlexibleInstances \#\-\}@
 
 Customizable by using mpsEntityJSON
 * http://hackage.haskell.org/package/persistent-template/docs/Database-Persist-TH.html#v:EntityJSON
@@ -216,7 +216,7 @@ Person sql=peoples
     name Text
 @
 
-== Change table/collection key definition (field name and/or type, persistent >= 2.1)
+== Change table/collection key definition (field name and\/or type, persistent >= 2.1)
 
 @Id@ defines the column to use to define the key of the entity.
 Without type, the default backend key type will be used. You can change its
@@ -956,7 +956,7 @@ getPsStrictFields = psStrictFields
 setPsStrictFields :: Bool -> PersistSettings -> PersistSettings
 setPsStrictFields a ps = ps { psStrictFields = a }
 
--- | Retrievce the default name of the @id@ column.
+-- | Retrieve the default name of the @id@ column.
 --
 -- @since 2.13.0.0
 getPsIdName :: PersistSettings -> Text
