@@ -1,5 +1,11 @@
 # Changelog for persistent-postgresql
 
+## 2.13.1.0
+
+* [#1305](https://github.com/yesodweb/persistent/pull/1305)
+  * Add `RawPostgresql` wrapper, which exposes the underlying Postgres connection used
+    to construct a `SqlBackend`.
+
 ## 2.13.0.3
 
 * [#1290](https://github.com/yesodweb/persistent/pull/1290)
