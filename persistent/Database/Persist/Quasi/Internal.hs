@@ -26,7 +26,7 @@ module Database.Persist.Quasi.Internal
     , parseFieldType
     , associateLines
     , LinesWithComments(..)
-    , splitExtras
+    , parseEntityFields
     , takeColsEx
     -- * UnboundEntityDef
     , UnboundEntityDef(..)
@@ -311,7 +311,7 @@ toParsedEntityDef lwc = ParsedEntityDef
             _ -> (False, EntityNameHS entityName)
 
     (attribs, extras) =
-        splitExtras fieldLines
+        parseEntityFields fieldLines
 
 isDocComment :: Token -> Maybe Text
 isDocComment tok =
@@ -825,12 +825,12 @@ mkAutoIdField' dbName entName idSqlType =
 keyConName :: EntityNameHS -> Text
 keyConName entName = unEntityNameHS entName `mappend` "Id"
 
-splitExtras
+parseEntityFields
     :: [Line]
     -> ( [[Token]]
        , M.Map Text [ExtraLine]
        )
-splitExtras lns =
+parseEntityFields lns =
     case lns of
         [] -> ([], M.empty)
         (line : rest) ->
@@ -839,10 +839,10 @@ splitExtras lns =
                   | isCapitalizedText name ->
                     let indent = lineIndent line
                         (children, rest') = span ((> indent) . lineIndent) rest
-                        (x, y) = splitExtras rest'
+                        (x, y) = parseEntityFields rest'
                      in (x, M.insert name (NEL.toList . lineText <$> children) y)
                 ts ->
-                    let (x, y) = splitExtras rest
+                    let (x, y) = parseEntityFields rest
                      in (ts:x, y)
 
 isCapitalizedText :: Text -> Bool

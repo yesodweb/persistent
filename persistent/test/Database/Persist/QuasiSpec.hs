@@ -23,28 +23,28 @@ import Text.Shakespeare.Text (st)
 
 spec :: Spec
 spec = describe "Quasi" $ do
-    describe "splitExtras" $ do
+    describe "parseEntityFields" $ do
         let helloWorldTokens = Token "hello" :| [Token "world"]
             foobarbazTokens = Token "foo" :| [Token "bar", Token "baz"]
         it "works" $ do
-            splitExtras []
+            parseEntityFields []
                 `shouldBe`
                     mempty
         it "works2" $ do
-            splitExtras
+            parseEntityFields
                 [ Line 0 helloWorldTokens
                 ]
                 `shouldBe`
                     ( [NEL.toList helloWorldTokens], mempty )
         it "works3" $ do
-            splitExtras
+            parseEntityFields
                 [ Line 0 helloWorldTokens
                 , Line 2 foobarbazTokens
                 ]
                 `shouldBe`
                     ( [NEL.toList helloWorldTokens, NEL.toList foobarbazTokens], mempty )
         it "works4" $ do
-            splitExtras
+            parseEntityFields
                 [ Line 0 [Token "Product"]
                 , Line 2 (Token <$> ["name", "Text"])
                 , Line 2 (Token <$> ["added", "UTCTime", "default=CURRENT_TIMESTAMP"])
@@ -59,7 +59,7 @@ spec = describe "Quasi" $ do
                         ) ]
                     )
         it "works5" $ do
-            splitExtras
+            parseEntityFields
                 [ Line 0 [Token "Product"]
                 , Line 2 (Token <$> ["name", "Text"])
                 , Line 4 [Token "ExtraBlock"]
