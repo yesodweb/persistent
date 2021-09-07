@@ -827,9 +827,7 @@ keyConName entName = unEntityNameHS entName `mappend` "Id"
 
 parseEntityFields
     :: [Line]
-    -> ( [[Token]]
-       , M.Map Text [ExtraLine]
-       )
+    -> ([[Token]], M.Map Text [ExtraLine])
 parseEntityFields lns =
     case lns of
         [] -> ([], M.empty)
@@ -837,13 +835,20 @@ parseEntityFields lns =
             case NEL.toList (tokens line) of
                 [Token name]
                   | isCapitalizedText name ->
-                    let indent = lineIndent line
-                        (children, rest') = span ((> indent) . lineIndent) rest
-                        (x, y) = parseEntityFields rest'
-                     in (x, M.insert name (NEL.toList . lineText <$> children) y)
+                    parseExtraBlock name (line :| rest)
                 ts ->
                     let (x, y) = parseEntityFields rest
                      in (ts:x, y)
+
+parseExtraBlock :: Text -> NonEmpty Line -> ([[Token]], M.Map Text [ExtraLine])
+parseExtraBlock name (line :| rest) =
+    (x, M.insert name (NEL.toList . lineText <$> children) y)
+  where
+   (children, rest') =
+       span ((> lineIndent line) . lineIndent) rest
+
+   (x, y) =
+       parseEntityFields rest'
 
 isCapitalizedText :: Text -> Bool
 isCapitalizedText t =
