@@ -58,7 +58,7 @@ import Data.List (find, foldl')
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NEL
 import qualified Data.Map as M
-import Data.Maybe (fromMaybe, listToMaybe, mapMaybe, maybeToList)
+import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
 import Data.Monoid (mappend)
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -636,7 +636,7 @@ mkUnboundEntityDef
 mkUnboundEntityDef ps parsedEntDef =
     UnboundEntityDef
         { unboundForeignDefs =
-            foreigns
+            entityConstraintDefsForeignsList entityConstraintDefs
         , unboundPrimarySpec =
             case (idField, primaryComposite) of
                 (Just {}, Just {}) ->
@@ -667,7 +667,7 @@ mkUnboundEntityDef ps parsedEntDef =
                     parsedEntityDefEntityAttributes parsedEntDef
                 , entityFields =
                     []
-                , entityUniques = uniqs
+                , entityUniques = entityConstraintDefsUniquesList entityConstraintDefs
                 , entityForeigns = []
                 , entityDerives = concat $ mapMaybe takeDerives textAttribs
                 , entityExtra = parsedEntityDefExtras parsedEntDef
@@ -689,17 +689,14 @@ mkUnboundEntityDef ps parsedEntDef =
     textAttribs =
         fmap tokenText <$> attribs
 
-    (idField, primaryComposite, uniqs, foreigns) =
-        foldl'
-            (\(mid, mp, us, fs) attr ->
-                let
-                    (i, p, u, f) = takeConstraint ps entNameHS cols attr
-                    squish xs m = xs `mappend` maybeToList m
-                in
-                    (just1 mid i, just1 mp p, squish us u, squish fs f)
-            )
-            (Nothing, Nothing, [],[])
-            textAttribs
+    entityConstraintDefs =
+        foldMap (maybe mempty (takeConstraint ps entNameHS cols) . NEL.nonEmpty) textAttribs
+
+    idField =
+        entityConstraintDefsIdField entityConstraintDefs
+
+    primaryComposite =
+        entityConstraintDefsPrimaryComposite entityConstraintDefs
 
     cols :: [UnboundFieldDef]
     cols = reverse . fst . foldr (associateComments ps) ([], []) $ reverse attribs
@@ -800,11 +797,6 @@ setFieldComments xs fld =
     case xs of
         [] -> fld
         _ -> fld { unboundFieldComments = Just (T.unlines xs) }
-
-just1 :: (Show x) => Maybe x -> Maybe x -> Maybe x
-just1 (Just x) (Just y) = error $ "expected only one of: "
-  `mappend` show x `mappend` " " `mappend` show y
-just1 x y = x `mplus` y
 
 mkAutoIdField :: PersistSettings -> EntityNameHS -> SqlType -> FieldDef
 mkAutoIdField ps =
@@ -928,28 +920,72 @@ getSqlNameOr def =
             _ ->
                 Nothing
 
+data EntityConstraintDefs = EntityConstraintDefs
+    { entityConstraintDefsIdField :: Maybe UnboundIdDef
+    , entityConstraintDefsPrimaryComposite :: Maybe UnboundCompositeDef
+    , entityConstraintDefsUniques :: Maybe (NonEmpty UniqueDef)
+    , entityConstraintDefsForeigns :: Maybe (NonEmpty UnboundForeignDef)
+    }
+
+instance Semigroup EntityConstraintDefs where
+    a <> b =
+        EntityConstraintDefs
+            { entityConstraintDefsIdField = just1 (entityConstraintDefsIdField a) (entityConstraintDefsIdField b)
+            , entityConstraintDefsPrimaryComposite = just1 (entityConstraintDefsPrimaryComposite a) (entityConstraintDefsPrimaryComposite b)
+            , entityConstraintDefsUniques = entityConstraintDefsUniques a <> entityConstraintDefsUniques b
+            , entityConstraintDefsForeigns = entityConstraintDefsForeigns a <> entityConstraintDefsForeigns b
+            }
+
+just1 :: (Show x) => Maybe x -> Maybe x -> Maybe x
+just1 (Just x) (Just y) = error $ "expected only one of: "
+  `mappend` show x `mappend` " " `mappend` show y
+just1 x y = x `mplus` y
+
+instance Monoid EntityConstraintDefs where
+    mempty =
+        EntityConstraintDefs Nothing Nothing Nothing Nothing
+
+entityConstraintDefsUniquesList :: EntityConstraintDefs -> [UniqueDef]
+entityConstraintDefsUniquesList = foldMap NEL.toList . entityConstraintDefsUniques
+
+entityConstraintDefsForeignsList :: EntityConstraintDefs -> [UnboundForeignDef]
+entityConstraintDefsForeignsList = foldMap NEL.toList . entityConstraintDefsForeigns
+
 takeConstraint
     :: PersistSettings
     -> EntityNameHS
     -> [UnboundFieldDef]
-    -> [Text]
-    -> (Maybe UnboundIdDef, Maybe UnboundCompositeDef, Maybe UniqueDef, Maybe UnboundForeignDef)
-takeConstraint ps entityName defs (n:rest) | isCapitalizedText n = takeConstraint'
-  where
-    takeConstraint'
-          | n == "Unique"  =
-              (Nothing, Nothing, takeUniq ps (unEntityNameHS entityName) defs rest, Nothing)
-          | n == "Foreign" =
-              (Nothing, Nothing, Nothing, Just $ takeForeign ps entityName rest)
-          | n == "Primary" =
-              (Nothing, Just $ takeComposite defNames rest, Nothing, Nothing)
-          | n == "Id"      =
-              (Just $ takeId ps entityName rest, Nothing, Nothing, Nothing)
-          | otherwise      =
-              (Nothing, Nothing, takeUniq ps "" defs (n:rest), Nothing) -- retain compatibility with original unique constraint
-    defNames =
-        map unboundFieldNameHS defs
-takeConstraint _ _ _ _ = (Nothing, Nothing, Nothing, Nothing)
+    -> NonEmpty Text
+    -> EntityConstraintDefs
+takeConstraint ps entityName defs (n :| rest) =
+    case n of
+        "Unique" ->
+            mempty
+                { entityConstraintDefsUniques =
+                    pure <$> takeUniq ps (unEntityNameHS entityName) defs rest
+                }
+        "Foreign" ->
+            mempty
+                { entityConstraintDefsForeigns =
+                    Just $ pure (takeForeign ps entityName rest)
+                }
+        "Primary" ->
+            mempty
+                { entityConstraintDefsPrimaryComposite =
+                    Just (takeComposite (unboundFieldNameHS <$> defs) rest)
+                }
+        "Id" ->
+            mempty
+                { entityConstraintDefsIdField =
+                    Just (takeId ps entityName rest)
+                }
+        _ | isCapitalizedText n ->
+            mempty
+                { entityConstraintDefsUniques =
+                    pure <$> takeUniq ps "" defs (n : rest)
+                }
+        _ ->
+            mempty
 
 -- | This type represents an @Id@ declaration in the QuasiQuoted syntax.
 --
