@@ -835,20 +835,12 @@ parseEntityFields lns =
             case NEL.toList (tokens line) of
                 [Token name]
                   | isCapitalizedText name ->
-                    parseExtraBlock name (line :| rest)
+                    let (children, rest') = span ((> lineIndent line) . lineIndent) rest
+                        (x, y) = parseEntityFields rest'
+                     in (x, M.insert name (NEL.toList . lineText <$> children) y)
                 ts ->
                     let (x, y) = parseEntityFields rest
                      in (ts:x, y)
-
-parseExtraBlock :: Text -> NonEmpty Line -> ([[Token]], M.Map Text [ExtraLine])
-parseExtraBlock name (line :| rest) =
-    (x, M.insert name (NEL.toList . lineText <$> children) y)
-  where
-   (children, rest') =
-       span ((> lineIndent line) . lineIndent) rest
-
-   (x, y) =
-       parseEntityFields rest'
 
 isCapitalizedText :: Text -> Bool
 isCapitalizedText t =
