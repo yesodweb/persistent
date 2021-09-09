@@ -1828,13 +1828,13 @@ postgresMkColumns allDefs t =
 --
 -- @since 2.13.1.0
 data RawPostgresql backend = RawPostgresql
-    { persistentBackend :: backend 
+    { persistentBackend :: backend
     -- ^ The persistent backend
     --
     -- @since 2.13.1.0
-    , rawPostgresqlConnection :: PG.Connection 
+    , rawPostgresqlConnection :: PG.Connection
     -- ^ The underlying `PG.Connection`
-    -- 
+    --
     -- @since 2.13.1.0
     }
 
