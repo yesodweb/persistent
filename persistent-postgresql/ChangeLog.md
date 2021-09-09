@@ -1,5 +1,11 @@
 # Changelog for persistent-postgresql
 
+## 2.13.2.0
+* [#1316](https://github.com/yesodweb/persistent/pull/1316)
+  * Expose some internals in the new `Database.Persist.Postgresql.Internal` module.
+    This gives access to the `P` newtype, which is used for de-serializing `PersistValue`s
+    from `postgresql-simple` code.
+
 ## 2.13.1.0
 
 * [#1305](https://github.com/yesodweb/persistent/pull/1305)
