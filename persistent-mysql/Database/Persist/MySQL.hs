@@ -33,7 +33,7 @@ module Database.Persist.MySQL
     , openMySQLConn
     ) where
 
-import qualified Blaze.ByteString.Builder.ByteString as BBS
+import qualified Blaze.ByteString.Builder as BB
 import qualified Blaze.ByteString.Builder.Char8 as BBB
 
 import Control.Arrow
@@ -51,7 +51,6 @@ import Data.Acquire (Acquire, mkAcquire, with)
 import Data.Aeson
 import Data.Aeson.Types (modifyFailure)
 import Data.ByteString (ByteString)
-import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as C8
 import Data.Conduit
 import qualified Data.Conduit.List as CL
@@ -71,7 +70,7 @@ import Data.Text (Text, pack)
 import qualified Data.Text.Read as Text 
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
-import Data.Time.Format.ISO8601 (iso8601Show, formatParseM, iso8601ParseM, yearFormat)
+import Data.Time.Format 
 import Data.Time.Calendar (fromGregorian)
 import qualified Data.Text.IO as T
 import GHC.Stack
@@ -222,12 +221,12 @@ formatPersistValue conn value =
       PersistByteString b -> quote <$> MySQL.escape conn b
       PersistText t -> quote <$> MySQL.escape conn (T.encodeUtf8 t)
       PersistBool b -> pure $ if b then "1" else "0"
-      PersistInt64 i -> MySQL.escape conn $ C8.pack $ show i 
-      PersistDouble d -> MySQL.escape conn $ C8.pack $ show d
-      PersistRational r -> MySQL.escape conn $ C8.pack $ show r
-      PersistUTCTime t -> MySQL.escape conn $ C8.pack $ iso8601Show t
-      PersistDay t -> MySQL.escape conn $ C8.pack $ iso8601Show t 
-      PersistTimeOfDay t -> MySQL.escape conn $ C8.pack $ iso8601Show t 
+      PersistInt64 i -> pure $ C8.pack $ show i
+      PersistDouble d -> pure $ C8.pack $ show d
+      PersistRational r -> pure $ BB.toByteString $ BBB.fromString $ show (fromRational r :: Pico)
+      PersistUTCTime t -> pure $ C8.pack $ formatTime defaultTimeLocale "'%F %T%Q'" t
+      PersistDay t -> pure $ C8.pack $ formatTime defaultTimeLocale "'%F'" t
+      PersistTimeOfDay t -> pure $ C8.pack $ formatTime defaultTimeLocale "'%T%Q'" t
       PersistList l -> quote <$> MySQL.escape conn (T.encodeUtf8 $ listToJSON l)
       PersistArray a -> formatPersistValue conn (PersistList a) 
       PersistMap m -> quote <$> MySQL.escape conn (T.encodeUtf8 $ mapToJSON m)
@@ -300,7 +299,7 @@ parsePV p = const (maybe PersistNull p)
 
 persistInt64 :: Getter PersistValue
 persistInt64 =
-    useTextReader PersistInt64 Text.decimal
+    useTextReader PersistInt64 (Text.signed Text.decimal)
 
 persistDouble :: Getter PersistValue
 persistDouble =
@@ -320,25 +319,19 @@ persistByteString =
 
 persistTimeOfDay :: Getter PersistValue
 persistTimeOfDay =
-    parsePV $ useStringParser (maybe PersistNull PersistTimeOfDay . iso8601ParseM)
+    parsePV $ useStringParser (maybe PersistNull PersistTimeOfDay . parseTimeM True defaultTimeLocale "%T%Q")
 
 persistUTCTime :: Getter PersistValue
 persistUTCTime =
-    parsePV $ useStringParser (maybe PersistNull PersistUTCTime . iso8601ParseM)
+    parsePV $ useStringParser (maybe PersistNull PersistUTCTime . parseTimeM True defaultTimeLocale "%F %T%Q")
 
 persistDay :: Getter PersistValue
 persistDay =
-    parsePV $ useStringParser (maybe PersistNull PersistDay . iso8601ParseM)
+    parsePV $ useStringParser (maybe PersistNull PersistDay . parseTimeM True defaultTimeLocale "%F")
 
 persistDayYear :: Getter PersistValue
 persistDayYear =
-    parsePV $ 
-    useStringParser $ \string ->
-        case formatParseM yearFormat string of
-            Just year -> 
-                PersistDay (fromGregorian year 1 1)
-            Nothing ->
-                PersistNull
+    useTextReader (PersistDay . (\y -> fromGregorian y 1 1)) Text.decimal
 
 
 -- | Get the corresponding @'Getter' 'PersistValue'@ depending on
@@ -347,6 +340,7 @@ getGetter :: MySQL.Field -> Getter PersistValue
 getGetter field = go (MySQL.fieldType field)
                         (MySQL.fieldCharSet field)
   where
+    go MySQL.Bit         _ = persistInt64
     go MySQL.Tiny        _ = persistInt64
     -- Int64
     go MySQL.Int24       _ = persistInt64
@@ -396,14 +390,8 @@ getGetter field = go (MySQL.fieldType field)
     go MySQL.Set        _  = persistText
     go MySQL.Enum       _  = persistText
     -- Conversion using PersistLiteral
-    go MySQL.Geometry   _  = \_ m ->
-      case m of
-        Just g -> PersistLiteral g
-        Nothing -> error "Unexpected null in database specific value"
+    go MySQL.Geometry   _  = parsePV PersistLiteral
     go MySQL.Json       _  = persistByteString 
-    -- Unsupported
-    go other _ = error $ "MySQL.getGetter: type " ++
-                      show other ++ " not supported."
 
 
 
