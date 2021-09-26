@@ -3,7 +3,14 @@
 # For more information, please see the documentation at:
 #   https://docs.haskellstack.org/en/stable/lock_files
 
-packages: []
+packages:
+- completed:
+    hackage: lift-type-0.1.0.0@sha256:b52c172fc19635e53fa72874ac0e09b08b4bc2c711f57f883181f348799abd6f,1095
+    pantry-tree:
+      size: 360
+      sha256: 2ae816ebaef99ad169d95189cefa2113600ae2185e6af861984d91cbcd4bb3f0
+  original:
+    hackage: lift-type-0.1.0.0
 snapshots:
 - completed:
     size: 565720

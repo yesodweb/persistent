@@ -17,9 +17,9 @@ module Database.Persist.MySQL
     , createMySQLPool
     , module Database.Persist.Sql
     , MySQL.ConnectInfo(..)
-    , MySQLBase.SSLInfo(..)
+    , MySQL.SSLInfo(..)
     , MySQL.defaultConnectInfo
-    , MySQLBase.defaultSSLInfo
+    , MySQL.defaultSSLInfo
     , MySQLConf(..)
     , mockMigration
      -- * @ON DUPLICATE KEY UPDATE@ Functionality
@@ -37,6 +37,7 @@ import qualified Blaze.ByteString.Builder.ByteString as BBS
 import qualified Blaze.ByteString.Builder.Char8 as BBB
 
 import Control.Arrow
+import Data.String (IsString)
 import Control.Monad
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.IO.Unlift (MonadUnliftIO)
@@ -46,11 +47,12 @@ import Control.Monad.Trans.Except (ExceptT, runExceptT)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT)
 import Control.Monad.Trans.Writer (runWriterT)
 
-import qualified Data.List.NonEmpty as NEL
 import Data.Acquire (Acquire, mkAcquire, with)
 import Data.Aeson
 import Data.Aeson.Types (modifyFailure)
 import Data.ByteString (ByteString)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as C8
 import Data.Conduit
 import qualified Data.Conduit.List as CL
 import Data.Either (partitionEithers)
@@ -59,29 +61,29 @@ import Data.Function (on)
 import Data.IORef
 import Data.Int (Int64)
 import Data.List (find, groupBy, intercalate, sort)
+import qualified Data.List.NonEmpty as NEL
 import qualified Data.Map as Map
 import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
 import Data.Monoid ((<>))
 import qualified Data.Monoid as Monoid
 import Data.Pool (Pool)
 import Data.Text (Text, pack)
+import qualified Data.Text.Read as Text 
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
+import Data.Time.Format.ISO8601 (iso8601Show, formatParseM, iso8601ParseM, yearFormat)
+import Data.Time.Calendar (fromGregorian)
 import qualified Data.Text.IO as T
 import GHC.Stack
 import System.Environment (getEnvironment)
 
 import Database.Persist.Sql
-import Database.Persist.SqlBackend
 import Database.Persist.Sql.Types.Internal (makeIsolationLevelStatement)
 import qualified Database.Persist.Sql.Util as Util
+import Database.Persist.SqlBackend
 
-import qualified Database.MySQL.Base as MySQLBase
-import qualified Database.MySQL.Base.Types as MySQLBase
-import qualified Database.MySQL.Simple as MySQL
-import qualified Database.MySQL.Simple.Param as MySQL
-import qualified Database.MySQL.Simple.Result as MySQL
-import qualified Database.MySQL.Simple.Types as MySQL
+import qualified Database.MySQL.Base as MySQL
+import qualified Database.MySQL.Base.Types as MySQL
 
 -- | Create a MySQL connection pool and run the given action.
 -- The pool is properly released after the action finishes using
@@ -128,7 +130,7 @@ withMySQLConn = withSqlConn . open'
 openMySQLConn :: MySQL.ConnectInfo -> LogFunc -> IO (MySQL.Connection, SqlBackend)
 openMySQLConn ci logFunc = do
     conn <- MySQL.connect ci
-    MySQLBase.autocommit conn False -- disable autocommit!
+    MySQL.autocommit conn False -- disable autocommit!
     smap <- newIORef $ Map.empty
     let
         backend =
@@ -141,8 +143,8 @@ openMySQLConn ci logFunc = do
                 , connClose      = MySQL.close conn
                 , connMigrateSql = migrate' ci
                 , connBegin      = \_ mIsolation -> do
-                    forM_ mIsolation $ \iso -> MySQL.execute_ conn (makeIsolationLevelStatement iso)
-                    MySQL.execute_ conn "start transaction" >> return ()
+                    forM_ mIsolation $ \iso -> MySQL.query conn (makeIsolationLevelStatement iso)
+                    MySQL.query conn "start transaction" >> return ()
                 , connCommit     = const $ MySQL.commit   conn
                 , connRollback   = const $ MySQL.rollback conn
                 , connEscapeFieldName = T.pack . escapeF
@@ -166,7 +168,7 @@ open' ci logFunc = snd <$> openMySQLConn ci logFunc
 -- we'll do some client-side preprocessing here.
 prepare' :: MySQL.Connection -> Text -> IO Statement
 prepare' conn sql = do
-    let query = MySQL.Query (T.encodeUtf8 sql)
+    let query = T.encodeUtf8 sql
     return Statement
         { stmtFinalize = return ()
         , stmtReset    = return ()
@@ -196,30 +198,67 @@ insertSql' ent vals =
         ]
 
 -- | Execute an statement that doesn't return any results.
-execute' :: MySQL.Connection -> MySQL.Query -> [PersistValue] -> IO Int64
-execute' conn query vals = MySQL.execute conn query (map P vals)
+execute' :: MySQL.Connection -> ByteString -> [PersistValue] -> IO Int64
+execute' conn query vals = do
+    MySQL.query conn =<< formatQuery conn query vals
+    MySQL.affectedRows conn
 
+formatQuery :: MySQL.Connection -> ByteString -> [PersistValue] -> IO ByteString
+formatQuery conn string values = do
+    formattedValues <- traverse (formatPersistValue conn) values
+    pure $ mconcat $ go (C8.split '?' string) formattedValues
+ where 
+     go [] [] = []
+     go [t] [] = [t]
+     go (t:ts) (v:vs) =
+         t:v:go ts vs
+     go [] (_:_) = error "not enough ?"
+     go (_:_:_) [] = error "not enough values"
+
+formatPersistValue :: MySQL.Connection -> PersistValue -> IO ByteString
+formatPersistValue conn value = 
+    case value of
+      PersistNull -> pure "NULL"
+      PersistByteString b -> quote <$> MySQL.escape conn b
+      PersistText t -> quote <$> MySQL.escape conn (T.encodeUtf8 t)
+      PersistBool b -> pure $ if b then "1" else "0"
+      PersistInt64 i -> MySQL.escape conn $ C8.pack $ show i 
+      PersistDouble d -> MySQL.escape conn $ C8.pack $ show d
+      PersistRational r -> MySQL.escape conn $ C8.pack $ show r
+      PersistUTCTime t -> MySQL.escape conn $ C8.pack $ iso8601Show t
+      PersistDay t -> MySQL.escape conn $ C8.pack $ iso8601Show t 
+      PersistTimeOfDay t -> MySQL.escape conn $ C8.pack $ iso8601Show t 
+      PersistList l -> quote <$> MySQL.escape conn (T.encodeUtf8 $ listToJSON l)
+      PersistArray a -> formatPersistValue conn (PersistList a) 
+      PersistMap m -> quote <$> MySQL.escape conn (T.encodeUtf8 $ mapToJSON m)
+      PersistLiteral_ Escaped b -> MySQL.escape conn b
+      PersistLiteral_ DbSpecific b -> MySQL.escape conn b
+      PersistLiteral_ Unescaped b -> pure b 
+      PersistObjectId _ -> error "PersistObjectId not supported"
+   
+quote :: (Semigroup s, IsString s) => s -> s
+quote s = "'" <> s <> "'"
 
 -- | Execute an statement that does return results.  The results
 -- are fetched all at once and stored into memory.
 withStmt' :: MonadIO m
           => MySQL.Connection
-          -> MySQL.Query
+          -> ByteString
           -> [PersistValue]
           -> Acquire (ConduitM () [PersistValue] m ())
 withStmt' conn query vals = do
-    result <- mkAcquire createResult MySQLBase.freeResult
+    result <- mkAcquire createResult MySQL.freeResult
     return $ fetchRows result >>= CL.sourceList
   where
     createResult = do
       -- Execute the query
-      formatted <- MySQL.formatQuery conn query (map P vals)
-      MySQLBase.query conn formatted
-      MySQLBase.storeResult conn
+      formatted <- formatQuery conn query vals
+      MySQL.query conn formatted
+      MySQL.storeResult conn
 
     fetchRows result = liftIO $ do
       -- Find out the type of the columns
-      fields <- MySQLBase.fetchFields result
+      fields <- MySQL.fetchFields result
       let getters = [ maybe PersistNull (getGetter f f . Just) | f <- fields]
           convert = use getters
             where use (g:gs) (col:cols) =
@@ -230,7 +269,7 @@ withStmt' conn query vals = do
 
       -- Ready to go!
       let go acc = do
-            row <- MySQLBase.fetchRow result
+            row <- MySQL.fetchRow result
             case row of
               [] -> return (acc [])
               _  -> let !converted = convert row
@@ -238,105 +277,132 @@ withStmt' conn query vals = do
       go id
 
 
--- | @newtype@ around 'PersistValue' that supports the
--- 'MySQL.Param' type class.
-newtype P = P PersistValue
-
-instance MySQL.Param P where
-    render (P (PersistText t))        = MySQL.render t
-    render (P (PersistByteString bs)) = MySQL.render bs
-    render (P (PersistInt64 i))       = MySQL.render i
-    render (P (PersistDouble d))      = MySQL.render d
-    render (P (PersistBool b))        = MySQL.render b
-    render (P (PersistDay d))         = MySQL.render d
-    render (P (PersistTimeOfDay t))   = MySQL.render t
-    render (P (PersistUTCTime t))     = MySQL.render t
-    render (P PersistNull)            = MySQL.render MySQL.Null
-    render (P (PersistList l))        = MySQL.render $ listToJSON l
-    render (P (PersistMap m))         = MySQL.render $ mapToJSON m
-    render (P (PersistRational r))    =
-      MySQL.Plain $ BBB.fromString $ show (fromRational r :: Pico)
-      -- FIXME: Too Ambiguous, can not select precision without information about field
-    render (P (PersistLiteral_ DbSpecific s))    = MySQL.Plain $ BBS.fromByteString s
-    render (P (PersistLiteral_ Unescaped l))     = MySQL.Plain $ BBS.fromByteString l
-    render (P (PersistLiteral_ Escaped e)) = MySQL.Escape e
-    render (P (PersistArray a))       = MySQL.render (P (PersistList a))
-    render (P (PersistObjectId _))    =
-        error "Refusing to serialize a PersistObjectId to a MySQL value"
-
 
 -- | @Getter a@ is a function that converts an incoming value
 -- into a data type @a@.
-type Getter a = MySQLBase.Field -> Maybe ByteString -> a
+type Getter a = MySQL.Field -> Maybe ByteString -> a
 
--- | Helper to construct 'Getter'@s@ using 'MySQL.Result'.
-convertPV :: MySQL.Result a => (a -> b) -> Getter b
-convertPV f = (f .) . MySQL.convert
+useTextReader :: (a -> PersistValue) -> Text.Reader a -> Getter PersistValue
+useTextReader p r =
+    parsePV $ useTextParser $ \text ->
+        case r text of
+          Right (value, _) -> p value
+          Left _ -> PersistNull
+
+useTextParser :: (Text -> a) -> (ByteString -> a)
+useTextParser p = p . T.decodeUtf8
+    
+useStringParser :: (String -> a) -> (ByteString -> a)
+useStringParser p = useTextParser (p . T.unpack)
+
+parsePV :: (ByteString -> PersistValue) -> Getter PersistValue 
+parsePV p = const (maybe PersistNull p)
+
+persistInt64 :: Getter PersistValue
+persistInt64 =
+    useTextReader PersistInt64 Text.decimal
+
+persistDouble :: Getter PersistValue
+persistDouble =
+    useTextReader PersistDouble Text.double
+
+persistRational :: Getter PersistValue
+persistRational =
+    useTextReader PersistRational Text.rational
+
+persistText :: Getter PersistValue
+persistText = 
+    parsePV $ useTextParser PersistText
+
+persistByteString :: Getter PersistValue
+persistByteString = 
+    parsePV PersistByteString 
+
+persistTimeOfDay :: Getter PersistValue
+persistTimeOfDay =
+    parsePV $ useStringParser (maybe PersistNull PersistTimeOfDay . iso8601ParseM)
+
+persistUTCTime :: Getter PersistValue
+persistUTCTime =
+    parsePV $ useStringParser (maybe PersistNull PersistUTCTime . iso8601ParseM)
+
+persistDay :: Getter PersistValue
+persistDay =
+    parsePV $ useStringParser (maybe PersistNull PersistDay . iso8601ParseM)
+
+persistDayYear :: Getter PersistValue
+persistDayYear =
+    parsePV $ 
+    useStringParser $ \string ->
+        case formatParseM yearFormat string of
+            Just year -> 
+                PersistDay (fromGregorian year 1 1)
+            Nothing ->
+                PersistNull
+
 
 -- | Get the corresponding @'Getter' 'PersistValue'@ depending on
 -- the type of the column.
-getGetter :: MySQLBase.Field -> Getter PersistValue
-getGetter field = go (MySQLBase.fieldType field)
-                        (MySQLBase.fieldLength field)
-                            (MySQLBase.fieldCharSet field)
+getGetter :: MySQL.Field -> Getter PersistValue
+getGetter field = go (MySQL.fieldType field)
+                        (MySQL.fieldCharSet field)
   where
-    -- Bool
-    go MySQLBase.Tiny       1 _ = convertPV PersistBool
-    go MySQLBase.Tiny       _ _ = convertPV PersistInt64
+    go MySQL.Tiny        _ = persistInt64
     -- Int64
-    go MySQLBase.Int24      _ _ = convertPV PersistInt64
-    go MySQLBase.Short      _ _ = convertPV PersistInt64
-    go MySQLBase.Long       _ _ = convertPV PersistInt64
-    go MySQLBase.LongLong   _ _ = convertPV PersistInt64
+    go MySQL.Int24       _ = persistInt64
+    go MySQL.Short       _ = persistInt64
+    go MySQL.Long        _ = persistInt64
+    go MySQL.LongLong    _ = persistInt64
     -- Double
-    go MySQLBase.Float      _ _ = convertPV PersistDouble
-    go MySQLBase.Double     _ _ = convertPV PersistDouble
-    go MySQLBase.Decimal    _ _ = convertPV PersistDouble
-    go MySQLBase.NewDecimal _ _ = convertPV PersistDouble
+    go MySQL.Float       _ = persistDouble
+    go MySQL.Double      _ = persistDouble
+    go MySQL.Decimal     _ = persistRational
+    go MySQL.NewDecimal  _ = persistRational
 
     -- ByteString and Text
 
     -- The MySQL C client (and by extension the Haskell mysql package) doesn't distinguish between binary and non-binary string data at the type level.
-    -- (e.g. both BLOB and TEXT have the MySQLBase.Blob type).
+    -- (e.g. both BLOB and TEXT have the MySQL.Blob type).
     -- Instead, the character set distinguishes them. Binary data uses character set number 63.
     -- See https://dev.mysql.com/doc/refman/5.6/en/c-api-data-structures.html (Search for "63")
-    go MySQLBase.VarChar    _ 63 = convertPV PersistByteString
-    go MySQLBase.VarString  _ 63 = convertPV PersistByteString
-    go MySQLBase.String     _ 63 = convertPV PersistByteString
+    go MySQL.VarChar     63 = persistByteString
+    go MySQL.VarString   63 = persistByteString
+    go MySQL.String      63 = persistByteString
 
-    go MySQLBase.VarChar    _ _  = convertPV PersistText
-    go MySQLBase.VarString  _ _  = convertPV PersistText
-    go MySQLBase.String     _ _  = convertPV PersistText
+    go MySQL.VarChar     _  = persistText
+    go MySQL.VarString   _  = persistText 
+    go MySQL.String      _  = persistText 
 
-    go MySQLBase.Blob       _ 63 = convertPV PersistByteString
-    go MySQLBase.TinyBlob   _ 63 = convertPV PersistByteString
-    go MySQLBase.MediumBlob _ 63 = convertPV PersistByteString
-    go MySQLBase.LongBlob   _ 63 = convertPV PersistByteString
+    go MySQL.Blob        63 = persistByteString
+    go MySQL.TinyBlob    63 = persistByteString
+    go MySQL.MediumBlob  63 = persistByteString
+    go MySQL.LongBlob    63 = persistByteString
 
-    go MySQLBase.Blob       _ _  = convertPV PersistText
-    go MySQLBase.TinyBlob   _ _  = convertPV PersistText
-    go MySQLBase.MediumBlob _ _  = convertPV PersistText
-    go MySQLBase.LongBlob   _ _  = convertPV PersistText
+    go MySQL.Blob        _  = persistText
+    go MySQL.TinyBlob    _  = persistText
+    go MySQL.MediumBlob  _  = persistText
+    go MySQL.LongBlob    _  = persistText
 
     -- Time-related
-    go MySQLBase.Time       _ _  = convertPV PersistTimeOfDay
-    go MySQLBase.DateTime   _ _  = convertPV PersistUTCTime
-    go MySQLBase.Timestamp  _ _  = convertPV PersistUTCTime
-    go MySQLBase.Date       _ _  = convertPV PersistDay
-    go MySQLBase.NewDate    _ _  = convertPV PersistDay
-    go MySQLBase.Year       _ _  = convertPV PersistDay
+    go MySQL.Time        _  = persistTimeOfDay 
+    go MySQL.DateTime    _  = persistUTCTime 
+    go MySQL.Timestamp   _  = persistUTCTime 
+    go MySQL.Date        _  = persistDay 
+    go MySQL.NewDate     _  = persistDay 
+    go MySQL.Year        _  = persistDayYear 
     -- Null
-    go MySQLBase.Null       _ _  = \_ _ -> PersistNull
+    go MySQL.Null        _  = \_ _ -> PersistNull
     -- Controversial conversions
-    go MySQLBase.Set        _ _  = convertPV PersistText
-    go MySQLBase.Enum       _ _  = convertPV PersistText
+    go MySQL.Set        _  = persistText
+    go MySQL.Enum       _  = persistText
     -- Conversion using PersistLiteral
-    go MySQLBase.Geometry   _ _  = \_ m ->
+    go MySQL.Geometry   _  = \_ m ->
       case m of
         Just g -> PersistLiteral g
         Nothing -> error "Unexpected null in database specific value"
+    go MySQL.Json       _  = persistByteString 
     -- Unsupported
-    go other _ _ = error $ "MySQL.getGetter: type " ++
+    go other _ = error $ "MySQL.getGetter: type " ++
                       show other ++ " not supported."
 
 
