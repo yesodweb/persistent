@@ -38,6 +38,7 @@ module Database.Persist.Sql
     , updateWhereCount
     , filterClause
     , filterClauseWithVals
+    , orderClause
     , FilterTablePrefix (..)
     -- * Transactions
     , transactionSave
