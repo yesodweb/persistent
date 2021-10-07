@@ -2,7 +2,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE PatternGuards, DataKinds, TypeOperators, UndecidableInstances #-}
+{-# LANGUAGE PatternGuards, DataKinds, TypeOperators, UndecidableInstances, GeneralizedNewtypeDeriving #-}
 module Database.Persist.Class.PersistField
     ( PersistField (..)
     , SomePersistField (..)
@@ -346,7 +346,7 @@ instance PersistField UTCTime where
 --
 -- @since 2.11.0
 newtype OverflowNatural = OverflowNatural { unOverflowNatural :: Natural }
-    deriving (Eq, Show, Ord)
+    deriving (Eq, Show, Ord, Num)
 
 instance
   TypeError

@@ -6,6 +6,9 @@
     * Fix typos and minor documentation issues in Database.Persist and
       Database.Persist.Quasi.
 
+* [#1319](https://github.com/yesodweb/persistent/pull/1319)
+    * Add a `Num` instance for `OverflowNatural`
+
 ## 2.13.1.2
 
 * [#1308](https://github.com/yesodweb/persistent/pull/1308)
