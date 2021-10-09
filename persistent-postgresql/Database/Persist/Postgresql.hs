@@ -119,6 +119,7 @@ import Database.Persist.Postgresql.Internal
 import Database.Persist.Sql
 import qualified Database.Persist.Sql.Util as Util
 import Database.Persist.SqlBackend
+import Database.Persist.SqlBackend.StatementCache (StatementCache, mkSimpleStatementCache, mkStatementCache)
 
 -- | A @libpq@ connection string.  A simple example of connection
 -- string would be @\"host=localhost port=5432 user=test
@@ -291,7 +292,7 @@ open' modConn getVer constructor cstr logFunc = do
     conn <- PG.connectPostgreSQL cstr
     modConn conn
     ver <- getVer conn
-    smap <- newIORef $ Map.empty
+    smap <- mkStatementCache <$> mkSimpleStatementCache
     return $ constructor (createBackend logFunc ver smap) conn
 
 -- | Gets the PostgreSQL server version
@@ -360,14 +361,14 @@ openSimpleConn = openSimpleConnWithVersion getServerVersion
 -- @since 2.9.1
 openSimpleConnWithVersion :: (PG.Connection -> IO (Maybe Double)) -> LogFunc -> PG.Connection -> IO SqlBackend
 openSimpleConnWithVersion getVerDouble logFunc conn = do
-    smap <- newIORef $ Map.empty
+    smap <- mkSimpleStatementCache
     serverVersion <- oldGetVersionToNew getVerDouble conn
-    return $ createBackend logFunc serverVersion smap conn
+    return $ createBackend logFunc serverVersion (mkStatementCache smap) conn
 
 -- | Create the backend given a logging function, server version, mutable statement cell,
 -- and connection.
 createBackend :: LogFunc -> NonEmpty Word
-              -> IORef (Map.Map Text Statement) -> PG.Connection -> SqlBackend
+              -> StatementCache -> PG.Connection -> SqlBackend
 createBackend logFunc serverVersion smap conn =
     maybe id setConnPutManySql (upsertFunction putManySql serverVersion) $
     maybe id setConnUpsertSql (upsertFunction upsertSql' serverVersion) $
@@ -1508,7 +1509,7 @@ mockMigrate allDefs _ entity = fmap (fmap $ map showAlterDb) $ do
 -- with the difference that an actual database is not needed.
 mockMigration :: Migration -> IO ()
 mockMigration mig = do
-    smap <- newIORef $ Map.empty
+    smap <- mkStatementCache <$> mkSimpleStatementCache
     let sqlbackend =
             mkSqlBackend MkSqlBackendArgs
                 { connPrepare = \_ -> do
