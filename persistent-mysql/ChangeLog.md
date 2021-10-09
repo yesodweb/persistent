@@ -1,6 +1,6 @@
 # Changelog for persistent-mysql
 
-## 2.14.0.0
+## 2.14.0.0 (unreleased)
 
 * [#XXXX]()
     * Update backend to support new `StatementCache` interface
