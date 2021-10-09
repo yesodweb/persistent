@@ -1,5 +1,10 @@
 # Changelog for persistent-mysql
 
+## 2.14.0.0
+
+* [#XXXX]()
+    * Update backend to support new `StatementCache` interface
+
 ## 2.13.0.2
 
 * Bugfix: prevent fetching constraint info from other databases during migrations [#1301](https://github.com/yesodweb/persistent/pull/1301)

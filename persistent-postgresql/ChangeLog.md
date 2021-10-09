@@ -1,5 +1,10 @@
 # Changelog for persistent-postgresql
 
+## 2.14.0.0
+
+* [#XXXX]()
+    * Update backend to support new `StatementCache` interface
+
 ## 2.13.2.0
 * [#1316](https://github.com/yesodweb/persistent/pull/1316)
   * Expose some internals in the new `Database.Persist.Postgresql.Internal` module.

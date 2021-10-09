@@ -1,5 +1,10 @@
 # Changelog for persistent-sqlite
 
+## 2.14.0.0
+
+* [#XXXX]()
+    * Update backend to support new `StatementCache` interface
+
 ## 2.13.0.3
 
 * Somehow failed to properly release the safe-to-remove changes.
