@@ -14,6 +14,7 @@ import Database.Persist.SqlBackend.Internal.MkSqlBackend
 import Database.Persist.SqlBackend.Internal.Statement
 import Database.Persist.SqlBackend.Internal.InsertSqlResult
 import Database.Persist.SqlBackend.Internal.IsolationLevel
+import Database.Persist.SqlBackend.Internal.StatementCache (StatementCache)
 
 -- | A 'SqlBackend' represents a handle or connection to a database. It
 -- contains functions and values that allow databases to have more
@@ -69,7 +70,7 @@ data SqlBackend = SqlBackend
     -- When left as 'Nothing', we default to using 'defaultPutMany'.
     --
     -- @since 2.8.1
-    , connStmtMap :: IORef (Map Text Statement)
+    , connStmtMap :: StatementCache
     -- ^ A reference to the cache of statements. 'Statement's are keyed by
     -- the 'Text' queries that generated them.
     , connClose :: IO ()

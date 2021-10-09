@@ -78,8 +78,6 @@ import qualified Data.Conduit.Combinators as C
 import qualified Data.Conduit.List as CL
 import qualified Data.HashMap.Lazy as HashMap
 import Data.Int (Int64)
-import Data.IORef
-import qualified Data.Map as Map
 import Data.Pool (Pool)
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -95,6 +93,7 @@ import Database.Persist.Sql
 import Database.Persist.SqlBackend
 import qualified Database.Persist.Sql.Util as Util
 import qualified Database.Sqlite as Sqlite
+import Database.Persist.SqlBackend.StatementCache
 
 
 -- | Create a pool of SQLite connections.
@@ -269,7 +268,7 @@ wrapConnectionInfo connInfo conn logFunc = do
         Sqlite.reset conn stmt
         Sqlite.finalize stmt
 
-    smap <- newIORef $ Map.empty
+    smap <- mkStatementCache <$> mkSimpleStatementCache
     return $
         setConnMaxParams 999 $
         setConnPutManySql putManySql $
@@ -456,7 +455,7 @@ migrate' allDefs getter val = do
 -- with the difference that an actual database isn't needed for it.
 mockMigration :: Migration -> IO ()
 mockMigration mig = do
-    smap <- newIORef $ Map.empty
+    smap <- mkStatementCache <$> mkSimpleStatementCache
     let sqlbackend =
             setConnMaxParams 999 $
             mkSqlBackend MkSqlBackendArgs

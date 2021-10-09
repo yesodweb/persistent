@@ -3,14 +3,13 @@
 module Database.Persist.SqlBackend.Internal.MkSqlBackend where
 
 import Control.Monad.Logger (Loc, LogLevel, LogSource, LogStr)
-import Data.IORef
-import Data.Map (Map)
 import Data.Text (Text)
 import Database.Persist.SqlBackend.Internal.Statement
 import Database.Persist.SqlBackend.Internal.InsertSqlResult
 import Database.Persist.SqlBackend.Internal.IsolationLevel
 import Database.Persist.Types.Base
 import Database.Persist.Names
+import Database.Persist.SqlBackend.Internal.StatementCache
 
 -- | This type shares many of the same field names as the 'SqlBackend' type.
 -- It's useful for library authors to use this when migrating from using the
@@ -28,7 +27,7 @@ data MkSqlBackendArgs = MkSqlBackendArgs
     , connInsertSql :: EntityDef -> [PersistValue] -> InsertSqlResult
     -- ^ This function generates the SQL and values necessary for
     -- performing an insert against the database.
-    , connStmtMap :: IORef (Map Text Statement)
+    , connStmtMap :: StatementCache
     -- ^ A reference to the cache of statements. 'Statement's are keyed by
     -- the 'Text' queries that generated them.
     , connClose :: IO ()

@@ -56,10 +56,8 @@ import qualified Data.Conduit.List as CL
 import Data.Either (partitionEithers)
 import Data.Fixed (Pico)
 import Data.Function (on)
-import Data.IORef
 import Data.Int (Int64)
 import Data.List (find, groupBy, intercalate, sort)
-import qualified Data.Map as Map
 import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
 import Data.Monoid ((<>))
 import qualified Data.Monoid as Monoid
@@ -73,6 +71,7 @@ import System.Environment (getEnvironment)
 
 import Database.Persist.Sql
 import Database.Persist.SqlBackend
+import Database.Persist.SqlBackend.StatementCache
 import Database.Persist.Sql.Types.Internal (makeIsolationLevelStatement)
 import qualified Database.Persist.Sql.Util as Util
 
@@ -129,7 +128,7 @@ openMySQLConn :: MySQL.ConnectInfo -> LogFunc -> IO (MySQL.Connection, SqlBacken
 openMySQLConn ci logFunc = do
     conn <- MySQL.connect ci
     MySQLBase.autocommit conn False -- disable autocommit!
-    smap <- newIORef $ Map.empty
+    smap <- mkStatementCache <$> mkSimpleStatementCache
     let
         backend =
             setConnPutManySql putManySql $
@@ -1278,7 +1277,7 @@ mockMigrate _connectInfo allDefs _getter val = do
 -- the actual database isn't already present in the system.
 mockMigration :: Migration -> IO ()
 mockMigration mig = do
-    smap <- newIORef $ Map.empty
+    smap <- mkStatemeentCache <$> mkSimpleStatementCache
     let sqlbackend =
             mkSqlBackend MkSqlBackendArgs
                 { connPrepare = \_ -> do
