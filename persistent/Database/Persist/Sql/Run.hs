@@ -2,7 +2,6 @@
 module Database.Persist.Sql.Run where
 
 import Control.Monad.IO.Unlift
-import qualified UnliftIO.Exception as UE
 import Control.Monad.Logger.CallStack
 import Control.Monad.Reader (MonadReader)
 import qualified Control.Monad.Reader as MonadReader
@@ -11,13 +10,14 @@ import Control.Monad.Trans.Resource
 import Data.Acquire (Acquire, ReleaseType(..), mkAcquireType, with)
 import Data.Pool as P
 import qualified Data.Text as T
+import qualified UnliftIO.Exception as UE
 
 import Database.Persist.Class.PersistStore
+import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Types.Internal
-import Database.Persist.Sql.Raw
 import Database.Persist.SqlBackend.Internal.StatementCache
-    ( StatementCache(statementCacheClear) )
+       (StatementCache(statementCacheClear))
 
 -- | Get a connection from the pool, run the given action, and then return the
 -- connection to the pool.

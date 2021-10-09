@@ -4,12 +4,12 @@ module Database.Persist.SqlBackend.Internal.MkSqlBackend where
 
 import Control.Monad.Logger (Loc, LogLevel, LogSource, LogStr)
 import Data.Text (Text)
-import Database.Persist.SqlBackend.Internal.Statement
+import Database.Persist.Names
 import Database.Persist.SqlBackend.Internal.InsertSqlResult
 import Database.Persist.SqlBackend.Internal.IsolationLevel
-import Database.Persist.Types.Base
-import Database.Persist.Names
+import Database.Persist.SqlBackend.Internal.Statement
 import Database.Persist.SqlBackend.Internal.StatementCache
+import Database.Persist.Types.Base
 
 -- | This type shares many of the same field names as the 'SqlBackend' type.
 -- It's useful for library authors to use this when migrating from using the
