@@ -1278,7 +1278,7 @@ mockMigrate _connectInfo allDefs _getter val = do
 -- the actual database isn't already present in the system.
 mockMigration :: Migration -> IO ()
 mockMigration mig = do
-    smap <- mkStatemeentCache <$> mkSimpleStatementCache
+    smap <- mkStatementCache <$> mkSimpleStatementCache
     let sqlbackend =
             mkSqlBackend MkSqlBackendArgs
                 { connPrepare = \_ -> do
