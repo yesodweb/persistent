@@ -2,7 +2,7 @@
 
 ## 2.14.0.0 (unreleased)
 
-* [#XXXX]()
+* [#1327](https://github.com/yesodweb/persistent/pull/1327)
     * Update `SqlBackend` to use new `StatementCache` interface
       instead of `IORef (Map Text Statement)`
 
