@@ -1,22 +1,22 @@
 module Database.Persist.Sql.Raw where
 
 import Control.Exception (throwIO)
-import Control.Monad (when, liftM)
+import Control.Monad (liftM, when)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Logger (logDebugNS, runLoggingT)
-import Control.Monad.Reader (ReaderT, ask, MonadReader)
-import Control.Monad.Trans.Resource (MonadResource,release)
-import Data.Acquire (allocateAcquire, Acquire, mkAcquire, with)
+import Control.Monad.Reader (MonadReader, ReaderT, ask)
+import Control.Monad.Trans.Resource (MonadResource, release)
+import Data.Acquire (Acquire, allocateAcquire, mkAcquire, with)
 import Data.Conduit
-import Data.IORef (writeIORef, readIORef, newIORef)
+import Data.IORef (newIORef, readIORef, writeIORef)
 import Data.Int (Int64)
 import Data.Text (Text, pack)
 import qualified Data.Text as T
 
 import Database.Persist
+import Database.Persist.Sql.Class
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Types.Internal
-import Database.Persist.Sql.Class
 import Database.Persist.SqlBackend.Internal.StatementCache
 
 rawQuery :: (MonadResource m, MonadReader env m, BackendCompatible SqlBackend env)

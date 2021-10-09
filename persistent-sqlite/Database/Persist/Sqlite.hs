@@ -60,40 +60,54 @@ module Database.Persist.Sqlite
 import Control.Concurrent (threadDelay)
 import qualified Control.Exception as E
 import Control.Monad (forM_)
-import Control.Monad.IO.Unlift (MonadIO (..), MonadUnliftIO, askRunInIO, withRunInIO, withUnliftIO, unliftIO, withRunInIO)
-import Control.Monad.Logger (NoLoggingT, runNoLoggingT, MonadLoggerIO, logWarn, runLoggingT, askLoggerIO)
+import Control.Monad.IO.Unlift
+       ( MonadIO(..)
+       , MonadUnliftIO
+       , askRunInIO
+       , unliftIO
+       , withRunInIO
+       , withUnliftIO
+       )
+import Control.Monad.Logger
+       ( MonadLoggerIO
+       , NoLoggingT
+       , askLoggerIO
+       , logWarn
+       , runLoggingT
+       , runNoLoggingT
+       )
 import Control.Monad.Reader (MonadReader)
-import Control.Monad.Trans.Resource (MonadResource)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT)
+import Control.Monad.Trans.Resource (MonadResource)
 #if !MIN_VERSION_base(4,12,0)
 import Control.Monad.Trans.Reader (withReaderT)
 #endif
 import Control.Monad.Trans.Writer (runWriterT)
 import Data.Acquire (Acquire, mkAcquire, with)
-import Data.Maybe
 import Data.Aeson
 import Data.Aeson.Types (modifyFailure)
 import Data.Conduit
 import qualified Data.Conduit.Combinators as C
 import qualified Data.Conduit.List as CL
+import Data.Foldable (toList)
 import qualified Data.HashMap.Lazy as HashMap
 import Data.Int (Int64)
+import Data.Maybe
 import Data.Pool (Pool)
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
 import Lens.Micro.TH (makeLenses)
 import UnliftIO.Resource (ResourceT, runResourceT)
-import Data.Foldable (toList)
 
 #if MIN_VERSION_base(4,12,0)
 import Database.Persist.Compatible
 #endif
 import Database.Persist.Sql
-import Database.Persist.SqlBackend
 import qualified Database.Persist.Sql.Util as Util
-import qualified Database.Sqlite as Sqlite
+import Database.Persist.SqlBackend
 import Database.Persist.SqlBackend.StatementCache
+import qualified Database.Sqlite as Sqlite
 
 
 -- | Create a pool of SQLite connections.
