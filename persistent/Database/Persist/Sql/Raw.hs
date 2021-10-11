@@ -77,8 +77,8 @@ getStmtConn :: SqlBackend -> Text -> IO Statement
 getStmtConn conn sql = do
     let cacheK = mkCacheKeyFromQuery sql
     mstmt <- liftIO $ statementCacheLookup (connStmtMap conn) cacheK
-    case mstmt of
-        Just stmt -> return stmt
+    stmt <- case mstmt of
+        Just stmt -> pure stmt
         Nothing -> do
             stmt' <- liftIO $ connPrepare conn sql
             iactive <- liftIO $ newIORef True
@@ -103,7 +103,8 @@ getStmtConn conn sql = do
                     }
 
             liftIO $ statementCacheInsert (connStmtMap conn) cacheK stmt
-            return stmt
+            pure stmt
+    (hookGetStatement $ connHooks conn) conn sql stmt
 
 -- | Execute a raw SQL statement and return its results as a
 -- list. If you do not expect a return value, use of

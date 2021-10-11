@@ -42,6 +42,7 @@ library
       , unliftio
       , unliftio-core
       , unordered-containers
+      , vault
       , vector
 
     default-extensions: 

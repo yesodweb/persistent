@@ -12,9 +12,8 @@ import Control.Exception (Exception(..))
 import Control.Monad.Logger (NoLoggingT)
 import Control.Monad.Trans.Reader (ReaderT(..))
 import Control.Monad.Trans.Resource (ResourceT)
-import Control.Monad.Trans.Writer (WriterT)
 import Data.Pool (Pool)
-import Data.Text (Text, unpack)
+import Data.Text (Text)
 
 import Data.Time (NominalDiffTime)
 import Database.Persist.Sql.Types.Internal

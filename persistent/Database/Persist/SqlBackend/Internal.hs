@@ -3,10 +3,10 @@
 
 module Database.Persist.SqlBackend.Internal where
 
-import Data.IORef
 import Data.List.NonEmpty (NonEmpty)
-import Data.Map (Map)
 import Data.Text (Text)
+import Data.Vault.Strict (Vault)
+import qualified Data.Vault.Strict as Vault
 import Database.Persist.Class.PersistStore
 import Database.Persist.Names
 import Database.Persist.SqlBackend.Internal.InsertSqlResult
@@ -133,6 +133,21 @@ data SqlBackend = SqlBackend
     -- When left as 'Nothing', we default to using 'defaultRepsertMany'.
     --
     -- @since 2.9.0
+    , connVault :: Vault
+    -- ^ Carry arbitrary payloads for the connection that
+    -- may be used to propagate information into hooks.
+    , connHooks :: SqlBackendHooks
+    -- ^ Instrumentation hooks that may be used to track the
+    -- behaviour of a backend.
+    }
+
+newtype SqlBackendHooks = SqlBackendHooks
+    { hookGetStatement :: SqlBackend -> Text -> Statement -> IO Statement
+    }
+
+emptySqlBackendHooks :: SqlBackendHooks
+emptySqlBackendHooks = SqlBackendHooks
+    { hookGetStatement = \_ _ s -> pure s
     }
 
 -- | A function for creating a value of the 'SqlBackend' type. You should prefer
@@ -149,6 +164,8 @@ mkSqlBackend MkSqlBackendArgs {..} =
         , connPutManySql = Nothing
         , connUpsertSql = Nothing
         , connInsertManySql = Nothing
+        , connVault = Vault.empty
+        , connHooks = emptySqlBackendHooks
         , ..
         }
 
