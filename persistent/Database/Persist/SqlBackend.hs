@@ -7,6 +7,7 @@ module Database.Persist.SqlBackend
     , mkSqlBackend
     , MkSqlBackendArgs(..)
     , SqlBackendHooks(..)
+    , emptySqlBackendHooks
     -- * Utilities
 
     -- $utilities
