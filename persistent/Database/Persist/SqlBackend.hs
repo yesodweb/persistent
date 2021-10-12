@@ -13,6 +13,7 @@ module Database.Persist.SqlBackend
     -- $utilities
 
     -- ** SqlBackend Getters
+    , getRDBMS
     , getEscapedFieldName
     , getEscapedRawName
     , getEscapeRawNameFunction
@@ -155,6 +156,17 @@ getConnHooks
     => m SqlBackendHooks
 getConnHooks = do
     asks (SqlBackend.connHooks . projectBackend)
+
+-- | Get a tag displaying what database the 'SqlBackend' is for. Can be
+-- used to differentiate features in downstream libraries for different
+-- database backends.
+-- @since 2.14.0.0
+getRDBMS
+    :: (BackendCompatible SqlBackend backend, MonadReader backend m)
+    => m Text
+getRDBMS = do
+    asks (SqlBackend.connRDBMS . projectBackend)
+
 
 -- | Set the maximum parameters that may be issued in a given SQL query. This
 -- should be used only if the database backend have this limitation.
