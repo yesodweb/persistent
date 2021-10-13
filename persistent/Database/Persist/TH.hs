@@ -3104,7 +3104,7 @@ discoverEntities = do
             mapMaybe getDecType instances
         getDecType dec =
             case dec of
-                InstanceD _moverlap _cxt typ _decs ->
+                InstanceD _moverlap [] typ _decs ->
                     stripPersistEntity typ
                 _ ->
                     Nothing
