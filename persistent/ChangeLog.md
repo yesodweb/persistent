@@ -1,5 +1,12 @@
 # Changelog for persistent
 
+## 2.13.2.1
+
+* [#1329](https://github.com/yesodweb/persistent/pull/1329)
+    * Prevent discovery of constrained `PersistEntity` instances in
+      `discoverEntities` (since the discovered instances won't work without
+      constraints anyway).
+
 ## 2.13.2.0
 
 * [#1314](https://github.com/yesodweb/persistent/pull/1314)
