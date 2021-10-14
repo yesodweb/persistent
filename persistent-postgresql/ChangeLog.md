@@ -2,7 +2,7 @@
 
 ## 2.13.2.1
 
-* [#]()
+* [#1331](https://github.com/yesodweb/persistent/pull/1331)
     * Fixes a bug where `upsertWhere` would fail on a database table with
       `MigrationOnly` fields.
 
