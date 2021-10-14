@@ -1,5 +1,11 @@
 # Changelog for persistent-postgresql
 
+## 2.13.2.1
+
+* [#]()
+    * Fixes a bug where `upsertWhere` would fail on a database table with
+      `MigrationOnly` fields.
+
 ## 2.13.2.0
 * [#1316](https://github.com/yesodweb/persistent/pull/1316)
   * Expose some internals in the new `Database.Persist.Postgresql.Internal` module.
