@@ -1726,7 +1726,7 @@ mkBulkUpsertQuery records conn fieldValues updates filters uniqDef =
     firstField = case entityFieldNames of
         [] -> error "The entity you're trying to insert does not have any fields."
         (field:_) -> field
-    entityFieldNames = map fieldDbToText (getEntityFieldsDatabase entityDef')
+    entityFieldNames = map fieldDbToText (getEntityFields entityDef')
     nameOfTable = escapeE . getEntityDBName $ entityDef'
     copyUnlessValues = map snd fieldsToMaybeCopy
     recordValues = concatMap (map toPersistValue . toPersistFields) records
