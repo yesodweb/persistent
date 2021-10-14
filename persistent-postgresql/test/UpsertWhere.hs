@@ -16,8 +16,8 @@ module UpsertWhere where
 
 import PgInit
 
-import Database.Persist.Postgresql
 import Data.Time
+import Database.Persist.Postgresql
 
 share [mkPersist sqlSettings, mkMigrate "upsertWhereMigrate"] [persistLowerCase|
 
