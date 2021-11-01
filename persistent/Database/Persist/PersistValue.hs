@@ -26,7 +26,8 @@ import Data.Time (Day, TimeOfDay, UTCTime)
 import Web.PathPieces (PathPiece(..))
 import qualified Data.Aeson as A
 import qualified Data.ByteString as BS
-import qualified Data.HashMap.Strict as HM
+#import qualified Data.HashMap.Strict as HM
+import qualified Data.Aeson.KeyMap as HM
 import Web.HttpApiData
        ( FromHttpApiData(..)
        , ToHttpApiData(..)
