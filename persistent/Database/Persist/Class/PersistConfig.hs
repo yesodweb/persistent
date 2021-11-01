@@ -4,6 +4,7 @@ module Database.Persist.Class.PersistConfig
 
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Data.Aeson (Value (Object))
+import Data.Aeson.KeyMap
 import Data.Aeson.Types (Parser)
 import qualified Data.HashMap.Strict as HashMap
 import Data.Kind (Type)
@@ -43,10 +44,10 @@ instance
     type PersistConfigPool (Either c1 c2) = PersistConfigPool c1
 
     loadConfig (Object o) =
-        case HashMap.lookup "left" o of
+        case KeyMap.lookup "left" o of
             Just v -> Left <$> loadConfig v
             Nothing ->
-                case HashMap.lookup "right" o of
+                case KeyMap.lookup "right" o of
                     Just v -> Right <$> loadConfig v
                     Nothing -> fail "PersistConfig for Either: need either a left or right"
     loadConfig _ = fail "PersistConfig for Either: need an object"
