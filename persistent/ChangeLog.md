@@ -1,10 +1,23 @@
 # Changelog for persistent
 
-## Unreleased
+## 2.13.2.1
+
+* [#1329](https://github.com/yesodweb/persistent/pull/1329)
+    * Prevent discovery of constrained `PersistEntity` instances in
+      `discoverEntities` (since the discovered instances won't work without
+      constraints anyway).
+
+## 2.13.2.0
 
 * [#1314](https://github.com/yesodweb/persistent/pull/1314)
     * Fix typos and minor documentation issues in Database.Persist and
       Database.Persist.Quasi.
+* [#1317](https://github.com/yesodweb/persistent/pull/1317)
+    * Expose `orderClause` from the Persistent internals, which allows users
+      to produce well-formatted `ORDER BY` clauses.
+
+* [#1319](https://github.com/yesodweb/persistent/pull/1319)
+    * Add a `Num` instance for `OverflowNatural`
 
 ## 2.13.1.2
 

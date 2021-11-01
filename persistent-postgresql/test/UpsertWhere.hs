@@ -16,6 +16,7 @@ module UpsertWhere where
 
 import PgInit
 
+import Data.Time
 import Database.Persist.Postgresql
 
 share [mkPersist sqlSettings, mkMigrate "upsertWhereMigrate"] [persistLowerCase|
@@ -29,11 +30,21 @@ Item
     UniqueName name
     deriving Eq Show Ord
 
+ItemMigOnly
+    name        Text
+    price       Double
+    quantity    Int
+
+    UniqueNameMigOnly name
+
+    createdAt UTCTime MigrationOnly default=CURRENT_TIMESTAMP
+
 |]
 
 wipe :: IO ()
 wipe = runConnAssert $ do
     deleteWhere ([] :: [Filter Item])
+    deleteWhere ([] :: [Filter ItemMigOnly])
 
 itDb :: String -> SqlPersistT (LoggingT (ResourceT IO)) a -> SpecWith (Arg (IO ()))
 itDb msg action = it msg $ runConnAssert $ void action
@@ -58,6 +69,12 @@ specs = describe "UpsertWhere" $ do
                 []
             Just item <- fmap entityVal <$> getBy (UniqueName "item1")
             item `shouldBe` item1 { itemDescription = newDescription }
+
+        itDb "inserts with MigrationOnly fields (#1330)" $ do
+            upsertWhere
+                (ItemMigOnly "foobar" 20 1)
+                [ItemMigOnlyPrice +=. 2]
+                []
 
     describe "upsertManyWhere" $ do
         itDb "inserts fresh records" $ do

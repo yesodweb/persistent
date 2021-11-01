@@ -10,6 +10,7 @@ module Database.Persist.Sql.Orphan.PersistQuery
     , filterClause
     , filterClauseHelper
     , filterClauseWithVals
+    , orderClause
     , FilterTablePrefix (..)
     , decorateSQLWithLimitOffset
     ) where
@@ -20,13 +21,13 @@ import Control.Monad.Trans.Reader (ReaderT, ask)
 import Data.ByteString.Char8 (readInteger)
 import Data.Conduit
 import qualified Data.Conduit.List as CL
+import Data.Foldable (toList)
 import Data.Int (Int64)
 import Data.List (find, inits, transpose)
 import Data.Maybe (isJust)
 import Data.Monoid (Monoid(..))
 import Data.Text (Text)
 import qualified Data.Text as T
-import Data.Foldable (toList)
 
 import Database.Persist hiding (updateField)
 import Database.Persist.Sql.Orphan.PersistStore (withRawQuery)
@@ -36,8 +37,8 @@ import Database.Persist.Sql.Types.Internal
 import Database.Persist.Sql.Util
        ( commaSeparated
        , dbIdColumns
-       , keyAndEntityColumnNames
        , isIdField
+       , keyAndEntityColumnNames
        , mkUpdateText
        , parseEntityValues
        , updatePersistValue
@@ -111,10 +112,7 @@ instance PersistQueryRead SqlBackend where
         wher conn = if null filts
                     then ""
                     else filterClause Nothing conn filts
-        ord conn =
-            case map (orderClause False conn) orders of
-                [] -> ""
-                ords -> " ORDER BY " <> T.intercalate "," ords
+        ord conn = orderClause Nothing conn orders
         cols = commaSeparated . toList . keyAndEntityColumnNames t
         sql conn = connLimitOffset conn (limit,offset) $ mconcat
             [ "SELECT "
@@ -148,10 +146,7 @@ instance PersistQueryRead SqlBackend where
 
         (limit, offset, orders) = limitOffsetOrder opts
 
-        ord conn =
-            case map (orderClause False conn) orders of
-                [] -> ""
-                ords -> " ORDER BY " <> T.intercalate "," ords
+        ord conn = orderClause Nothing conn orders
 
         parse xs = do
             keyvals <- case entityPrimary t of
@@ -261,6 +256,16 @@ data FilterTablePrefix
     -- the documentation on @upsertWhere@ and @upsertManyWhere@.
     --
     -- @since 2.12.1.0
+
+prefixByTable
+    :: Maybe FilterTablePrefix
+    -> Text -- ^ Table name
+    -> (Text -> Text) -- ^ Prefixing function
+prefixByTable tablePrefix tableName =
+    case tablePrefix of
+        Just PrefixTableName -> ((tableName <> ".") <>)
+        Just PrefixExcluded -> (("EXCLUDED.") <>)
+        _ -> id
 
 filterClauseHelper
     :: (PersistEntity val)
@@ -410,11 +415,7 @@ filterClauseHelper tablePrefix includeWhere conn orNull filters =
         notNullVals = filter (/= PersistNull) allVals
         allVals = filterValueToPersistValues value
         tn = connEscapeTableName conn $ entityDef $ dummyFromFilts [Filter field value pfilter]
-        name =
-          case tablePrefix of
-            Just PrefixTableName -> ((tn <> ".") <>) $ connEscapeFieldName conn (fieldName field)
-            Just PrefixExcluded -> (("EXCLUDED.") <>) $ connEscapeFieldName conn (fieldName field)
-            _ -> id $ connEscapeFieldName conn (fieldName field)
+        name = prefixByTable tablePrefix tn $ connEscapeFieldName conn (fieldName field)
         qmarks = case value of
                     FilterValue{} -> "(?)"
                     UnsafeValue{} -> "(?)"
@@ -457,28 +458,35 @@ filterClauseWithVals :: (PersistEntity val)
              -> (Text, [PersistValue])
 filterClauseWithVals b c  = filterClauseHelper b True c OrNullNo
 
+-- | Render a @['SelectOpt' record]@ made up *only* of 'Asc' and 'Desc' constructors
+-- into a 'Text' value suitable for inclusion into a SQL query.
+--
+-- @since 2.13.2.0
 orderClause :: (PersistEntity val)
-            => Bool -- ^ include the table name
+            => Maybe FilterTablePrefix -- ^ include table name or EXCLUDED
             -> SqlBackend
-            -> SelectOpt val
+            -> [SelectOpt val]
             -> Text
-orderClause includeTable conn o =
-    case o of
-        Asc  x -> name x
-        Desc x -> name x <> " DESC"
-        _ -> error "orderClause: expected Asc or Desc, not limit or offset"
+orderClause includeTable conn orders =
+    if null orders
+        then ""
+        else
+            " ORDER BY " <> T.intercalate ","
+                (map (\case
+                    Asc  x -> name x
+                    Desc x -> name x <> " DESC"
+                    _ -> error "orderClause: expected Asc or Desc, not limit or offset")
+                    orders)
   where
-    dummyFromOrder :: SelectOpt a -> Maybe a
+    dummyFromOrder :: [SelectOpt a] -> Maybe a
     dummyFromOrder _ = Nothing
 
-    tn = connEscapeTableName conn (entityDef $ dummyFromOrder o)
+    tn = connEscapeTableName conn (entityDef $ dummyFromOrder orders)
 
     name :: (PersistEntity record)
          => EntityField record typ -> Text
     name x =
-        (if includeTable
-            then ((tn <> ".") <>)
-            else id)
+        prefixByTable includeTable tn
         $ connEscapeFieldName conn (fieldName x)
 
 -- | Generates sql for limit and offset for postgres, sqlite and mysql.

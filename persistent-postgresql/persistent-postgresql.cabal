@@ -1,5 +1,5 @@
 name:            persistent-postgresql
-version:         2.13.1.0
+version:         2.13.2.1
 license:         MIT
 license-file:    LICENSE
 author:          Felipe Lessa, Michael Snoyman <michael@snoyman.com>
@@ -35,6 +35,7 @@ library
                    , transformers          >= 0.5
                    , unliftio-core
     exposed-modules: Database.Persist.Postgresql
+                   , Database.Persist.Postgresql.Internal
                    , Database.Persist.Postgresql.JSON
     ghc-options:     -Wall
     default-language: Haskell2010
