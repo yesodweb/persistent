@@ -3,7 +3,28 @@
 # For more information, please see the documentation at:
 #   https://docs.haskellstack.org/en/stable/lock_files
 
-packages: []
+packages:
+- completed:
+    hackage: lift-type-0.1.0.0@sha256:b52c172fc19635e53fa72874ac0e09b08b4bc2c711f57f883181f348799abd6f,1095
+    pantry-tree:
+      size: 360
+      sha256: 2ae816ebaef99ad169d95189cefa2113600ae2185e6af861984d91cbcd4bb3f0
+  original:
+    hackage: lift-type-0.1.0.0
+- completed:
+    hackage: mysql-0.2.1@sha256:156061d432d29b3a56037e8a67e16589b1d370fb9ad0dd71a81ea2c4b0b195bb,2188
+    pantry-tree:
+      size: 640
+      sha256: 567eaea9d842f5ece8702d3d895b7573c168faa986ad9071019877bf8edacf39
+  original:
+    hackage: mysql-0.2.1
+- completed:
+    hackage: mysql-simple-0.4.7@sha256:bf7c4a1ed0971d11c21f14796c3850a623a43ea83d158877f05380c52abad4a9,2581
+    pantry-tree:
+      size: 877
+      sha256: e1e868b577503a0e414de3172d09284596b070519806d1de2721daa0b33f1a82
+  original:
+    hackage: mysql-simple-0.4.7
 snapshots:
 - completed:
     size: 565720
