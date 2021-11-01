@@ -4,7 +4,7 @@ module Database.Persist.Class.PersistConfig
 
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Data.Aeson (Value (Object))
-import Data.Aeson.KeyMap
+import qualified Data.Aeson.KeyMap as KeyMap
 import Data.Aeson.Types (Parser)
 import qualified Data.HashMap.Strict as HashMap
 import Data.Kind (Type)
