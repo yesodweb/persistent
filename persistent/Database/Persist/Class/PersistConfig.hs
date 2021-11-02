@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP #-}
+
 module Database.Persist.Class.PersistConfig
     ( PersistConfig (..)
     ) where
