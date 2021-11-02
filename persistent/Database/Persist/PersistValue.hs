@@ -176,7 +176,7 @@ instance A.ToJSON PersistValue where
     toJSON PersistNull = A.Null
     toJSON (PersistList l) = A.Array $ V.fromList $ map A.toJSON l
     toJSON (PersistMap m) = A.object $ map go m
-        where go (k, v) = (K.toText k, A.toJSON v)
+        where go (k, v) = (K.fromText k, A.toJSON v)
     toJSON (PersistLiteral_ litTy b) =
         let encoded = TE.decodeUtf8 $ B64.encode b
             prefix =
