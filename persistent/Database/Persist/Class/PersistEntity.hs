@@ -46,7 +46,7 @@ import qualified Data.Aeson.Parser as AP
 import Data.Aeson.Text (encodeToTextBuilder)
 import Data.Aeson.Types (Parser, Result(Error, Success))
 import Data.Attoparsec.ByteString (parseOnly)
-import qualified Data.HashMap.Strict as HM
+import qualified Data.Aeson.KeyMap as KM
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Maybe (isJust)
 import Data.Text (Text)
@@ -288,7 +288,7 @@ keyValueEntityFromJSON _ = fail "keyValueEntityFromJSON: not an object"
 -- @
 entityIdToJSON :: (PersistEntity record, ToJSON record) => Entity record -> Value
 entityIdToJSON (Entity key value) = case toJSON value of
-        Object o -> Object $ HM.insert "id" (toJSON key) o
+        Object o -> Object $ KM.insert "id" (toJSON key) o
         x -> x
 
 -- | Predefined @parseJSON@. The input JSON looks like
