@@ -2549,7 +2549,7 @@ mkField mps entityMap et fieldDef = do
             maybeIdType mps entityMap fieldDef Nothing Nothing
     bod <- mkLookupEntityField et (unboundFieldNameHS fieldDef)
     let cla = normalClause
-                [ConP name []]
+                [ConP name [] []]
                 bod
     return $ EntityFieldTH con cla
   where
@@ -2579,7 +2579,7 @@ mkIdField mps ued = do
                 [mkEqualP (VarT $ mkName "typ") entityIdType]
                 $ NormalC name []
         , entityFieldTHClause =
-            normalClause [ConP name []] clause
+            normalClause [ConP name [] []] clause
         }
 
 lookupEntityField
@@ -2658,7 +2658,7 @@ mkJSON mps (fixEntityDef -> def) = do
             typeInstanceD ''ToJSON (mpsGeneric mps) typ [toJSON']
           where
             toJSON' = FunD 'toJSON $ return $ normalClause
-                [ConP conName $ fmap VarP xs]
+                [ConP conName [] $ fmap VarP xs]
                 (objectE `AppE` ListE pairs)
               where
                 pairs = zipWith toPair fields xs
@@ -2670,7 +2670,7 @@ mkJSON mps (fixEntityDef -> def) = do
             typeInstanceD ''FromJSON (mpsGeneric mps) typ [parseJSON']
           where
             parseJSON' = FunD 'parseJSON
-                [ normalClause [ConP 'Object [VarP obj]]
+                [ normalClause [ConP 'Object [] [VarP obj]]
                     (foldl'
                         (\x y -> InfixE (Just x) apE' (Just y))
                         (pureE `AppE` ConE conName)
