@@ -1284,7 +1284,7 @@ mkToPersistFields mps ed = do
     go = do
         xs <- sequence $ replicate fieldCount $ newName "x"
         let name = mkEntityDefName ed
-            pat = ConP name $ fmap VarP xs
+            pat = ConP name [] $ fmap VarP xs
         sp <- [|SomePersistField|]
         let bod = ListE $ fmap (AppE sp . VarE) xs
         return $ normalClause [pat] bod
@@ -1306,7 +1306,7 @@ mkToPersistFields mps ed = do
                 , [sp `AppE` VarE x]
                 , after
                 ]
-        return $ normalClause [ConP name [VarP x]] body
+        return $ normalClause [ConP name [] [VarP x]] body
 
 mkToFieldNames :: [UniqueDef] -> Q Dec
 mkToFieldNames pairs = do
