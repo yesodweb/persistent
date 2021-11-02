@@ -27,7 +27,8 @@ import Web.PathPieces (PathPiece(..))
 import qualified Data.Aeson as A
 import qualified Data.ByteString as BS
 --import qualified Data.HashMap.Strict as HM
-import qualified Data.Aeson.KeyMap as HM
+import qualified Data.Aeson.Key as K
+import qualified Data.Aeson.KeyMap as KM
 import Web.HttpApiData
        ( FromHttpApiData(..)
        , ToHttpApiData(..)
@@ -248,7 +249,7 @@ instance A.FromJSON PersistValue where
     parseJSON A.Null = return PersistNull
     parseJSON (A.Array a) = fmap PersistList (mapM A.parseJSON $ V.toList a)
     parseJSON (A.Object o) =
-        fmap PersistMap $ mapM go $ HM.toList o
+        fmap PersistMap $ mapM go $ KM.toList o
       where
-        go (k, v) = (,) A.unkey k <$> A.parseJSON v
+        go (k, v) = (,) K.toText k <$> A.parseJSON v
 
