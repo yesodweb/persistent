@@ -17,7 +17,6 @@ import Data.Int (Int64)
 import qualified Data.Scientific
 import Data.Text.Encoding.Error (lenientDecode)
 import Data.Bits (shiftL, shiftR)
-import Control.Arrow (second)
 import Numeric (readHex, showHex)
 import qualified Data.Text as Text
 import Data.Text (Text)
