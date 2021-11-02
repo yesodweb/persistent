@@ -33,8 +33,6 @@ import qualified Data.Aeson.KeyMap as AM
 import qualified Data.HashMap.Strict as AM
 #endif
 
-import qualified Data.Aeson.Key as K
-import qualified Data.Aeson.KeyMap as KM
 import Web.HttpApiData
        ( FromHttpApiData(..)
        , ToHttpApiData(..)
