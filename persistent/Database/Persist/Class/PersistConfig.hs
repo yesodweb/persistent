@@ -6,7 +6,6 @@ import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Data.Aeson (Value (Object))
 import qualified Data.Aeson.KeyMap as KeyMap
 import Data.Aeson.Types (Parser)
-import qualified Data.HashMap.Strict as HashMap
 import Data.Kind (Type)
 
 -- | Represents a value containing all the configuration options for a specific
