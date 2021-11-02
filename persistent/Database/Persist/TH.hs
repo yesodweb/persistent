@@ -2361,7 +2361,7 @@ mkUniqueKeys def = do
             return (x, x')
         let pcs = fmap (go xs) $ entityUniques $ unboundEntityDef def
         let pat = ConP
-                (mkEntityDefName def)
+                (mkEntityDefName def) []
                 (fmap (VarP . snd) xs)
         return $ normalClause [pat] (ListE pcs)
 
