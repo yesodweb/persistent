@@ -176,8 +176,7 @@ instance A.ToJSON PersistValue where
     toJSON (PersistDay d) = A.String $ Text.pack $ 'd' : show d
     toJSON PersistNull = A.Null
     toJSON (PersistList l) = A.Array $ V.fromList $ map A.toJSON l
-    --toJSON (PersistMap m) = A.object $ map (second A.toJSON) m
-    toJSON (PersistMap m) = A.object $ map A.toJSON m
+    toJSON (PersistMap m) = A.object $ mapKeys A.toJSONKey $ map (second A.toJSON) m
     toJSON (PersistLiteral_ litTy b) =
         let encoded = TE.decodeUtf8 $ B64.encode b
             prefix =
