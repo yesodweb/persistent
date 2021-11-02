@@ -48,7 +48,7 @@ import Data.Aeson.Text (encodeToTextBuilder)
 import Data.Aeson.Types (Parser, Result(Error, Success))
 import Data.Attoparsec.ByteString (parseOnly)
 
-#if MIN_VERSION_template_haskell(2,18,0)
+#if MIN_VERSION_aeson(2,0,0)
 import qualified Data.Aeson.KeyMap as AM
 #else
 import qualified Data.HashMap.Strict as AM
