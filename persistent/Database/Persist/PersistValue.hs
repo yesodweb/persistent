@@ -27,7 +27,7 @@ import Web.PathPieces (PathPiece(..))
 import qualified Data.Aeson as A
 import qualified Data.ByteString as BS
 
-#if MIN_VERSION_template_haskell(2,18,0)
+#if MIN_VERSION_aeson(2,0,0)
 import qualified Data.Aeson.Key as K
 import qualified Data.Aeson.KeyMap as AM
 #else
@@ -131,7 +131,7 @@ pattern PersistLiteral bs <- PersistLiteral_ _ bs where
 
 {-# DEPRECATED PersistDbSpecific "Deprecated since 2.11 because of inconsistent escaping behavior across backends. The Postgres backend escapes these values, while the MySQL backend does not. If you are using this, please switch to 'PersistLiteral_' and provide a relevant 'LiteralType' for your conversion." #-}
 
-#if MIN_VERSION_template_haskell(2,18,0)
+#if MIN_VERSION_aeson(2,0,0)
 keyToText = AK.toText
 keyFromText = AK.fromText
 #else
