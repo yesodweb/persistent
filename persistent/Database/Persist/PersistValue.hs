@@ -250,5 +250,5 @@ instance A.FromJSON PersistValue where
     parseJSON (A.Object o) =
         fmap PersistMap $ mapM go $ HM.toList o
       where
-        go (k, v) = (,) k <$> A.parseJSON v
+        go (k, v) = (,) A.unkey k <$> A.parseJSON v
 
