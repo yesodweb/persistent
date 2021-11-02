@@ -1,4 +1,5 @@
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE CPP #-}
 
 -- | This module contains an intermediate representation of values before the
 -- backends serialize them into explicit database types.
