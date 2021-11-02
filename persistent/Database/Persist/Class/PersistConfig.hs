@@ -8,7 +8,7 @@ import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Data.Aeson (Value (Object))
 import Data.Aeson.Types (Parser)
 
-#if MIN_VERSION_template_haskell(2,18,0)
+#if MIN_VERSION_aeson(2,0,0)
 import qualified Data.Aeson.KeyMap as AM
 #else
 import qualified Data.HashMap.Strict as AM
