@@ -132,8 +132,8 @@ pattern PersistLiteral bs <- PersistLiteral_ _ bs where
 {-# DEPRECATED PersistDbSpecific "Deprecated since 2.11 because of inconsistent escaping behavior across backends. The Postgres backend escapes these values, while the MySQL backend does not. If you are using this, please switch to 'PersistLiteral_' and provide a relevant 'LiteralType' for your conversion." #-}
 
 #if MIN_VERSION_aeson(2,0,0)
-keyToText = AK.toText
-keyFromText = AK.fromText
+keyToText = AM.toText
+keyFromText = AM.fromText
 #else
 keyToText = id
 keyFromText = id
