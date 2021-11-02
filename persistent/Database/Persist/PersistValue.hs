@@ -25,6 +25,14 @@ import Data.Time (Day, TimeOfDay, UTCTime)
 import Web.PathPieces (PathPiece(..))
 import qualified Data.Aeson as A
 import qualified Data.ByteString as BS
+
+#if MIN_VERSION_template_haskell(2,18,0)
+import qualified Data.Aeson.Key as K
+import qualified Data.Aeson.KeyMap as AM
+#else
+import qualified Data.HashMap.Strict as AM
+#endif
+
 import qualified Data.Aeson.Key as K
 import qualified Data.Aeson.KeyMap as KM
 import Web.HttpApiData
@@ -124,6 +132,14 @@ pattern PersistLiteral bs <- PersistLiteral_ _ bs where
 
 {-# DEPRECATED PersistDbSpecific "Deprecated since 2.11 because of inconsistent escaping behavior across backends. The Postgres backend escapes these values, while the MySQL backend does not. If you are using this, please switch to 'PersistLiteral_' and provide a relevant 'LiteralType' for your conversion." #-}
 
+#if MIN_VERSION_template_haskell(2,18,0)
+keyToText = AK.toText
+keyFromText = AK.fromText
+#else
+keyToText = id
+keyFromText = id
+#endif
+
 instance ToHttpApiData PersistValue where
     toUrlPiece val =
         case fromPersistValueText val of
@@ -175,7 +191,7 @@ instance A.ToJSON PersistValue where
     toJSON PersistNull = A.Null
     toJSON (PersistList l) = A.Array $ V.fromList $ map A.toJSON l
     toJSON (PersistMap m) = A.object $ map go m
-        where go (k, v) = (K.fromText k, A.toJSON v)
+        where go (k, v) = (keyFromText k, A.toJSON v)
     toJSON (PersistLiteral_ litTy b) =
         let encoded = TE.decodeUtf8 $ B64.encode b
             prefix =
@@ -248,7 +264,7 @@ instance A.FromJSON PersistValue where
     parseJSON A.Null = return PersistNull
     parseJSON (A.Array a) = fmap PersistList (mapM A.parseJSON $ V.toList a)
     parseJSON (A.Object o) =
-        fmap PersistMap $ mapM go $ KM.toList o
+        fmap PersistMap $ mapM go $ AM.toList o
       where
-        go (k, v) = (,) (K.toText k) <$> A.parseJSON v
+        go (k, v) = (,) (keyToText k) <$> A.parseJSON v
 
