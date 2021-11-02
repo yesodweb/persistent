@@ -26,7 +26,6 @@ import Data.Time (Day, TimeOfDay, UTCTime)
 import Web.PathPieces (PathPiece(..))
 import qualified Data.Aeson as A
 import qualified Data.ByteString as BS
---import qualified Data.HashMap.Strict as HM
 import qualified Data.Aeson.Key as K
 import qualified Data.Aeson.KeyMap as KM
 import Web.HttpApiData
@@ -176,8 +175,8 @@ instance A.ToJSON PersistValue where
     toJSON (PersistDay d) = A.String $ Text.pack $ 'd' : show d
     toJSON PersistNull = A.Null
     toJSON (PersistList l) = A.Array $ V.fromList $ map A.toJSON l
-    --toJSON (PersistMap m) = A.object $ map (second A.toJSON) m
-    toJSON (PersistMap m) = A.object $ map go m where go (a, b) = (A.toJSONKey a, A.toJSON b)
+    toJSON (PersistMap m) = A.object $ map go m
+        where go (k, v) = (K.toText k, A.toJSON v)
     toJSON (PersistLiteral_ litTy b) =
         let encoded = TE.decodeUtf8 $ B64.encode b
             prefix =
