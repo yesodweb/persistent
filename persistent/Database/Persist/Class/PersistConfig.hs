@@ -4,6 +4,7 @@ module Database.Persist.Class.PersistConfig
 
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Data.Aeson (Value (Object))
+import Data.Aeson.Types (Parser)
 
 #if MIN_VERSION_template_haskell(2,18,0)
 import qualified Data.Aeson.KeyMap as AM
@@ -11,7 +12,6 @@ import qualified Data.Aeson.KeyMap as AM
 import qualified Data.HashMap.Strict as AM
 #endif
 
-import Data.Aeson.Types (Parser)
 import Data.Kind (Type)
 
 -- | Represents a value containing all the configuration options for a specific
