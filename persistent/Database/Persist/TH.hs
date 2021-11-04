@@ -82,6 +82,9 @@ import Data.Aeson
        , (.:?)
        , (.=)
        )
+#if MIN_VERSION_aeson(2,0,0)
+import qualified Data.Aeson.Key as Key
+#endif
 import qualified Data.ByteString as BS
 import Data.Char (toLower, toUpper)
 import Data.Coerce
@@ -2636,7 +2639,11 @@ mkJSON mps (fixEntityDef -> def) = do
     requireExtensions [[FlexibleInstances]]
     pureE <- [|pure|]
     apE' <- [|(<*>)|]
-    packE <- [|pack|]
+#if MIN_VERSION_aeson(2,0,0)
+    toKeyE <- [|Key.fromString|]
+#else
+    toKeyE <- [|pack|]
+#endif
     dotEqualE <- [|(.=)|]
     dotColonE <- [|(.:)|]
     dotColonQE <- [|(.:?)|]
@@ -2663,7 +2670,7 @@ mkJSON mps (fixEntityDef -> def) = do
               where
                 pairs = zipWith toPair fields xs
                 toPair f x = InfixE
-                    (Just (packE `AppE` LitE (StringL $ unpack $ unFieldNameHS $ unboundFieldNameHS f)))
+                    (Just (toKeyE `AppE` LitE (StringL $ unpack $ unFieldNameHS $ unboundFieldNameHS f)))
                     dotEqualE
                     (Just $ VarE x)
         fromJSONI =
@@ -2684,7 +2691,7 @@ mkJSON mps (fixEntityDef -> def) = do
                 toPull f = InfixE
                     (Just $ VarE obj)
                     (if maybeNullable f then dotColonQE else dotColonE)
-                    (Just $ AppE packE $ LitE $ StringL $ unpack $ unFieldNameHS $ unboundFieldNameHS f)
+                    (Just $ AppE toKeyE $ LitE $ StringL $ unpack $ unFieldNameHS $ unboundFieldNameHS f)
     case mpsEntityJSON mps of
         Nothing ->
             return [toJSONI, fromJSONI]

@@ -1,4 +1,5 @@
-resolver: lts-14.27
+resolver: nightly-2021-11-14
+
 packages:
   - ./persistent
   - ./persistent-sqlite
@@ -10,4 +11,9 @@ packages:
   - ./persistent-qq
 
 extra-deps:
-    - lift-type-0.1.0.0
+  - aeson-2.0.2.0
+  # https://github.com/yesodweb/shakespeare/pull/260
+  - github: yesodweb/shakespeare
+    commit: ea390a0e6fa25349626a0c45f133d87e3725f0ba
+  # https://github.com/commercialhaskell/stackage/issues/6294
+  - happy-1.20.0
