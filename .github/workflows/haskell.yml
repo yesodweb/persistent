@@ -52,6 +52,14 @@ jobs:
           - "8.8.4"
           - "8.10.3"
           - "9.0"
+          # When the following PRs are merged, add a source-repository-package
+          # stanza in cabal.project for them.
+          #   * https://github.com/yesodweb/shakespeare/pull/260
+          #   * https://github.com/DanBurton/haskell-src-meta/pull/23
+          #   * https://github.com/haskell-foundation/foundation/pull/555
+          #   * https://github.com/vincenthz/hs-memory/pull/87
+          #   * https://github.com/haskell-crypto/cryptonite/pull/354
+          # - "9.2"
 
     env:
       CONFIG: "--enable-tests --enable-benchmarks"
