@@ -1,4 +1,5 @@
 resolver: nightly-2022-01-14
+compiler: ghc-9.2.1
 
 packages:
   - ./persistent
@@ -14,3 +15,20 @@ extra-deps:
   - aeson-2.0.2.0
   # https://github.com/commercialhaskell/stackage/issues/6294
   - happy-1.20.0
+
+  # GHC 9.2 requirements
+  - attoparsec-0.14.2
+  - base-compat-0.12.1
+  - base-compat-batteries-0.12.1
+  - haskell-src-meta-0.8.8
+  # https://github.com/haskell-foundation/foundation/pull/555
+  - github: haskell-foundation/foundation
+    commit: 0bb195e1fea06d144dafc5af9a0ff79af0a5f4a0
+    subdirs:
+      - basement
+  # https://github.com/vincenthz/hs-memory/pull/87
+  - github: vincenthz/hs-memory
+    commit: 3cf661a8a9a8ac028df77daa88e8d65c55a3347a
+  # https://github.com/haskell-crypto/cryptonite/pull/354
+  - github: haskell-crypto/cryptonite
+    commit: 3b081e3ad027b0550fc87f171dffecbb20dedafe
