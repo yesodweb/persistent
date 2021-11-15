@@ -68,7 +68,7 @@ import Init
 import Control.Exception (SomeException)
 import Control.Monad (forM_, liftM, replicateM, void, when)
 import Control.Monad.Trans.Reader
-import Data.Aeson (ToJSON, FromJSON, Value(..))
+import Data.Aeson (ToJSON, FromJSON, Value(..), object)
 import Database.Persist.Postgresql.JSON ()
 import Database.Persist.Sql.Raw.QQ
 import Database.Persist.SqlBackend
@@ -210,13 +210,12 @@ instance Arbitrary Value where
                         , (2, Number <$> arbitrary)
                         , (2, String <$> arbText)
                         , (3, Array <$> limitIt 4 arbitrary)
-                        , (3, Object <$> arbObject)
+                        , (3, object <$> arbObject)
                         ]
     where limitIt i x = sized $ \n -> do
             let m = if n > i then i else n
             resize m x
           arbObject = limitIt 4 -- Recursion can make execution divergent
-                    $ fmap HM.fromList -- HashMap -> [(,)]
-                    . listOf -- [(,)] -> (,)
+                    $ listOf -- [(,)] -> (,)
                     . liftA2 (,) arbText -- (,) -> Text and Value
                     $ limitIt 4 arbitrary -- Again, precaution against divergent recursion.
