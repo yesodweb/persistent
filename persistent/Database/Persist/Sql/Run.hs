@@ -1,9 +1,11 @@
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
 module Database.Persist.Sql.Run where
 
 import Control.Monad.IO.Unlift
 import Control.Monad.Logger.CallStack
-import Control.Monad.Reader (MonadReader)
+import Control.Monad.Reader (MonadReader, void)
 import qualified Control.Monad.Reader as MonadReader
 import Control.Monad.Trans.Reader hiding (local)
 import Control.Monad.Trans.Resource
@@ -93,15 +95,64 @@ runSqlPoolWithHooks
     -- cleanup function is complete.
     -> m a
 runSqlPoolWithHooks r pconn i before after onException =
+    runSqlPoolWithExtensibleHooks r pconn i $ SqlPoolHooks
+        { alterBackend = pure
+        , runBefore = void . before
+        , runAfter = void . after
+        , runOnException = \b e -> void $ onException b e
+        }
+
+-- | A set of hooks that may be used to alter the behaviour
+-- of @runSqlPoolWithExtensibleHooks@ in a backwards-compatible
+-- fashion.
+data SqlPoolHooks m backend = SqlPoolHooks
+    { alterBackend :: backend -> m backend
+    -- ^ Alter the backend prior to executing any actions with it.
+    , runBefore :: backend -> m ()
+    -- ^ Run this action immediately before the action is performed.
+    , runAfter :: backend -> m ()
+    -- ^ Run this action immediately after the action is completed.
+    , runOnException :: backend -> UE.SomeException -> m ()
+    -- ^ This action is performed when an exception is received. The
+    -- exception is provided as a convenience - it is rethrown once this
+    -- cleanup function is complete.
+    }
+
+-- | Empty hooks that may be altered to extend SQL pool behavior
+-- in a backwards compatible fashion.
+--
+-- @since 2.14.0.0
+defaultSqlPoolHooks :: (Applicative m) => SqlPoolHooks m backend
+defaultSqlPoolHooks = SqlPoolHooks
+    { alterBackend = pure
+    , runBefore = \_ -> pure ()
+    , runAfter = \_ -> pure ()
+    , runOnException = \_ _ -> pure ()
+    }
+
+-- | This function is how 'runSqlPoolWithHooks' is defined.
+--
+-- It's currently the most general function for using a SQL pool.
+--
+-- @since 2.14.0.0
+runSqlPoolWithExtensibleHooks
+    :: forall backend m a. (MonadUnliftIO m, BackendCompatible SqlBackend backend)
+    => ReaderT backend m a
+    -> Pool backend
+    -> Maybe IsolationLevel
+    -> SqlPoolHooks m backend
+    -> m a
+runSqlPoolWithExtensibleHooks r pconn i SqlPoolHooks{..} =
     withRunInIO $ \runInIO ->
     withResource pconn $ \conn ->
     UE.mask $ \restore -> do
-        _ <- restore $ runInIO $ before conn
-        a <- restore (runInIO (runReaderT r conn))
+        conn' <- restore $ runInIO $ alterBackend conn
+        _ <- restore $ runInIO $ runBefore conn'
+        a <- restore (runInIO (runReaderT r conn'))
             `UE.catchAny` \e -> do
-                _ <- restore $ runInIO $ onException conn e
+                _ <- restore $ runInIO $ runOnException conn' e
                 UE.throwIO e
-        _ <- restore $ runInIO $ after conn
+        _ <- restore $ runInIO $ runAfter conn'
         pure a
 
 rawAcquireSqlConn
