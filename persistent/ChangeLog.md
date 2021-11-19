@@ -2,7 +2,7 @@
 
 ## 2.14.0.0 (unreleased)
 
-* [#XXXX]()
+* [#1341](https://github.com/yesodweb/persistent/pull/1341)
     * Add `SqlBackendHooks` to allow for instrumentation of queries.
 
 * [#1327](https://github.com/yesodweb/persistent/pull/1327)
