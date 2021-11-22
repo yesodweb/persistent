@@ -97,9 +97,9 @@ runSqlPoolWithHooks
 runSqlPoolWithHooks r pconn i before after onException =
     runSqlPoolWithExtensibleHooks r pconn i $ SqlPoolHooks
         { alterBackend = pure
-        , runBefore = void . before
-        , runAfter = void . after
-        , runOnException = \b e -> void $ onException b e
+        , runBefore = \conn _ -> void $ before conn
+        , runAfter = \conn _ -> void $ after conn
+        , runOnException = \b _ e -> void $ onException b e
         }
 
 -- | A set of hooks that may be used to alter the behaviour
@@ -108,26 +108,42 @@ runSqlPoolWithHooks r pconn i before after onException =
 data SqlPoolHooks m backend = SqlPoolHooks
     { alterBackend :: backend -> m backend
     -- ^ Alter the backend prior to executing any actions with it.
-    , runBefore :: backend -> m ()
+    , runBefore :: backend -> Maybe IsolationLevel -> m ()
     -- ^ Run this action immediately before the action is performed.
-    , runAfter :: backend -> m ()
+    , runAfter :: backend -> Maybe IsolationLevel -> m ()
     -- ^ Run this action immediately after the action is completed.
-    , runOnException :: backend -> UE.SomeException -> m ()
+    , runOnException :: backend -> Maybe IsolationLevel -> UE.SomeException -> m ()
     -- ^ This action is performed when an exception is received. The
     -- exception is provided as a convenience - it is rethrown once this
     -- cleanup function is complete.
     }
 
--- | Empty hooks that may be altered to extend SQL pool behavior
+-- | Lifecycle hooks that may be altered to extend SQL pool behavior
 -- in a backwards compatible fashion.
 --
+-- By default, the hooks have the following semantics:
+--
+-- - 'alterBackend' has no effect
+-- - 'runBefore' begins a transaction
+-- - 'runAfter' commits the current transaction
+-- - 'runOnException' rolls back the current transaction
+--
 -- @since 2.14.0.0
-defaultSqlPoolHooks :: (Applicative m) => SqlPoolHooks m backend
+defaultSqlPoolHooks :: (MonadIO m, BackendCompatible SqlBackend backend) => SqlPoolHooks m backend
 defaultSqlPoolHooks = SqlPoolHooks
     { alterBackend = pure
-    , runBefore = \_ -> pure ()
-    , runAfter = \_ -> pure ()
-    , runOnException = \_ _ -> pure ()
+    , runBefore = \conn mi -> do
+        let sqlBackend = projectBackend conn
+        let getter = getStmtConn sqlBackend
+        liftIO $ connBegin sqlBackend getter mi
+    , runAfter = \conn _ -> do
+        let sqlBackend = projectBackend conn
+        let getter = getStmtConn sqlBackend
+        liftIO $ connCommit sqlBackend getter
+    , runOnException = \conn _ _ -> do
+        let sqlBackend = projectBackend conn
+        let getter = getStmtConn sqlBackend
+        liftIO $ connRollback sqlBackend getter
     }
 
 -- | This function is how 'runSqlPoolWithHooks' is defined.
@@ -147,12 +163,12 @@ runSqlPoolWithExtensibleHooks r pconn i SqlPoolHooks{..} =
     withResource pconn $ \conn ->
     UE.mask $ \restore -> do
         conn' <- restore $ runInIO $ alterBackend conn
-        _ <- restore $ runInIO $ runBefore conn'
+        _ <- restore $ runInIO $ runBefore conn' i
         a <- restore (runInIO (runReaderT r conn'))
             `UE.catchAny` \e -> do
-                _ <- restore $ runInIO $ runOnException conn' e
+                _ <- restore $ runInIO $ runOnException conn' i e
                 UE.throwIO e
-        _ <- restore $ runInIO $ runAfter conn'
+        _ <- restore $ runInIO $ runAfter conn' i
         pure a
 
 rawAcquireSqlConn
