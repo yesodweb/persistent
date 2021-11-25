@@ -34,6 +34,7 @@ library
                    , time                  >= 1.6
                    , transformers          >= 0.5
                    , unliftio-core
+                   , vault
     exposed-modules: Database.Persist.Postgresql
                    , Database.Persist.Postgresql.Internal
                    , Database.Persist.Postgresql.JSON
