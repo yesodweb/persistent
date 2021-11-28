@@ -48,8 +48,6 @@ import Database.Persist.PersistValue
 -- this module is a bit of a kitchen sink of types and concepts. the guts of
 -- persistent, just strewn across the table. in 2.13 let's get this cleaned up
 -- and a bit more tidy.
---
--- not sure if the re-export of FieldTypeLit here is correct going forward, given the above
 import Database.Persist.Types.Base
        ( Attr
        , CascadeAction(..)

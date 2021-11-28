@@ -66,4 +66,3 @@ specsWith runDb =
       lbl <- getJust labelledKey
       liftIO $ typeLitFieldDefsLabelledOne lbl @?= oneLabelled
       liftIO $ typeLitFieldDefsLabelledTwenty lbl @?= twentyLabelled
-

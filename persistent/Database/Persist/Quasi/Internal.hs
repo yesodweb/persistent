@@ -129,13 +129,13 @@ parseFieldType t0 =
     parseNumericLit :: Char -> Text -> Maybe (ParseState FieldType)
     parseNumericLit c t = do
         guard (isDigit c && T.all isDigit t)
-        let (a, b) = T.break (\x -> isSpace x || x `elem` ("()[]"::String)) t
+        let (a, b) = breakAtNextSpace t
         lit <- FTLit . IntTypeLit <$> readMaybe (T.cons c a)
         pure $ PSSuccess lit b
 
     parseTypeCon c t = do
         guard (isUpper c || c == '\'')
-        let (a, b) = T.break (\x -> isSpace x || x `elem` ("()[]"::String)) t
+        let (a, b) = breakAtNextSpace t
         pure $ PSSuccess (parseFieldTypePiece c a) b
 
     goMany :: ([FieldType] -> a) -> Text -> ParseState a
@@ -144,6 +144,10 @@ parseFieldType t0 =
             PSSuccess x t' -> goMany (front . (x:)) t'
             PSFail err -> PSFail err
             PSDone -> PSSuccess (front []) t
+
+breakAtNextSpace :: Text -> (Text, Text)
+breakAtNextSpace =
+  T.break isSpace
 
 parseFieldTypePiece :: Char -> Text -> FieldType
 parseFieldTypePiece fstChar rest =
