@@ -2619,12 +2619,19 @@ ftToType = \case
         ConT ''Int64
     FTTypeCon (Just m) t ->
         ConT $ mkName $ unpack $ concat [m, ".", t]
+    FTLit l ->
+        LitT (typeLitToTyLit l)
     FTTypePromoted t ->
         PromotedT $ mkName $ T.unpack t
     FTApp x y ->
         ftToType x `AppT` ftToType y
     FTList x ->
         ListT `AppT` ftToType x
+
+typeLitToTyLit :: FieldTypeLit -> TyLit
+typeLitToTyLit = \case
+  IntTypeLit n -> NumTyLit n
+  TextTypeLit t -> StrTyLit (T.unpack t)
 
 infixr 5 ++
 (++) :: Monoid m => m -> m -> m

@@ -135,6 +135,15 @@ spec = describe "Quasi" $ do
                         ]
                     )
 
+        it "handles numbers" $
+            parseLine "  one (Finite 1)" `shouldBe`
+                Just
+                    ( Line 2
+                        [ Token "one"
+                        , Token "Finite 1"
+                        ]
+                    )
+
         it "handles quotes" $
             parseLine "  \"foo bar\"  \"baz\"" `shouldBe`
                 Just
@@ -400,6 +409,22 @@ CustomerTransfer
                     , (FieldNameHS "uuid", FTTypeCon Nothing "TransferUuid")
                     ]
 
+        describe "type literals" $ do
+            it "should be able to parse type literals" $ do
+                let simplifyField field =
+                        (unboundFieldNameHS field, unboundFieldType field)
+                let tickedDefinition = [st|
+WithFinite
+    one    (Finite 1)
+    twenty (Labelled "twenty")
+|]
+                let [withFinite] = parse lowerCaseSettings tickedDefinition
+
+                (simplifyField <$> unboundEntityFields withFinite) `shouldBe`
+                    [ (FieldNameHS "one", FTApp (FTTypeCon Nothing "Finite") (FTLit (IntTypeLit 1)))
+                    , (FieldNameHS "twenty", FTApp (FTTypeCon Nothing "Labelled") (FTLit (TextTypeLit "twenty")))
+                    ]
+
     describe "parseFieldType" $ do
         it "simple types" $
             parseFieldType "FooBar" `shouldBe` Right (FTTypeCon Nothing "FooBar")
@@ -426,8 +451,14 @@ CustomerTransfer
                 baz = FTTypeCon Nothing "Baz"
             parseFieldType "Foo [Bar] Baz" `shouldBe` Right (
                 foo `FTApp` bars `FTApp` baz)
+        it "numeric type literals" $ do
+            let expected = FTApp (FTTypeCon Nothing "Finite") (FTLit (IntTypeLit 1))
+            parseFieldType "Finite 1" `shouldBe` Right expected
+        it "string type literals" $ do
+            let expected = FTApp (FTTypeCon Nothing "Labelled") (FTLit (TextTypeLit "twenty"))
+            parseFieldType "Labelled \"twenty\"" `shouldBe` Right expected
         it "fails on lowercase starts" $ do
-            parseFieldType "nothanks" `shouldBe` Left "PSFail ('n',\"othanks\")"
+            parseFieldType "nothanks" `shouldBe` Left "PSFail \"nothanks\""
 
     describe "#1175 empty entity" $ do
         let subject =

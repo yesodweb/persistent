@@ -53,6 +53,7 @@ library
         SumTypeTest
         TransactionLevelTest
         TreeTest
+        TypeLitFieldDefsTest
         UniqueTest
         UpsertTest
         LongIdentifierTest

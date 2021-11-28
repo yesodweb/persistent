@@ -44,6 +44,7 @@ import qualified MpsCustomPrefixTest
 import qualified MpsNoPrefixTest
 import qualified PersistUniqueTest
 import qualified PersistentTest
+import qualified TypeLitFieldDefsTest
 -- FIXME: Not used... should it be?
 -- import qualified PrimaryTest
 import qualified RawSqlTest
@@ -126,6 +127,7 @@ main = do
             , UniqueTest.uniqueMigrate
             , MaxLenTest.maxlenMigrate
             , MaybeFieldDefsTest.maybeFieldDefMigrate
+            , TypeLitFieldDefsTest.typeLitFieldDefsMigrate
             , Recursive.recursiveMigrate
             , CompositeTest.compositeMigrate
             , PersistUniqueTest.migration
@@ -174,6 +176,7 @@ main = do
         LargeNumberTest.specsWith db
         UniqueTest.specsWith db
         MaybeFieldDefsTest.specsWith db
+        TypeLitFieldDefsTest.specsWith db
         MaxLenTest.specsWith db
         Recursive.specsWith db
         SumTypeTest.specsWith db (Just (runMigrationSilent SumTypeTest.sumTypeMigrate))

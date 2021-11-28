@@ -45,6 +45,7 @@ import qualified Recursive
 import qualified RenameTest
 import qualified SumTypeTest
 import qualified TransactionLevelTest
+import qualified TypeLitFieldDefsTest
 import qualified UniqueTest
 import qualified UpsertTest
 
@@ -162,6 +163,7 @@ main = do
             , UniqueTest.uniqueMigrate
             , MaxLenTest.maxlenMigrate
             , MaybeFieldDefsTest.maybeFieldDefMigrate
+            , TypeLitFieldDefsTest.typeLitFieldDefsMigrate
             , Recursive.recursiveMigrate
             , CompositeTest.compositeMigrate
             , MigrationTest.migrationMigrate
@@ -209,6 +211,7 @@ main = do
         UniqueTest.specsWith db
         MaxLenTest.specsWith db
         MaybeFieldDefsTest.specsWith db
+        TypeLitFieldDefsTest.specsWith db
         Recursive.specsWith db
         SumTypeTest.specsWith db (Just (runMigrationSilent SumTypeTest.sumTypeMigrate))
         MigrationOnlyTest.specsWith db

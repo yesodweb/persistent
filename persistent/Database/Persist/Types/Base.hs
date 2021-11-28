@@ -411,10 +411,16 @@ parseFieldAttrs = fmap $ \case
 data FieldType
     = FTTypeCon (Maybe Text) Text
     -- ^ Optional module and name.
+    | FTLit FieldTypeLit
     | FTTypePromoted Text
     | FTApp FieldType FieldType
     | FTList FieldType
     deriving (Show, Eq, Read, Ord, Lift)
+
+data FieldTypeLit
+  = IntTypeLit Integer
+  | TextTypeLit Text
+  deriving (Show, Eq, Read, Ord, Lift)
 
 isFieldNotGenerated :: FieldDef -> Bool
 isFieldNotGenerated = isNothing . fieldGenerated
