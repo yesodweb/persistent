@@ -19,6 +19,7 @@ import qualified Data.ByteString.Lazy as L
 import Data.Fixed
 import Data.Int (Int8, Int16, Int32, Int64)
 import qualified Data.IntMap as IM
+import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Data.Text (Text)
@@ -308,12 +309,18 @@ instance PersistField UTCTime where
     fromPersistValue x@(PersistText t)  =
         let s = T.unpack t
         in
-          case reads s of
-            (d, _):_ -> Right d
-            _ ->
+          case NonEmpty.nonEmpty (reads s) of
+            Nothing ->
                 case parse8601 s <|> parsePretty s of
                     Nothing -> Left $ fromPersistValueParseError "UTCTime" x
                     Just x' -> Right x'
+            Just matches ->
+                -- The 'Read UTCTime' instance in newer versions of 'time' is
+                -- more flexible when parsing UTCTime strings and will return
+                -- UTCTimes with different microsecond parsings. The last result
+                -- here contains the parsed UTCTime with as much microsecond
+                -- precision parsed as posssible.
+                Right $ fst $ NonEmpty.last matches
       where
 #if MIN_VERSION_time(1,5,0)
         parseTime' = parseTimeM True defaultTimeLocale
