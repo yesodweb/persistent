@@ -316,14 +316,12 @@ instance PersistField UTCTime where
                     Just x' -> Right x'
       where
 #if MIN_VERSION_time(1,5,0)
-        parse8601 = parseTimeM True defaultTimeLocale format8601
-        parsePretty = parseTimeM True defaultTimeLocale formatPretty
+        parseTime' = parseTimeM True defaultTimeLocale
 #else
-        parse8601 = parseTime defaultTimeLocale format8601
-        parsePretty = parseTime defaultTimeLocale formatPretty
+        parseTime' = parseTime defaultTimeLocale
 #endif
-        format8601 = "%FT%T%Q"
-        formatPretty = "%F %T%Q"
+        parse8601 = parseTime' "%FT%T%Q"
+        parsePretty = parseTime' "%F %T%Q"
     fromPersistValue x@(PersistByteString s) =
         case reads $ unpack s of
             (d, _):_ -> Right d
