@@ -1,5 +1,10 @@
 # Changelog for persistent
 
+## (Unreleased)
+
+* [#1264](https://github.com/yesodweb/persistent/pull/1264)
+    * Support declaring Maybe before the type in model definitions
+
 ## 2.13.2.1
 
 * [#1329](https://github.com/yesodweb/persistent/pull/1329)

@@ -418,9 +418,9 @@ data FieldType
     deriving (Show, Eq, Read, Ord, Lift)
 
 data FieldTypeLit
-  = IntTypeLit Integer
-  | TextTypeLit Text
-  deriving (Show, Eq, Read, Ord, Lift)
+    = IntTypeLit Integer
+    | TextTypeLit Text
+    deriving (Show, Eq, Read, Ord, Lift)
 
 isFieldNotGenerated :: FieldDef -> Bool
 isFieldNotGenerated = isNothing . fieldGenerated

@@ -97,14 +97,14 @@ parseFieldType t0 =
     parse1 :: Text -> ParseState FieldType
     parse1 t = fromMaybe (PSFail (show t)) $ do
         case T.uncons t of
-          Nothing -> pure PSDone
-          Just (x, xs) ->
-            parseSpace x xs
-            <|> parseParenEnclosed x xs
-            <|> parseList x xs
-            <|> parseNumericLit x xs
-            <|> parseTextLit x xs
-            <|> parseTypeCon x xs
+            Nothing -> pure PSDone
+            Just (x, xs) ->
+                parseSpace x xs
+                <|> parseParenEnclosed x xs
+                <|> parseList x xs
+                <|> parseNumericLit x xs
+                <|> parseTextLit x xs
+                <|> parseTypeCon x xs
 
     parseSpace :: Char -> Text -> Maybe (ParseState FieldType)
     parseSpace c t = do
@@ -147,7 +147,7 @@ parseFieldType t0 =
 
 breakAtNextSpace :: Text -> (Text, Text)
 breakAtNextSpace =
-  T.break isSpace
+    T.break isSpace
 
 parseFieldTypePiece :: Char -> Text -> FieldType
 parseFieldTypePiece fstChar rest =

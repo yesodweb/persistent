@@ -2630,8 +2630,8 @@ ftToType = \case
 
 typeLitToTyLit :: FieldTypeLit -> TyLit
 typeLitToTyLit = \case
-  IntTypeLit n -> NumTyLit n
-  TextTypeLit t -> StrTyLit (T.unpack t)
+    IntTypeLit n -> NumTyLit n
+    TextTypeLit t -> StrTyLit (T.unpack t)
 
 infixr 5 ++
 (++) :: Monoid m => m -> m -> m
