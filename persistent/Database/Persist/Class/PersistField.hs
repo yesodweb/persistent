@@ -5,7 +5,6 @@
 {-# LANGUAGE PatternGuards, DataKinds, TypeOperators, UndecidableInstances, GeneralizedNewtypeDeriving #-}
 module Database.Persist.Class.PersistField
     ( PersistField (..)
-    , SomePersistField (..)
     , getPersistMap
     , OverflowNatural(..)
     ) where
@@ -446,11 +445,6 @@ getPersistMap (PersistByteString bs)
     | Just pairs <- A.decode' (L.fromChunks [bs]) = Right pairs
 getPersistMap PersistNull = Right []
 getPersistMap x = Left $ fromPersistValueError "[(Text, PersistValue)]" "map, string, bytestring or null" x
-
-data SomePersistField = forall a. (PersistField a) => SomePersistField a
-instance PersistField SomePersistField where
-    toPersistValue (SomePersistField a) = toPersistValue a
-    fromPersistValue x = fmap SomePersistField (fromPersistValue x :: Either Text Text)
 
 instance PersistField Checkmark where
     toPersistValue Active   = PersistBool True
