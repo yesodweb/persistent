@@ -5,7 +5,7 @@ import Data.Word
 
 import Init
 
-share [mkPersist sqlSettings { mpsGeneric = True },  mkMigrate "numberMigrate"] [persistLowerCase|
+share [mkPersist sqlSettings, mkMigrate "numberMigrate"] [persistLowerCase|
   Number
     intx Int
     int32 Int32
@@ -16,11 +16,11 @@ share [mkPersist sqlSettings { mpsGeneric = True },  mkMigrate "numberMigrate"] 
 |]
 
 cleanDB
-    :: Runner backend m => ReaderT backend m ()
+    :: Runner SqlBackend m => ReaderT SqlBackend m ()
 cleanDB = do
-  deleteWhere ([] :: [Filter (NumberGeneric backend)])
+  deleteWhere ([] :: [Filter Number])
 
-specsWith :: Runner backend m => RunDb backend m -> Spec
+specsWith :: Runner SqlBackend m => RunDb SqlBackend m -> Spec
 specsWith runDb = describe "Large Numbers" $ do
   it "preserves their values in the database" $ runDb $ do
       let go x = do

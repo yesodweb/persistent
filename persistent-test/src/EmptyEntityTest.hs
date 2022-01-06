@@ -8,23 +8,23 @@ import Database.Persist.TH
 import Init
 
 -- Test lower case names
-share [mkPersist sqlSettings { mpsGeneric = True }, mkMigrate "migration"] [persistLowerCase|
+share [mkPersist sqlSettings, mkMigrate "migration"] [persistLowerCase|
 EmptyEntity
 |]
 
 cleanDB
     ::
-    ( PersistQueryWrite backend
+    ( PersistQueryWrite SqlBackend
     , MonadIO m
-    , PersistStoreWrite (BaseBackend backend)
+    , PersistStoreWrite (BaseBackend SqlBackend)
     )
-    => ReaderT backend m ()
-cleanDB = deleteWhere ([] :: [Filter (EmptyEntityGeneric backend)])
+    => ReaderT SqlBackend m ()
+cleanDB = deleteWhere ([] :: [Filter EmptyEntity])
 
 specsWith
-    :: Runner backend m
-    => RunDb backend m
-    -> Maybe (ReaderT backend m a)
+    :: Runner SqlBackend m
+    => RunDb SqlBackend m
+    -> Maybe (ReaderT SqlBackend m a)
     -> Spec
 specsWith runConn mmigrate = describe "empty entity" $
     it "inserts" $ asIO $ runConn $ do

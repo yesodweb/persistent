@@ -11,20 +11,20 @@ import Text.Blaze.Html.Renderer.Text
 import Init
 
 -- Test lower case names
-share [mkPersist persistSettings { mpsGeneric = True }, mkMigrate "htmlMigrate"] [persistLowerCase|
+share [mkPersist persistSettings, mkMigrate "htmlMigrate"] [persistLowerCase|
 HtmlTable
     html Html
     deriving
 |]
 
-cleanDB :: Runner backend m => ReaderT backend m ()
+cleanDB :: Runner SqlBackend m => ReaderT SqlBackend m ()
 cleanDB = do
-  deleteWhere ([] :: [Filter (HtmlTableGeneric backend)])
+  deleteWhere ([] :: [Filter HtmlTable])
 
 specsWith
-    :: Runner backend m
-    => RunDb backend m
-    -> Maybe (ReaderT backend m a)
+    :: Runner SqlBackend m
+    => RunDb SqlBackend m
+    -> Maybe (ReaderT SqlBackend m a)
     -> Spec
 specsWith runConn mmigrate = describe "html" $ do
     it "works" $ asIO $ runConn $ do

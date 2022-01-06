@@ -27,7 +27,7 @@ import PersistTestPetCollarType
 import PersistTestPetType
 
 share
-    [ mkPersist sqlSettings { mpsGeneric = True }
+    [ mkPersist sqlSettings
     , mkMigrate "testMigrate"
     ] [persistUpperCase|
 
@@ -110,10 +110,7 @@ share
 
 |]
 
-deriving instance Show (BackendKey backend) => Show (PetGeneric backend)
-deriving instance Eq (BackendKey backend) => Eq (PetGeneric backend)
-
-share [ mkPersist sqlSettings { mpsPrefixFields = False, mpsGeneric = True }
+share [ mkPersist sqlSettings { mpsPrefixFields = False }
       , mkMigrate "noPrefixMigrate"
       ] [persistLowerCase|
 NoPrefix1
@@ -126,12 +123,6 @@ NoPrefix2
     unprefixedRight String
     deriving Show Eq
 |]
-
-deriving instance Show (BackendKey backend) => Show (NoPrefix1Generic backend)
-deriving instance Eq (BackendKey backend) => Eq (NoPrefix1Generic backend)
-
-deriving instance Show (BackendKey backend) => Show (NoPrefix2Generic backend)
-deriving instance Eq (BackendKey backend) => Eq (NoPrefix2Generic backend)
 
 -- | Reverses the order of the fields of an entity.  Used to test
 -- @??@ placeholders of 'rawSql'.
@@ -164,15 +155,13 @@ instance (PersistEntity a) => PersistEntity (ReverseFieldOrder a) where
     persistIdField = error "ReverseFieldOrder.persistIdField"
     fieldLens x = error "ReverseFieldOrder.fieldLens"
 
-cleanDB
-    :: (MonadIO m, PersistQuery backend, PersistStoreWrite (BaseBackend backend))
-    => ReaderT backend m ()
+cleanDB :: (MonadIO m) => SqlPersistT m ()
 cleanDB = do
-  deleteWhere ([] :: [Filter (PersonGeneric backend)])
-  deleteWhere ([] :: [Filter (Person1Generic backend)])
-  deleteWhere ([] :: [Filter (PetGeneric backend)])
-  deleteWhere ([] :: [Filter (MaybeOwnedPetGeneric backend)])
-  deleteWhere ([] :: [Filter (NeedsPetGeneric backend)])
-  deleteWhere ([] :: [Filter (OutdoorPetGeneric backend)])
-  deleteWhere ([] :: [Filter (UserPTGeneric backend)])
-  deleteWhere ([] :: [Filter (EmailPTGeneric backend)])
+  deleteWhere ([] :: [Filter Person])
+  deleteWhere ([] :: [Filter Person1])
+  deleteWhere ([] :: [Filter Pet])
+  deleteWhere ([] :: [Filter MaybeOwnedPet])
+  deleteWhere ([] :: [Filter NeedsPet])
+  deleteWhere ([] :: [Filter OutdoorPet])
+  deleteWhere ([] :: [Filter UserPT])
+  deleteWhere ([] :: [Filter EmailPT])

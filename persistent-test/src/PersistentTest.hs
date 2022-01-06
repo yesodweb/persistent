@@ -40,9 +40,7 @@ catchPersistException action errValue = do
     return  res
 
 filterOrSpecs
-    :: forall m backend. Runner backend m
-    => RunDb backend m
-    -> Spec
+    :: forall m . Runner SqlBackend m => RunDb SqlBackend m -> Spec
 filterOrSpecs runDb = describe "FilterOr" $ do
             it "FilterOr []" $ runDb $ do
                 let p = Person "z" 1 Nothing
@@ -74,7 +72,7 @@ type Getting r s t a b = (a -> Constant r b) -> s -> Constant r t
 view :: s -> Getting a s t a b -> a
 view s l = getConstant (l Constant s)
 
-safeToRemoveSpec :: forall backend m. Runner backend m => RunDb backend m -> Spec
+safeToRemoveSpec :: forall m. Runner SqlBackend m => RunDb SqlBackend m -> Spec
 safeToRemoveSpec runDb = do
     describe "DudeWeirdColumns" $ do
         it "can insert and get" $ do
@@ -90,7 +88,7 @@ safeToRemoveSpec runDb = do
                     ]
             runDb $ putMany ms
 
-specsWith :: forall backend m. Runner backend m => RunDb backend m -> Spec
+specsWith :: forall m. Runner SqlBackend m => RunDb SqlBackend m -> Spec
 specsWith runDb = describe "persistent" $ do
   describe "SafeToRemove" (safeToRemoveSpec runDb)
   it "fieldLens" $ do
@@ -200,7 +198,7 @@ specsWith runDb = describe "persistent" $ do
       fmap entityVal mq @== Just q
 
   it "!=." $ runDb $ do
-      deleteWhere ([] :: [Filter (PersonGeneric backend)])
+      deleteWhere ([] :: [Filter Person])
       let mic = Person "Michael" 25 Nothing
       insert_ mic
       let eli = Person "Eliezer" 25 (Just "Red")
@@ -217,7 +215,7 @@ specsWith runDb = describe "persistent" $ do
 
 
   it "Double Maybe" $ runDb $ do
-      deleteWhere ([] :: [Filter (PersonMayGeneric backend)])
+      deleteWhere ([] :: [Filter PersonMay])
       let mic = PersonMay (Just "Michael") Nothing
       insert_ mic
       let eli = PersonMay (Just "Eliezer") (Just "Red")
@@ -228,7 +226,7 @@ specsWith runDb = describe "persistent" $ do
       map entityVal pne @== [eli]
 
   it "and/or" $ runDb $ do
-      deleteWhere ([] :: [Filter (Person1Generic backend)])
+      deleteWhere ([] :: [Filter Person1])
       insertMany_ [ Person1 "Michael" 25
                   , Person1 "Miriam" 25
                   , Person1 "Michael" 30
@@ -494,14 +492,14 @@ specsWith runDb = describe "persistent" $ do
           e4 @== Nothing
 
   it "insertMany_ with no arguments" $ runDb $ do
-    _ <- insertMany_ ([] :: [PersonGeneric backend])
-    rows <- (count ([] :: [Filter (PersonGeneric backend)]) :: ReaderT backend m Int)
+    _ <- insertMany_ ([] :: [Person])
+    rows <- count ([] :: [Filter Person])
     rows @== 0
-    _ <- insertMany ([] :: [PersonGeneric backend])
-    rows2 <- count ([] :: [Filter (PersonGeneric backend)])
+    _ <- insertMany ([] :: [Person])
+    rows2 <- count ([] :: [Filter Person])
     rows2 @== 0
-    _ <- insertEntityMany ([] :: [Entity (PersonGeneric backend)])
-    rows3 <- count ([] :: [Filter (PersonGeneric backend)])
+    _ <- insertEntityMany ([] :: [Entity Person])
+    rows3 <- count ([] :: [Filter Person])
     rows3 @== 0
 
   it "insertEntityMany" $ runDb $ do
@@ -512,7 +510,7 @@ specsWith runDb = describe "persistent" $ do
         p4 = Entity id4 $ Person "insertEntityMany4" 3 Nothing
         p5 = Entity id5 $ Person "insertEntityMany5" 3 Nothing
     insertEntityMany [p1,p2,p3,p4,p5]
-    rows <- count ([] :: [Filter (PersonGeneric backend)])
+    rows <- count ([] :: [Filter Person])
     rows @== 5
 
   it "insertBy" $ runDb $ do

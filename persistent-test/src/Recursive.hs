@@ -6,7 +6,7 @@ module Recursive (specsWith, recursiveMigrate, cleanup) where
 
 import Init
 
-share [mkPersist sqlSettings { mpsGeneric = True }, mkMigrate "recursiveMigrate"] [persistLowerCase|
+share [mkPersist sqlSettings, mkMigrate "recursiveMigrate"] [persistLowerCase|
 
 SubType
   object [MenuObject]
@@ -18,20 +18,16 @@ MenuObject
 
 |]
 
-cleanup
-    :: (PersistStoreWrite (BaseBackend backend), PersistQueryWrite backend)
-    => ReaderT backend IO ()
+cleanup :: SqlPersistT IO ()
 cleanup = do
-  deleteWhere ([] :: [Filter (MenuObjectGeneric backend)])
-  deleteWhere ([] :: [Filter (SubTypeGeneric backend)])
+  deleteWhere ([] :: [Filter MenuObject])
+  deleteWhere ([] :: [Filter SubType])
 
 specsWith
     ::
-    ( PersistStoreWrite backend
-    , PersistStoreWrite (BaseBackend backend)
-    , MonadIO m
+    ( MonadIO m
     )
-    => RunDb backend m
+    => RunDb SqlBackend m
     -> Spec
 specsWith runDb = describe "recursive definitions" $ do
   it "mutually recursive" $ runDb $ do

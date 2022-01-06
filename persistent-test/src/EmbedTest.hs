@@ -28,7 +28,7 @@ instance PersistField a => PersistField (NonEmpty a) where
             (l:ls) -> Right (l:|ls)
 
 
-share [mkPersist sqlSettings { mpsGeneric = True },  mkMigrate "embedMigrate"] [persistUpperCase|
+share [mkPersist sqlSettings,  mkMigrate "embedMigrate"] [persistUpperCase|
 
   OnlyName
     name Text
@@ -137,18 +137,18 @@ share [mkPersist sqlSettings { mpsGeneric = True },  mkMigrate "embedMigrate"] [
 |]
 cleanDB :: (PersistQuery backend, PersistEntityBackend HasMap ~ backend, MonadIO m) => ReaderT backend m ()
 cleanDB = do
-  deleteWhere ([] :: [Filter (HasEmbedGeneric backend)])
-  deleteWhere ([] :: [Filter (HasEmbedsGeneric backend)])
-  deleteWhere ([] :: [Filter (HasListEmbedGeneric backend)])
-  deleteWhere ([] :: [Filter (HasSetEmbedGeneric backend)])
-  deleteWhere ([] :: [Filter (UserGeneric backend)])
-  deleteWhere ([] :: [Filter (HasMapGeneric backend)])
-  deleteWhere ([] :: [Filter (HasListGeneric backend)])
-  deleteWhere ([] :: [Filter (EmbedsHasMapGeneric backend)])
-  deleteWhere ([] :: [Filter (ListEmbedGeneric backend)])
-  deleteWhere ([] :: [Filter (ARecordGeneric backend)])
-  deleteWhere ([] :: [Filter (AccountGeneric backend)])
-  deleteWhere ([] :: [Filter (HasNestedListGeneric backend)])
+  deleteWhere ([] :: [Filter (HasEmbed)])
+  deleteWhere ([] :: [Filter (HasEmbeds)])
+  deleteWhere ([] :: [Filter (HasListEmbed)])
+  deleteWhere ([] :: [Filter (HasSetEmbed)])
+  deleteWhere ([] :: [Filter (User)])
+  deleteWhere ([] :: [Filter (HasMap)])
+  deleteWhere ([] :: [Filter (HasList)])
+  deleteWhere ([] :: [Filter (EmbedsHasMap)])
+  deleteWhere ([] :: [Filter (ListEmbed)])
+  deleteWhere ([] :: [Filter (ARecord)])
+  deleteWhere ([] :: [Filter (Account)])
+  deleteWhere ([] :: [Filter (HasNestedList)])
 
 _unlessM :: MonadIO m => IO Bool -> m () -> m ()
 _unlessM predicate body = do

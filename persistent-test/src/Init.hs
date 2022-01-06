@@ -155,7 +155,7 @@ isCI =  do
 
 
 persistSettings :: MkPersistSettings
-persistSettings = sqlSettings { mpsGeneric = True }
+persistSettings = sqlSettings
 
 instance Arbitrary PersistValue where
     arbitrary = PersistInt64 `fmap` choose (0, maxBound)

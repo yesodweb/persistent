@@ -83,7 +83,7 @@ _debugOn :: Bool
 _debugOn = False
 
 persistSettings :: MkPersistSettings
-persistSettings = sqlSettings { mpsGeneric = True }
+persistSettings = sqlSettings
 
 type BackendMonad = SqlBackend
 

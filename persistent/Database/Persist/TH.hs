@@ -32,7 +32,6 @@ module Database.Persist.TH
     , mkPersistWith
     , MkPersistSettings
     , mpsBackend
-    , mpsGeneric
     , mpsPrefixFields
     , mpsFieldLabelModifier
     , mpsConstraintLabelModifier
@@ -865,23 +864,6 @@ data MkPersistSettings = MkPersistSettings
     -- ^ Which database backend we\'re using. This type is used for the
     -- 'PersistEntityBackend' associated type in the entities that are
     -- generated.
-    --
-    -- If the 'mpsGeneric' value is set to 'True', then this type is used for
-    -- the non-Generic type alias. The data and type will be named:
-    --
-    -- @
-    -- data ModelGeneric backend = Model { ... }
-    -- @
-    --
-    -- And, for convenience's sake, we provide a type alias:
-    --
-    -- @
-    -- type Model = ModelGeneric $(the type you give here)
-    -- @
-    , mpsGeneric :: Bool
-    -- ^ Create generic types that can be used with multiple backends. Good for
-    -- reusable code, but makes error messages harder to understand. Default:
-    -- False.
     , mpsPrefixFields :: Bool
     -- ^ Prefix field names with the model name. Default: True.
     --
@@ -935,8 +917,6 @@ data MkPersistSettings = MkPersistSettings
     -- @since 2.13.0.0
     }
 
-{-# DEPRECATED mpsGeneric "The mpsGeneric function adds a considerable amount of overhead and complexity to the library without bringing significant benefit. We would like to remove it. If you require this feature, please comment on the linked GitHub issue, and we'll either keep it around, or we can figure out a nicer way to solve your problem.\n\n Github: https://github.com/yesodweb/persistent/issues/1204" #-}
-
 -- |  Set the 'ImplicitIdDef' in the given 'MkPersistSettings'. The default
 -- value is 'autoIncrementingInteger'.
 --
@@ -948,9 +928,8 @@ setImplicitIdDef iid mps =
 getImplicitIdType :: MkPersistSettings -> Type
 getImplicitIdType = do
     idDef <- mpsImplicitIdDef
-    isGeneric <- mpsGeneric
     backendTy <- mpsBackend
-    pure $ iidType idDef isGeneric backendTy
+    pure $ iidType idDef backendTy
 
 data EntityJSON = EntityJSON
     { entityToJSON :: Name
@@ -965,7 +944,6 @@ mkPersistSettings
     -> MkPersistSettings
 mkPersistSettings backend = MkPersistSettings
     { mpsBackend = backend
-    , mpsGeneric = False
     , mpsPrefixFields = True
     , mpsFieldLabelModifier = (++)
     , mpsConstraintLabelModifier = (++)
@@ -1028,15 +1006,8 @@ dataTypeDec mps entityMap entDef = do
         ]
         )
 
-    (nameFinal, paramsFinal)
-        | mpsGeneric mps =
-            ( mkEntityDefGenericName entDef
-            , [ mkPlainTV backendName
-              ]
-            )
-
-        | otherwise =
-            (mkEntityDefName entDef, [])
+    (nameFinal, paramsFinal) =
+        (mkEntityDefName entDef, [])
 
     cols :: [VarBangType]
     cols = do
@@ -1108,44 +1079,10 @@ mkUnique mps entityMap entDef (UniqueDef constr _ fields attrs) =
               , "constraint in order to disable this check. ***" ]
 
 -- | This function renders a Template Haskell 'Type' for an 'UnboundFieldDef'.
--- It takes care to respect the 'mpsGeneric' setting to render an Id faithfully,
--- and it also ensures that the generated Haskell type is 'Maybe' if the
--- database column has that attribute.
+-- It ensures that the generated Haskell type is 'Maybe' if the database column
+-- has that attribute.
 --
--- For a database schema with @'mpsGeneric' = False@, this is simple - it uses
--- the @ModelNameId@ type directly. This resolves just fine.
---
--- If 'mpsGeneric' is @True@, then we have to do something a bit more
--- complicated. We can't refer to a @ModelNameId@ directly, because that @Id@
--- alias hides the backend type variable. Instead, we need to refer to:
---
--- > Key (ModelNameGeneric backend)
---
--- This means that the client code will need both the term @ModelNameId@ in
--- scope, as well as the @ModelNameGeneric@ constructor, despite the fact that
--- the @ModelNameId@ is the only term explicitly used (and imported).
---
--- However, we're not guaranteed to have @ModelName@ in scope - we've only
--- referenced @ModelNameId@ in code, and so code generation *should* work even
--- without this. Consider an explicit-style import:
---
--- @
--- import Model.Foo (FooId)
---
--- mkPersistWith sqlSettings $(discoverEntities) [persistLowerCase|
---   Bar
---     foo FooId
--- |]
--- @
---
--- This looks like it ought to work, but it would fail with @mpsGeneric@ being
--- enabled. One hacky work-around is to perform a @'lookupTypeName' :: String ->
--- Q (Maybe Name)@ on the @"ModelNameId"@ type string. If the @Id@ is
--- a reference in the 'EntityMap' and @lookupTypeName@ returns @'Just' name@,
--- then that 'Name' contains the fully qualified information needed to use the
--- 'Name' without importing it at the client-site. Then we can perform a bit of
--- surgery on the 'Name' to strip the @Id@ suffix, turn it into a 'Type', and
--- apply the 'Key' constructor.
+-- This uses the @ModelNameId@ type directly. This resolves just fine.
 maybeIdType
     :: MkPersistSettings
     -> EntityMap
@@ -1165,87 +1102,20 @@ maybeIdType mps entityMap fieldDef mbackend mnull =
     idType =
         fromMaybe (ftToType $ unboundFieldType fieldDef) $ do
             typ <- extractForeignRef entityMap fieldDef
-            guard ((mpsGeneric mps))
             pure $
                 ConT ''Key
                 `AppT` genericDataType mps typ (VarT $ fromMaybe backendName mbackend)
 
-    -- TODO: if we keep mpsGeneric, this needs to check 'mpsGeneric' and then
-    -- append Generic to the model name, probably
-    _removeIdFromTypeSuffix :: Name -> Type
-    _removeIdFromTypeSuffix oldName@(Name (OccName nm) nameFlavor) =
-        case stripSuffix "Id" (T.pack nm) of
-            Nothing ->
-                ConT oldName
-            Just name ->
-                ConT ''Key
-                `AppT` do
-                    ConT $ Name (OccName (T.unpack name)) nameFlavor
-
-    -- | TODO: if we keep mpsGeneric, let's incorporate this behavior here, so
-    -- end users don't need to import the constructor type as well as the id type
-    --
-    -- Returns 'Nothing' if the given text does not appear to be a table reference.
-    -- In that case, do the usual thing for generating a type name.
-    --
-    -- Returns a @Just typ@ if the text appears to be a model name, and if the
-    -- @ModelId@ type is in scope. The 'Type' is a fully qualified reference to
-    -- @'Key' ModelName@ such that end users won't have to import it directly.
-    _lookupReferencedTable :: EntityMap -> Text -> Q (Maybe Type)
-    _lookupReferencedTable em fieldTypeText = do
-        let
-            mmodelIdString = do
-                fieldTypeNoId <- stripSuffix "Id" fieldTypeText
-                _ <- M.lookup (EntityNameHS fieldTypeNoId) em
-                pure (T.unpack fieldTypeText)
-        case mmodelIdString of
-            Nothing ->
-                pure Nothing
-            Just modelIdString -> do
-                mIdName <- lookupTypeName modelIdString
-                pure $ fmap _removeIdFromTypeSuffix mIdName
-
-    _fieldNameEndsWithId :: UnboundFieldDef -> Maybe String
-    _fieldNameEndsWithId ufd = go (unboundFieldType ufd)
-      where
-        go = \case
-            FTTypeCon mmodule name -> do
-                a <- stripSuffix "Id" name
-                pure $
-                    T.unpack $ mconcat
-                        [ case mmodule of
-                            Nothing ->
-                                ""
-                            Just m ->
-                                mconcat [m, "."]
-                        ,  a
-                        , "Id"
-                        ]
-            _ ->
-                Nothing
-
 backendDataType :: MkPersistSettings -> Type
-backendDataType mps
-    | mpsGeneric mps = backendT
-    | otherwise = mpsBackend mps
+backendDataType = mpsBackend
 
--- | TODO:
---
--- if we keep mpsGeneric
--- then
---      let's make this fully qualify the generic name
--- else
---      let's delete it
 genericDataType
     :: MkPersistSettings
     -> EntityNameHS
     -> Type -- ^ backend
     -> Type
-genericDataType mps name backend
-    | mpsGeneric mps =
-        ConT (mkEntityNameHSGenericName name) `AppT` backend
-    | otherwise =
-        ConT $ mkEntityNameHSName name
+genericDataType _ name _ =
+    ConT $ mkEntityNameHSName name
 
 degen :: [Clause] -> [Clause]
 degen [] =
@@ -1448,20 +1318,17 @@ mkLensClauses mps entDef = do
 mkKeyTypeDec :: MkPersistSettings -> UnboundEntityDef -> Q (Dec, [Dec])
 mkKeyTypeDec mps entDef = do
     (instDecs, i) <-
-      if mpsGeneric mps
-        then if not useNewtype
-               then do pfDec <- pfInstD
-                       return (pfDec, supplement [''Generic])
-               else do gi <- genericNewtypeInstances
-                       return (gi, supplement [])
-        else if not useNewtype
-               then do pfDec <- pfInstD
-                       return (pfDec, supplement [''Show, ''Read, ''Eq, ''Ord, ''Generic])
-                else do
-                    let allInstances = supplement [''Show, ''Read, ''Eq, ''Ord, ''PathPiece, ''ToHttpApiData, ''FromHttpApiData, ''PersistField, ''PersistFieldSql, ''ToJSON, ''FromJSON]
-                    if customKeyType
-                      then return ([], allInstances)
-                      else do
+        if not useNewtype
+            then do
+                pfDec <- pfInstD
+                return (pfDec, supplement [''Show, ''Read, ''Eq, ''Ord, ''Generic])
+            else do
+                let allInstances =
+                        supplement [''Show, ''Read, ''Eq, ''Ord, ''PathPiece, ''ToHttpApiData, ''FromHttpApiData, ''PersistField, ''PersistFieldSql, ''ToJSON, ''FromJSON]
+                if customKeyType
+                    then do
+                        return ([], allInstances)
+                    else do
                         bi <- backendKeyI
                         return (bi, allInstances)
 
@@ -1749,17 +1616,10 @@ mkEntity embedEntityMap entityMap mps preDef = do
     keyToValues' <- mkKeyToValues mps entDef
     keyFromValues' <- mkKeyFromValues mps entDef
 
-    let addSyn -- FIXME maybe remove this
-            | mpsGeneric mps = (:) $
-                TySynD name [] $
-                    genericDataType mps entName $ mpsBackend mps
-            | otherwise = id
-
     lensClauses <- mkLensClauses mps entDef
 
     lenses <- mkLenses mps entityMap entDef
-    let instanceConstraint = if not (mpsGeneric mps) then [] else
-          [mkClassP ''PersistStore [backendT]]
+    let instanceConstraint = []
 
     [keyFromRecordM'] <-
         case unboundPrimarySpec entDef of
@@ -1794,7 +1654,7 @@ mkEntity embedEntityMap entityMap mps preDef = do
             entityFieldTHCon <$> efthAllFields fields
         allEntDefClauses =
             entityFieldTHClause <$> efthAllFields fields
-    return $ addSyn $
+    return $
        dtd : mconcat fkc `mappend`
       ( [ TySynD (keyIdName entDef) [] $
             ConT ''Key `AppT` ConT name
@@ -1940,12 +1800,7 @@ mkUniqueKeyInstances mps entDef = do
     typeErrorMultiple = mkOnlyUniqueError typeErrorMultipleCtx
 
     withPersistStoreWriteCxt =
-        if mpsGeneric mps
-            then do
-                write <- [t|PersistStoreWrite $(pure backendT) |]
-                pure [write]
-            else do
-                pure []
+        pure []
 
     typeErrorNoneCtx = do
         tyErr <- [t|TypeError (NoUniqueKeysError $(pure genDataType))|]
@@ -2032,8 +1887,7 @@ mkLenses mps entityMap ent = fmap mconcat $ forM (getUnboundFieldDefs ent) $ \fi
         sT = mkST backend1
         tT = mkST backend2
         t1 `arrow` t2 = ArrowT `AppT` t1 `AppT` t2
-        vars = mkForallTV fT
-             : (if mpsGeneric mps then [mkForallTV backend1{-, PlainTV backend2-}] else [])
+        vars = [mkForallTV fT]
     return
         [ SigD lensName $ ForallT vars [mkClassP ''Functor [VarT fT]] $
             (aT `arrow` (VarT fT `AppT` bT)) `arrow`
@@ -2204,12 +2058,12 @@ persistFieldFromEntity mps entDef = do
     fromPersistValueImplementation <- [|entityFromPersistValueHelper columnNames|]
 
     return
-        [ persistFieldInstanceD (mpsGeneric mps) typ
+        [ persistFieldInstanceD typ
             [ FunD 'toPersistValue [ normalClause [] toPersistValueImplementation ]
             , FunD 'fromPersistValue
                 [ normalClause [] fromPersistValueImplementation ]
             ]
-        , persistFieldSqlInstanceD (mpsGeneric mps) typ
+        , persistFieldSqlInstanceD typ
             [ sqlTypeFunD sqlStringConstructor'
             ]
         ]
@@ -2380,23 +2234,16 @@ sqlTypeFunD st = FunD 'sqlType
 
 typeInstanceD
     :: Name
-    -> Bool -- ^ include PersistStore backend constraint
     -> Type
     -> [Dec]
     -> Dec
-typeInstanceD clazz hasBackend typ =
-    instanceD ctx (ConT clazz `AppT` typ)
-  where
-    ctx
-        | hasBackend = [mkClassP ''PersistStore [backendT]]
-        | otherwise = []
+typeInstanceD clazz typ =
+    instanceD [] (ConT clazz `AppT` typ)
 
-persistFieldInstanceD :: Bool -- ^ include PersistStore backend constraint
-                      -> Type -> [Dec] -> Dec
+persistFieldInstanceD :: Type -> [Dec] -> Dec
 persistFieldInstanceD = typeInstanceD ''PersistField
 
-persistFieldSqlInstanceD :: Bool -- ^ include PersistStore backend constraint
-                         -> Type -> [Dec] -> Dec
+persistFieldSqlInstanceD :: Type -> [Dec] -> Dec
 persistFieldSqlInstanceD = typeInstanceD ''PersistFieldSql
 
 -- | Automatically creates a valid 'PersistField' instance for any datatype
@@ -2414,7 +2261,7 @@ derivePersistField s = do
                             (x, _):_ -> Right x
                             [] -> Left $ pack "Invalid " ++ pack dt ++ pack ": " ++ s'|]
     return
-        [ persistFieldInstanceD False (ConT $ mkName s)
+        [ persistFieldInstanceD (ConT $ mkName s)
             [ FunD 'toPersistValue
                 [ normalClause [] tpv
                 ]
@@ -2422,7 +2269,7 @@ derivePersistField s = do
                 [ normalClause [] (fpv `AppE` LitE (StringL s))
                 ]
             ]
-        , persistFieldSqlInstanceD False (ConT $ mkName s)
+        , persistFieldSqlInstanceD (ConT $ mkName s)
             [ sqlTypeFunD ss
             ]
         ]
@@ -2449,7 +2296,7 @@ derivePersistFieldJSON s = do
                     Left e -> Left $ pack "JSON decoding error for " ++ pack dt ++ pack ": " ++ pack e ++ pack ". On Input: " ++ decodeUtf8 bs'
                     Right x -> Right x|]
     return
-        [ persistFieldInstanceD False (ConT $ mkName s)
+        [ persistFieldInstanceD (ConT $ mkName s)
             [ FunD 'toPersistValue
                 [ normalClause [] tpv
                 ]
@@ -2457,7 +2304,7 @@ derivePersistFieldJSON s = do
                 [ normalClause [] (fpv `AppE` LitE (StringL s))
                 ]
             ]
-        , persistFieldSqlInstanceD False (ConT $ mkName s)
+        , persistFieldSqlInstanceD (ConT $ mkName s)
             [ sqlTypeFunD ss
             ]
         ]
@@ -2560,14 +2407,8 @@ mkIdField mps ued = do
     let
         entityName =
             getUnboundEntityNameHS ued
-        entityIdType
-            | mpsGeneric mps =
-                ConT ''Key `AppT` (
-                    ConT (mkEntityNameHSGenericName entityName)
-                    `AppT` backendT
-                )
-            | otherwise =
-                ConT $ mkName $ (T.unpack $ unEntityNameHS entityName) ++ "Id"
+        entityIdType =
+            ConT $ mkName $ (T.unpack $ unEntityNameHS entityName) ++ "Id"
         name =
             filterConName' mps entityName (FieldNameHS "Id")
     clause  <-
@@ -2655,7 +2496,7 @@ mkJSON mps (fixEntityDef -> def) = do
         typ =
             genericDataType mps (entityHaskell (unboundEntityDef def)) backendT
         toJSONI =
-            typeInstanceD ''ToJSON (mpsGeneric mps) typ [toJSON']
+            typeInstanceD ''ToJSON typ [toJSON']
           where
             toJSON' = FunD 'toJSON $ return $ normalClause
                 [ConP conName $ fmap VarP xs]
@@ -2667,7 +2508,7 @@ mkJSON mps (fixEntityDef -> def) = do
                     dotEqualE
                     (Just $ VarE x)
         fromJSONI =
-            typeInstanceD ''FromJSON (mpsGeneric mps) typ [parseJSON']
+            typeInstanceD ''FromJSON typ [parseJSON']
           where
             parseJSON' = FunD 'parseJSON
                 [ normalClause [ConP 'Object [VarP obj]]
@@ -2689,14 +2530,8 @@ mkJSON mps (fixEntityDef -> def) = do
         Nothing ->
             return [toJSONI, fromJSONI]
         Just entityJSON -> do
-            entityJSONIs <- if mpsGeneric mps
-              then [d|
-                instance PersistStore $(pure backendT) => ToJSON (Entity $(pure typ)) where
-                    toJSON = $(varE (entityToJSON entityJSON))
-                instance PersistStore $(pure backendT) => FromJSON (Entity $(pure typ)) where
-                    parseJSON = $(varE (entityFromJSON entityJSON))
-                |]
-              else [d|
+            entityJSONIs <-
+              [d|
                 instance ToJSON (Entity $(pure typ)) where
                     toJSON = $(varE (entityToJSON entityJSON))
                 instance FromJSON (Entity $(pure typ)) where
@@ -2782,13 +2617,8 @@ mkSymbolToFieldInstances mps entityMap (fixEntityDef -> ed) = do
 
     pure (mkey <> join regularFields)
   where
-    nameG =
-        mkEntityDefGenericName ed
-    recordNameT
-        | mpsGeneric mps =
-            conT nameG `appT` varT backendName
-        | otherwise =
-            entityDefConT ed
+    recordNameT =
+        entityDefConT ed
     mkInstance fieldNameT fieldTypeT entityFieldConstr =
         [d|
             instance SymbolToField $(fieldNameT) $(recordNameT) $(fieldTypeT) where
@@ -2924,11 +2754,6 @@ mkEntityNameHSName =
 mkEntityDefName :: UnboundEntityDef -> Name
 mkEntityDefName =
     mkEntityNameHSName . entityHaskell . unboundEntityDef
-
--- | Make a TH Name for the EntityDef's Haskell type, when using mpsGeneric
-mkEntityDefGenericName :: UnboundEntityDef -> Name
-mkEntityDefGenericName =
-    mkEntityNameHSGenericName . entityHaskell . unboundEntityDef
 
 mkEntityNameHSGenericName :: EntityNameHS -> Name
 mkEntityNameHSGenericName name =

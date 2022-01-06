@@ -83,7 +83,7 @@ _debugOn :: Bool
 _debugOn = True
 
 persistSettings :: MkPersistSettings
-persistSettings = (mkPersistSettings $ ConT ''Context) { mpsGeneric = True }
+persistSettings = mkPersistSettings $ ConT ''Context
 
 dbName :: Text
 dbName = "persistent"

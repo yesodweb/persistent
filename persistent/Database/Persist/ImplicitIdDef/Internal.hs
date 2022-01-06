@@ -100,9 +100,10 @@ data ImplicitIdDef = ImplicitIdDef
     -- correspond with an autoincrementing integer primary key.
     --
     -- @since 2.13.0.0
-    , iidType :: Bool -> Type -> Type
+    , iidType :: Type -> Type
     -- ^ The Bool argument is whether or not the 'MkPersistBackend' type has the
-    -- 'mpsGeneric' field set.
+    -- 'mpsGeneric' field set. Since this was removed in @persistent-2.14.0@,
+    -- this argument is ignored.
     --
     -- The 'Type' is the 'mpsBackend' value.
     --
@@ -163,7 +164,7 @@ mkImplicitIdDef def =
         , iidFieldSqlType =
             sqlType (Proxy @t)
         , iidType =
-            \_ _ -> liftType @t
+            \_ -> liftType @t
         , iidDefault =
             Just def
         , iidMaxLen =

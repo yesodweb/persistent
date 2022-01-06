@@ -7,7 +7,7 @@ import Data.String (IsString)
 
 import Init
 
-share [mkPersist sqlSettings { mpsGeneric = True },  mkMigrate "maxlenMigrate"] [persistLowerCase|
+share [mkPersist sqlSettings,  mkMigrate "maxlenMigrate"] [persistLowerCase|
   MaxLen
     text1 Text
     text2 Text maxlen=3
@@ -24,7 +24,7 @@ share [mkPersist sqlSettings { mpsGeneric = True },  mkMigrate "maxlenMigrate"] 
     deriving Show Eq
 |]
 
-specsWith :: Runner backend m => RunDb backend m -> Spec
+specsWith :: Runner SqlBackend m => RunDb SqlBackend m -> Spec
 specsWith runDb = describe "Maximum length attribute" $ do
   it "truncates values that are too long" $ runDb $ do
     let t1  = MaxLen a a  a a  a a
