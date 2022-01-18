@@ -322,6 +322,6 @@ instance Exception PersistUnsafeMigrationException
 -- @since 2.13.3.0
 createSearchIndex :: (PersistEntity rec) => EntityField rec typ -> Text -> Migration
 createSearchIndex entity tableName =
-  addMigration True $ "CREATE INDEX IF NOT EXISTS ON " <> tableName <> " (" <> fieldName <> ")"
+  addMigration True $ "CREATE INDEX IF NOT EXISTS ON \"" <> tableName <> "\" (\"" <> fieldName <> "\")"
   where
     fieldName = unFieldNameDB . fieldDB $ persistFieldDef entity
