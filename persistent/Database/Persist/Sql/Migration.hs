@@ -59,15 +59,15 @@ module Database.Persist.Sql.Migration
   )
 where
 
-import Control.Exception (Exception(..), throwIO)
+import Control.Exception (Exception (..), throwIO)
 import Control.Monad (liftM, unless)
 import Control.Monad.IO.Unlift
-import Control.Monad.Trans.Class (MonadTrans(..))
-import Control.Monad.Trans.Reader (ReaderT(..), ask)
+import Control.Monad.Trans.Class (MonadTrans (..))
+import Control.Monad.Trans.Reader (ReaderT (..), ask)
 import Control.Monad.Trans.Writer
 import Data.Text (Text, isPrefixOf, pack, snoc, unpack)
 import qualified Data.Text.IO
-import Database.Persist (PersistEntity(EntityField, persistFieldDef))
+import Database.Persist (PersistEntity (EntityField, entityDef, persistFieldDef))
 import Database.Persist.Sql.Orphan.PersistStore ()
 import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Types
@@ -319,9 +319,19 @@ instance Exception PersistUnsafeMigrationException
 
 -- | Create an index for the given 'EntityField' and table.
 --
+-- This function returns a 'Migration', and so can be sequenced with another migration in a `do` block.
+--
+-- @
+-- migrations :: 'Migration'
+-- migrations = do
+--     migrateAll
+--     createSearchIndex UserName
+-- @
+--
 -- @since 2.13.3.0
-createSearchIndex :: (PersistEntity rec) => EntityField rec typ -> Text -> Migration
-createSearchIndex entity tableName =
+createSearchIndex :: (PersistEntity rec, PersistEntity typ) => EntityField rec typ -> Migration
+createSearchIndex entityField =
   addMigration True $ "CREATE INDEX IF NOT EXISTS ON \"" <> tableName <> "\" (\"" <> fieldName <> "\")"
   where
-    fieldName = unFieldNameDB . fieldDB $ persistFieldDef entity
+    fieldName = unFieldNameDB . fieldDB $ persistFieldDef entityField
+    tableName = unEntityNameDB . getEntityDBName $ entityDef entityField
