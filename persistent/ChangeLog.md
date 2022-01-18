@@ -3,7 +3,7 @@
 ## 2.13.3.0
 
 * [#1352](https://github.com/yesodweb/persistent/pull/1352)
-    * Add search index migration (#919).
+    * Add search index migration [#919](https://github.com/yesodweb/persistent/issues/919).
 
 ## 2.13.2.1
 
