@@ -1,5 +1,10 @@
 # Changelog for persistent
 
+## 2.13.3.0
+
+* [#1352](https://github.com/yesodweb/persistent/pull/1352)
+    * Add search index migration (#919).
+
 ## 2.13.2.1
 
 * [#1329](https://github.com/yesodweb/persistent/pull/1329)
