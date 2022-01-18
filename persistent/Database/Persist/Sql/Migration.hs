@@ -1,3 +1,6 @@
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+
 -- | This module documents tools and utilities for running SQL migrations.
 --
 -- A 'Migration' is (currently) an alias for a 'WriterT' of
@@ -65,6 +68,7 @@ import Control.Monad.IO.Unlift
 import Control.Monad.Trans.Class (MonadTrans (..))
 import Control.Monad.Trans.Reader (ReaderT (..), ask)
 import Control.Monad.Trans.Writer
+import Data.Data (Proxy (Proxy))
 import Data.Text (Text, isPrefixOf, pack, snoc, unpack)
 import qualified Data.Text.IO
 import Database.Persist (PersistEntity (EntityField, entityDef, persistFieldDef))
@@ -329,9 +333,9 @@ instance Exception PersistUnsafeMigrationException
 -- @
 --
 -- @since 2.13.3.0
-createSearchIndex :: (PersistEntity rec, PersistEntity typ) => EntityField rec typ -> Migration
+createSearchIndex :: forall rec typ. (PersistEntity rec) => EntityField rec typ -> Migration
 createSearchIndex entityField =
   addMigration True $ "CREATE INDEX IF NOT EXISTS ON \"" <> tableName <> "\" (\"" <> fieldName <> "\")"
   where
     fieldName = unFieldNameDB . fieldDB $ persistFieldDef entityField
-    tableName = unEntityNameDB . getEntityDBName $ entityDef entityField
+    tableName = unEntityNameDB . getEntityDBName $ entityDef (Proxy :: Proxy rec)
