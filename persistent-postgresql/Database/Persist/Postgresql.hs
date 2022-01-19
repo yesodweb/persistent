@@ -33,6 +33,7 @@ module Database.Persist.Postgresql
     , createPostgresqlPoolModified
     , createPostgresqlPoolModifiedWithVersion
     , createPostgresqlPoolWithConf
+    , createSearchIndexPostgres
     , module Database.Persist.Sql
     , ConnectionString
     , HandleUpdateCollision

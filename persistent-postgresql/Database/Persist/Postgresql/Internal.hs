@@ -1,10 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Database.Persist.Postgresql.Internal
     ( P(..)
     , PgInterval(..)
     , getGetter
+    , createSearchIndexPostgres
     ) where
 
 import qualified Database.PostgreSQL.Simple as PG
@@ -18,6 +21,7 @@ import qualified Blaze.ByteString.Builder.Char8 as BBB
 import qualified Data.Attoparsec.ByteString.Char8 as P
 import Data.Bits ((.&.))
 import Data.ByteString (ByteString)
+import Data.Data (Proxy (Proxy))
 import qualified Data.ByteString.Builder as BB
 import qualified Data.ByteString.Char8 as B8
 import Data.Char (ord)
@@ -281,4 +285,23 @@ instance PersistField PgInterval where
 instance PersistFieldSql PgInterval where
   sqlType _ = SqlOther "interval"
 
-
+-- | Create an index for the given 'EntityField'.
+--
+-- This function returns a 'Migration', and so can be sequenced with another migration in a `do` block.
+--
+-- @
+-- migrations :: 'Migration'
+-- migrations = do
+--     migrateAll
+--     createSearchIndex UserName
+-- @
+--
+-- @since 2.13.3.0
+createSearchIndexPostgres :: forall rec typ. (PersistEntity rec) => EntityField rec typ -> Migration
+createSearchIndexPostgres entityField =
+  addMigration True $ "CREATE INDEX IF NOT EXISTS "
+    <> tableName <> "_" <> fieldName <> "idx ON \""
+    <> tableName <> "\" (\"" <> fieldName <> "\")"
+  where
+    fieldName = unFieldNameDB . fieldDB $ persistFieldDef entityField
+    tableName = unEntityNameDB . getEntityDBName $ entityDef (Proxy :: Proxy rec)

@@ -311,7 +311,8 @@ instance Show PersistUnsafeMigrationException where
 
 instance Exception PersistUnsafeMigrationException
 
--- | Create an index for the given 'EntityField' and table.
+-- | Create an index for the given 'EntityField'.
+-- If your backend is PostgreSQL, you will need to use 'createSearchIndexPostgres' from 'persistent-postgres'.
 --
 -- This function returns a 'Migration', and so can be sequenced with another migration in a `do` block.
 --
