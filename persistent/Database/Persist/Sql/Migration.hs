@@ -5,81 +5,80 @@
 --
 -- A 'Migration' is (currently) an alias for a 'WriterT' of
 module Database.Persist.Sql.Migration
-  ( -- * Types
-    Migration,
-    CautiousMigration,
-    Sql,
-
+  (
+    -- * Types
+    Migration
+  , CautiousMigration
+  , Sql
     -- * Using a 'Migration'
-    showMigration,
-    parseMigration,
-    parseMigration',
-    printMigration,
-    getMigration,
-    runMigration,
-    runMigrationQuiet,
-    runMigrationSilent,
-    runMigrationUnsafe,
-    runMigrationUnsafeQuiet,
-    migrate,
-    createSearchIndex,
+  , showMigration
+  , parseMigration
+  , parseMigration'
+  , printMigration
+  , getMigration
+  , runMigration
+  , runMigrationQuiet
+  , runMigrationSilent
+  , runMigrationUnsafe
+  , runMigrationUnsafeQuiet
+  , migrate
+  , createSearchIndex
+  -- * Utilities for constructing migrations
+  -- | While 'migrate' is capable of creating a 'Migration' for you, it's not
+  -- the only way you can write migrations. You can use these utilities to write
+  -- extra steps in your migrations.
+  --
+  -- As an example, let's say we want to enable the @citext@ extension on
+  -- @postgres@ as part of our migrations.
+  --
+  -- @
+  -- 'Database.Persist.TH.share' ['Database.Persist.TH.mkPersist' sqlSettings, 'Database.Persist.TH.mkMigration' "migrateAll"] ...
+  --
+  -- migration :: 'Migration'
+  -- migration = do
+  --     'runSqlCommand' $
+  --         'rawExecute_' "CREATE EXTENSION IF NOT EXISTS \"citext\";"
+  --     migrateAll
+  -- @
+  --
+  -- For raw commands, you can also just write 'addMigration':
+  --
+  -- @
+  -- migration :: 'Migration'
+  -- migration = do
+  --     'addMigration' "CREATE EXTENSION IF NOT EXISTS \"citext\";"
+  --     migrateAll
+  -- @
+  , reportErrors
+  , reportError
+  , addMigrations
+  , addMigration
+  , runSqlCommand
+  -- * If something goes wrong...
+  , PersistUnsafeMigrationException(..)
+  ) where
 
-    -- * Utilities for constructing migrations
 
-    -- | While 'migrate' is capable of creating a 'Migration' for you, it's not
-    -- the only way you can write migrations. You can use these utilities to write
-    -- extra steps in your migrations.
-    --
-    -- As an example, let's say we want to enable the @citext@ extension on
-    -- @postgres@ as part of our migrations.
-    --
-    -- @
-    -- 'Database.Persist.TH.share' ['Database.Persist.TH.mkPersist' sqlSettings, 'Database.Persist.TH.mkMigration' "migrateAll"] ...
-    --
-    -- migration :: 'Migration'
-    -- migration = do
-    --     'runSqlCommand' $
-    --         'rawExecute_' "CREATE EXTENSION IF NOT EXISTS \"citext\";"
-    --     migrateAll
-    -- @
-    --
-    -- For raw commands, you can also just write 'addMigration':
-    --
-    -- @
-    -- migration :: 'Migration'
-    -- migration = do
-    --     'addMigration' "CREATE EXTENSION IF NOT EXISTS \"citext\";"
-    --     migrateAll
-    -- @
-    reportErrors,
-    reportError,
-    addMigrations,
-    addMigration,
-    runSqlCommand,
-
-    -- * If something goes wrong...
-    PersistUnsafeMigrationException (..),
-  )
-where
-
-import Control.Exception (Exception (..), throwIO)
+import Control.Exception (throwIO)
 import Control.Monad (liftM, unless)
 import Control.Monad.IO.Unlift
-import Control.Monad.Trans.Class (MonadTrans (..))
-import Control.Monad.Trans.Reader (ReaderT (..), ask)
+import Control.Monad.Trans.Class (MonadTrans(..))
+import Control.Monad.Trans.Reader (ReaderT(..), ask)
 import Control.Monad.Trans.Writer
 import Data.Data (Proxy (Proxy))
 import Data.Text (Text, isPrefixOf, pack, snoc, unpack)
 import qualified Data.Text.IO
+import GHC.Stack
+import System.IO
+import System.IO.Silently (hSilence)
+
 import Database.Persist (PersistEntity (EntityField, entityDef, persistFieldDef))
 import Database.Persist.Sql.Orphan.PersistStore ()
 import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Types.Internal
 import Database.Persist.Types
-import GHC.Stack
-import System.IO
-import System.IO.Silently (hSilence)
+import Control.Exception (Exception(..))
 
 type Sql = Text
 
@@ -109,7 +108,7 @@ safeSql = allSql . filter (not . fst)
 -- errors associated with the migration or a list of migrations to do.
 parseMigration :: (HasCallStack, MonadIO m) => Migration -> ReaderT SqlBackend m (Either [Text] CautiousMigration)
 parseMigration =
-  liftIOReader . liftM go . runWriterT . execWriterT
+    liftIOReader . liftM go . runWriterT . execWriterT
   where
     go ([], sql) = Right sql
     go (errs, _) = Left errs
@@ -122,14 +121,13 @@ parseMigration' :: (HasCallStack, MonadIO m) => Migration -> ReaderT SqlBackend 
 parseMigration' m = do
   x <- parseMigration m
   case x of
-    Left errs -> error $ unlines $ map unpack errs
-    Right sql -> return sql
+      Left errs -> error $ unlines $ map unpack errs
+      Right sql -> return sql
 
 -- | Prints a migration.
 printMigration :: (HasCallStack, MonadIO m) => Migration -> ReaderT SqlBackend m ()
-printMigration m =
-  showMigration m
-    >>= mapM_ (liftIO . Data.Text.IO.putStrLn)
+printMigration m = showMigration m
+               >>= mapM_ (liftIO . Data.Text.IO.putStrLn)
 
 -- | Convert a 'Migration' to a list of 'Text' values corresponding to their
 -- 'Sql' statements.
@@ -145,10 +143,9 @@ getMigration m = do
 
 -- | Runs a migration. If the migration fails to parse or if any of the
 -- migrations are unsafe, then this throws a 'PersistUnsafeMigrationException'.
-runMigration ::
-  MonadIO m =>
-  Migration ->
-  ReaderT SqlBackend m ()
+runMigration :: MonadIO m
+             => Migration
+             -> ReaderT SqlBackend m ()
 runMigration m = runMigration' m False >> return ()
 
 -- | Same as 'runMigration', but does not report the individual migrations on
@@ -159,10 +156,9 @@ runMigration m = runMigration' m False >> return ()
 -- persistent-postgresql
 --
 -- @since 2.10.2
-runMigrationQuiet ::
-  MonadIO m =>
-  Migration ->
-  ReaderT SqlBackend m [Text]
+runMigrationQuiet :: MonadIO m
+                  => Migration
+                  -> ReaderT SqlBackend m [Text]
 runMigrationQuiet m = runMigration' m True
 
 -- | Same as 'runMigration', but returns a list of the SQL commands executed
@@ -172,66 +168,61 @@ runMigrationQuiet m = runMigration' m True
 -- is not thread-safe and can clobber output from other parts of the program.
 -- This implementation method was chosen to also silence postgresql migration
 -- output on stderr, but is not recommended!
-runMigrationSilent ::
-  MonadUnliftIO m =>
-  Migration ->
-  ReaderT SqlBackend m [Text]
+runMigrationSilent :: MonadUnliftIO m
+                   => Migration
+                   -> ReaderT SqlBackend m [Text]
 runMigrationSilent m = withRunInIO $ \run ->
   hSilence [stderr] $ run $ runMigration' m True
 
 -- | Run the given migration against the database. If the migration fails
 -- to parse, or there are any unsafe migrations, then this will error at
 -- runtime. This returns a list of the migrations that were executed.
-runMigration' ::
-  (HasCallStack, MonadIO m) =>
-  Migration ->
-  -- | is silent?
-  Bool ->
-  ReaderT SqlBackend m [Text]
+runMigration'
+    :: (HasCallStack, MonadIO m)
+    => Migration
+    -> Bool -- ^ is silent?
+    -> ReaderT SqlBackend m [Text]
 runMigration' m silent = do
-  mig <- parseMigration' m
-  if any fst mig
-    then liftIO . throwIO $ PersistUnsafeMigrationException mig
-    else mapM (executeMigrate silent) $ sortMigrations $ safeSql mig
+    mig <- parseMigration' m
+    if any fst mig
+        then liftIO . throwIO $ PersistUnsafeMigrationException mig
+        else mapM (executeMigrate silent) $ sortMigrations $ safeSql mig
 
 -- | Like 'runMigration', but this will perform the unsafe database
 -- migrations instead of erroring out.
-runMigrationUnsafe ::
-  MonadIO m =>
-  Migration ->
-  ReaderT SqlBackend m ()
+runMigrationUnsafe :: MonadIO m
+                   => Migration
+                   -> ReaderT SqlBackend m ()
 runMigrationUnsafe m = runMigrationUnsafe' False m >> return ()
 
 -- | Same as 'runMigrationUnsafe', but returns a list of the SQL commands
 -- executed instead of printing them to stderr.
 --
 -- @since 2.10.2
-runMigrationUnsafeQuiet ::
-  (HasCallStack, MonadIO m) =>
-  Migration ->
-  ReaderT SqlBackend m [Text]
+runMigrationUnsafeQuiet :: (HasCallStack, MonadIO m)
+                        => Migration
+                        -> ReaderT SqlBackend m [Text]
 runMigrationUnsafeQuiet = runMigrationUnsafe' True
 
-runMigrationUnsafe' ::
-  (HasCallStack, MonadIO m) =>
-  Bool ->
-  Migration ->
-  ReaderT SqlBackend m [Text]
+runMigrationUnsafe' :: (HasCallStack, MonadIO m)
+                    => Bool
+                    -> Migration
+                    -> ReaderT SqlBackend m [Text]
 runMigrationUnsafe' silent m = do
-  mig <- parseMigration' m
-  mapM (executeMigrate silent) $ sortMigrations $ allSql mig
+    mig <- parseMigration' m
+    mapM (executeMigrate silent) $ sortMigrations $ allSql mig
 
 executeMigrate :: MonadIO m => Bool -> Text -> ReaderT SqlBackend m Text
 executeMigrate silent s = do
-  unless silent $ liftIO $ hPutStrLn stderr $ "Migrating: " ++ unpack s
-  rawExecute s []
-  return s
+    unless silent $ liftIO $ hPutStrLn stderr $ "Migrating: " ++ unpack s
+    rawExecute s []
+    return s
 
 -- | Sort the alter DB statements so tables are created before constraints are
 -- added.
 sortMigrations :: [Sql] -> [Sql]
 sortMigrations x =
-  filter isCreate x ++ filter (not . isCreate) x
+    filter isCreate x ++ filter (not . isCreate) x
   where
     -- Note the use of lower-case e. This (hack) allows backends to explicitly
     -- choose to have this special sorting applied.
@@ -240,14 +231,13 @@ sortMigrations x =
 -- |  Given a list of old entity definitions and a new 'EntityDef' in
 -- @val@, this creates a 'Migration' to update the old list of definitions
 -- with the new one.
-migrate ::
-  [EntityDef] ->
-  EntityDef ->
-  Migration
+migrate :: [EntityDef]
+        -> EntityDef
+        -> Migration
 migrate allDefs val = do
-  conn <- lift $ lift ask
-  res <- liftIO $ connMigrateSql conn allDefs (getStmtConn conn) val
-  either reportErrors addMigrations res
+    conn <- lift $ lift ask
+    res <- liftIO $ connMigrateSql conn allDefs (getStmtConn conn) val
+    either reportErrors addMigrations res
 
 -- | Report a single error in a 'Migration'.
 --
@@ -264,24 +254,24 @@ reportErrors = tell
 -- | Add a migration to the migration plan.
 --
 -- @since 2.9.2
-addMigration ::
-  -- | Is the migration unsafe to run? (eg a destructive or non-idempotent
-  -- update on the schema). If 'True', the migration is *unsafe*, and will
-  -- need to be run manually later. If 'False', the migration is *safe*, and
-  -- can be run any number of times.
-  Bool ->
-  -- | A 'Text' value representing the command to run on the database.
-  Sql ->
-  Migration
+addMigration
+    :: Bool
+    -- ^ Is the migration unsafe to run? (eg a destructive or non-idempotent
+    -- update on the schema). If 'True', the migration is *unsafe*, and will
+    -- need to be run manually later. If 'False', the migration is *safe*, and
+    -- can be run any number of times.
+    -> Sql
+    -- ^ A 'Text' value representing the command to run on the database.
+    -> Migration
 addMigration isUnsafe sql = lift (tell [(isUnsafe, sql)])
 
 -- | Add a 'CautiousMigration' (aka a @[('Bool', 'Text')]@) to the
 -- migration plan.
 --
 -- @since 2.9.2
-addMigrations ::
-  CautiousMigration ->
-  Migration
+addMigrations
+    :: CautiousMigration
+    -> Migration
 addMigrations = lift . tell
 
 -- | Run an action against the database during a migration. Can be useful for eg
@@ -310,13 +300,13 @@ newtype PersistUnsafeMigrationException
 instance Show PersistUnsafeMigrationException where
   show (PersistUnsafeMigrationException mig) =
     concat
-      [ "\n\nDatabase migration: manual intervention required.\n",
-        "The unsafe actions are prefixed by '***' below:\n\n",
-        unlines $ map displayMigration mig
+      [ "\n\nDatabase migration: manual intervention required.\n"
+      , "The unsafe actions are prefixed by '***' below:\n\n"
+      , unlines $ map displayMigration mig
       ]
     where
       displayMigration :: (Bool, Sql) -> String
-      displayMigration (True, s) = "*** " ++ unpack s ++ ";"
+      displayMigration (True,  s) = "*** " ++ unpack s ++ ";"
       displayMigration (False, s) = "    " ++ unpack s ++ ";"
 
 instance Exception PersistUnsafeMigrationException
