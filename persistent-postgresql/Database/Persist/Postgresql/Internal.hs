@@ -300,7 +300,7 @@ instance PersistFieldSql PgInterval where
 createSearchIndexPostgres :: forall rec typ. (PersistEntity rec) => EntityField rec typ -> Migration
 createSearchIndexPostgres entityField =
   addMigration True $ "CREATE INDEX IF NOT EXISTS "
-    <> tableName <> "_" <> fieldName <> "idx ON \""
+    <> tableName <> "_" <> fieldName <> "_idx ON \""
     <> tableName <> "\" (\"" <> fieldName <> "\")"
   where
     fieldName = unFieldNameDB . fieldDB $ persistFieldDef entityField
