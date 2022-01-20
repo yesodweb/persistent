@@ -72,6 +72,9 @@ import Control.Monad.Trans.Writer (runWriterT)
 import Data.Acquire (Acquire, mkAcquire, with)
 import Data.Maybe
 import Data.Aeson
+#if MIN_VERSION_aeson(2,0,0)
+import qualified Data.Aeson.KeyMap as KeyMap
+#endif
 import Data.Aeson.Types (modifyFailure)
 import Data.Conduit
 import qualified Data.Conduit.Combinators as C
@@ -728,13 +731,18 @@ data SqliteConf = SqliteConf
 
 instance FromJSON SqliteConf where
     parseJSON v = modifyFailure ("Persistent: error loading Sqlite conf: " ++) $ flip (withObject "SqliteConf") v parser where
-        parser o = if HashMap.member "database" o
+        parser o = if "database" `isMember` o
                       then SqliteConf
                             <$> o .: "database"
                             <*> o .: "poolsize"
                       else SqliteConfInfo
                             <$> o .: "connInfo"
                             <*> o .: "poolsize"
+#if MIN_VERSION_aeson(2,0,0)
+        isMember = KeyMap.member
+#else
+        isMember = HashMap.member
+#endif
 
 instance PersistConfig SqliteConf where
     type PersistConfigBackend SqliteConf = SqlPersistT

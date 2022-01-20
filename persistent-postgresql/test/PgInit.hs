@@ -27,6 +27,7 @@ module PgInit
     , module Test.Hspec
     , module Test.Hspec.Expectations.Lifted
     , module Test.HUnit
+    , AValue (..)
     , BS.ByteString
     , Int32, Int64
     , liftIO
@@ -68,7 +69,7 @@ import Init
 import Control.Exception (SomeException)
 import Control.Monad (forM_, liftM, replicateM, void, when)
 import Control.Monad.Trans.Reader
-import Data.Aeson (ToJSON, FromJSON, Value(..))
+import Data.Aeson (ToJSON, FromJSON, Value(..), object)
 import Database.Persist.Postgresql.JSON ()
 import Database.Persist.Sql.Raw.QQ
 import Database.Persist.SqlBackend
@@ -117,6 +118,7 @@ import Data.Int (Int32, Int64)
 import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
 import Data.Text (Text)
+import Data.Vector (Vector)
 import System.Environment (getEnvironment)
 import System.Log.FastLogger (fromLogStr)
 
@@ -204,19 +206,24 @@ runConnAssertUseConf :: SqlPersistT (LoggingT (ResourceT IO)) () -> Assertion
 runConnAssertUseConf actions = do
   runResourceT $ runConnInternal RunConnConf (actions >> transactionUndo)
 
-instance Arbitrary Value where
-  arbitrary = frequency [ (1, pure Null)
+newtype AValue = AValue { getValue :: Value }
+
+-- Need a specialized Arbitrary instance
+instance Arbitrary AValue where
+  arbitrary = AValue <$>
+              frequency [ (1, pure Null)
                         , (1, Bool <$> arbitrary)
                         , (2, Number <$> arbitrary)
                         , (2, String <$> arbText)
-                        , (3, Array <$> limitIt 4 arbitrary)
-                        , (3, Object <$> arbObject)
+                        , (3, Array <$> limitIt 4 (fmap (fmap getValue) arbitrary))
+                        , (3, object <$> arbObject)
                         ]
-    where limitIt i x = sized $ \n -> do
-            let m = if n > i then i else n
-            resize m x
-          arbObject = limitIt 4 -- Recursion can make execution divergent
-                    $ fmap HM.fromList -- HashMap -> [(,)]
-                    . listOf -- [(,)] -> (,)
-                    . liftA2 (,) arbText -- (,) -> Text and Value
-                    $ limitIt 4 arbitrary -- Again, precaution against divergent recursion.
+    where
+      limitIt :: Int -> Gen a -> Gen a
+      limitIt i x = sized $ \n -> do
+          let m = if n > i then i else n
+          resize m x
+      arbObject = limitIt 4 -- Recursion can make execution divergent
+                $ listOf -- [(,)] -> (,)
+                . liftA2 (,) arbText -- (,) -> Text and Value
+                $ limitIt 4 (fmap getValue arbitrary) -- Again, precaution against divergent recursion.

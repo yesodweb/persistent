@@ -10,6 +10,7 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE CPP #-}
 
 module Database.Persist.Class.PersistEntity
     ( PersistEntity (..)
@@ -46,7 +47,13 @@ import qualified Data.Aeson.Parser as AP
 import Data.Aeson.Text (encodeToTextBuilder)
 import Data.Aeson.Types (Parser, Result(Error, Success))
 import Data.Attoparsec.ByteString (parseOnly)
-import qualified Data.HashMap.Strict as HM
+
+#if MIN_VERSION_aeson(2,0,0)
+import qualified Data.Aeson.KeyMap as AM
+#else
+import qualified Data.HashMap.Strict as AM
+#endif
+
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Maybe (isJust)
 import Data.Text (Text)
@@ -288,7 +295,7 @@ keyValueEntityFromJSON _ = fail "keyValueEntityFromJSON: not an object"
 -- @
 entityIdToJSON :: (PersistEntity record, ToJSON record) => Entity record -> Value
 entityIdToJSON (Entity key value) = case toJSON value of
-        Object o -> Object $ HM.insert "id" (toJSON key) o
+        Object o -> Object $ AM.insert "id" (toJSON key) o
         x -> x
 
 -- | Predefined @parseJSON@. The input JSON looks like

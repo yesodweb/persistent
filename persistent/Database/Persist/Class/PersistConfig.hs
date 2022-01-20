@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP #-}
+
 module Database.Persist.Class.PersistConfig
     ( PersistConfig (..)
     ) where
@@ -5,7 +7,13 @@ module Database.Persist.Class.PersistConfig
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Data.Aeson (Value (Object))
 import Data.Aeson.Types (Parser)
-import qualified Data.HashMap.Strict as HashMap
+
+#if MIN_VERSION_aeson(2,0,0)
+import qualified Data.Aeson.KeyMap as AM
+#else
+import qualified Data.HashMap.Strict as AM
+#endif
+
 import Data.Kind (Type)
 
 -- | Represents a value containing all the configuration options for a specific
@@ -43,10 +51,10 @@ instance
     type PersistConfigPool (Either c1 c2) = PersistConfigPool c1
 
     loadConfig (Object o) =
-        case HashMap.lookup "left" o of
+        case AM.lookup "left" o of
             Just v -> Left <$> loadConfig v
             Nothing ->
-                case HashMap.lookup "right" o of
+                case AM.lookup "right" o of
                     Just v -> Right <$> loadConfig v
                     Nothing -> fail "PersistConfig for Either: need either a left or right"
     loadConfig _ = fail "PersistConfig for Either: need an object"
