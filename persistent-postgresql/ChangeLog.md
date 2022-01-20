@@ -1,5 +1,10 @@
 # Changelog for persistent-postgresql
 
+## 2.13.2.2
+
+* [#1351](https://github.com/yesodweb/persistent/pull/1351/)
+    * Support `aeson-2.0` in test suite.
+
 ## 2.13.2.1
 
 * [#1331](https://github.com/yesodweb/persistent/pull/1331)
