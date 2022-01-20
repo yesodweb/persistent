@@ -1,5 +1,10 @@
 # Changelog for persistent
 
+## 2.13.2.2
+
+* [#1351](https://github.com/yesodweb/persistent/pull/1351/)
+    * `aeson-2.0` support
+
 ## 2.13.2.1
 
 * [#1329](https://github.com/yesodweb/persistent/pull/1329)
