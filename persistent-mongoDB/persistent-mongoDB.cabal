@@ -19,6 +19,8 @@ Flag high_precision_date
    Default: False
 
 library
+    if impl(ghc >= 9.2)
+        buildable: False
     build-depends:   base               >= 4.8 && < 5
                    , persistent         >= 2.12   && < 3
                    , aeson              >= 1.0
@@ -45,6 +47,8 @@ library
      cpp-options: -DHIGH_PRECISION_DATE
 
 test-suite test
+    if impl(ghc >= 9.2)
+        buildable: False
     type:            exitcode-stdio-1.0
     main-is:         main.hs
     hs-source-dirs:  test
