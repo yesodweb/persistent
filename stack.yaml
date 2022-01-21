@@ -12,6 +12,5 @@ packages:
 
 extra-deps:
   - aeson-2.0.2.0
-  # https://github.com/yesodweb/shakespeare/pull/260
   # https://github.com/commercialhaskell/stackage/issues/6294
   - happy-1.20.0
