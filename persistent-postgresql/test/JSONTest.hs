@@ -16,7 +16,7 @@
 module JSONTest where
 
 import Control.Monad.IO.Class (MonadIO)
-import Data.Aeson
+import Data.Aeson hiding (Key)
 import qualified Data.Vector as V (fromList)
 import Test.HUnit (assertBool)
 import Test.Hspec.Expectations ()

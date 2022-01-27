@@ -1,5 +1,9 @@
 # Changelog for persistent-sqlite
 
+## 2.13.0.4
+
+* `aeson-2.0` support [#1351](https://github.com/yesodweb/persistent/pull/1351/)
+
 ## 2.13.0.3
 
 * Somehow failed to properly release the safe-to-remove changes.
