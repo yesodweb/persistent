@@ -1,6 +1,6 @@
 # Changelog for persistent-postgresql
 
-## 2.13.2.2
+## 2.13.3.0
 
 * [#1349](https://github.com/yesodweb/persistent/pull/1349)
     * Add `BackendCompatible (RawPostgresql b) (RawPostgresql b)` instance.
