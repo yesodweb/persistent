@@ -8,3 +8,8 @@ packages:
   - ./persistent-postgresql
   - ./persistent-redis
   - ./persistent-qq
+
+extra-deps:
+    - lift-type-0.1.0.0
+    - mysql-0.2.1
+    - mysql-simple-0.4.7

@@ -45,11 +45,13 @@ import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT, runExceptT)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT)
 import Control.Monad.Trans.Writer (runWriterT)
+import Data.Proxy (Proxy(..))
 
 import Data.Acquire (Acquire, mkAcquire, with)
 import Data.Aeson
 import Data.Aeson.Types (modifyFailure)
 import Data.ByteString (ByteString)
+import qualified Data.ByteString.Lazy as BSL
 import Data.Conduit
 import qualified Data.Conduit.List as CL
 import Data.Either (partitionEithers)
@@ -335,6 +337,7 @@ getGetter field = go (MySQLBase.fieldType field)
       case m of
         Just g -> PersistLiteral g
         Nothing -> error "Unexpected null in database specific value"
+    go MySQLBase.Json       _ _  = convertPV PersistByteString
     -- Unsupported
     go other _ _ = error $ "MySQL.getGetter: type " ++
                       show other ++ " not supported."
