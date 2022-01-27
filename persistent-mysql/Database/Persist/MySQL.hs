@@ -46,7 +46,6 @@ import Control.Monad.Trans.Except (ExceptT, runExceptT)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT)
 import Control.Monad.Trans.Writer (runWriterT)
 
-import qualified Data.List.NonEmpty as NEL
 import Data.Acquire (Acquire, mkAcquire, with)
 import Data.Aeson
 import Data.Aeson.Types (modifyFailure)
@@ -59,6 +58,7 @@ import Data.Function (on)
 import Data.IORef
 import Data.Int (Int64)
 import Data.List (find, groupBy, intercalate, sort)
+import qualified Data.List.NonEmpty as NEL
 import qualified Data.Map as Map
 import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
 import Data.Monoid ((<>))
@@ -72,9 +72,9 @@ import GHC.Stack
 import System.Environment (getEnvironment)
 
 import Database.Persist.Sql
-import Database.Persist.SqlBackend
 import Database.Persist.Sql.Types.Internal (makeIsolationLevelStatement)
 import qualified Database.Persist.Sql.Util as Util
+import Database.Persist.SqlBackend
 
 import qualified Database.MySQL.Base as MySQLBase
 import qualified Database.MySQL.Base.Types as MySQLBase
