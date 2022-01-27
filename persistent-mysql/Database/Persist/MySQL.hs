@@ -453,7 +453,7 @@ addTable cols entity = AddTable $ concat
     , "("
     , idtxt
     , if null nonIdCols then [] else ","
-    , intercalate "," $ map showColumn nonIdCols
+    , intercalate "," $ map showCreateColumn nonIdCols
     , ")"
     ]
   where
@@ -467,7 +467,9 @@ addTable cols entity = AddTable $ concat
                 concat
                     [ " PRIMARY KEY ("
                     , intercalate ","
-                  $ map (escapeF . fieldDB) $ NEL.toList $ compositeFields pdef
+                        $ map (escapeF . fieldDB)
+                        $ NEL.toList
+                        $ compositeFields pdef
                     , ")"
                     ]
             EntityIdField idField ->
@@ -961,8 +963,14 @@ findAlters edef allDefs col@(Column name isNull type_ def gen _defConstraintName
 
 -- | Prints the part of a @CREATE TABLE@ statement about a given
 -- column.
-showColumn :: Column -> String
-showColumn (Column n nu t def gen _defConstraintName maxLen ref) = concat
+showCreateColumn :: Column -> String
+showCreateColumn = showColumn False
+
+showAlterColumn :: Column -> String
+showAlterColumn = showColumn True
+
+showColumn :: Bool -> Column -> String
+showColumn showReferences (Column n nu t def gen _defConstraintName maxLen ref) = concat
     [ escapeF n
     , " "
     , showSqlType t maxLen True
@@ -975,13 +983,21 @@ showColumn (Column n nu t def gen _defConstraintName maxLen ref) = concat
     , if nu then "NULL" else "NOT NULL"
     , case def of
         Nothing -> ""
-        Just s -> -- Avoid DEFAULT NULL, since it is always unnecessary, and is an error for text/blob fields
-                  if T.toUpper s == "NULL" then ""
-                  else " DEFAULT " ++ T.unpack s
+        Just s ->
+            -- Avoid DEFAULT NULL, since it is always unnecessary, and is an error for text/blob fields
+            if T.toUpper s == "NULL"
+                then ""
+                else " DEFAULT " ++ T.unpack s
     , case ref of
-        Nothing -> ""
-        Just cRef -> " REFERENCES " ++ escapeE (crTableName cRef)
-            <> " " <> T.unpack (renderFieldCascade (crFieldCascade cRef))
+        Just cRef | showReferences ->
+            mconcat
+                [ " REFERENCES "
+                , escapeE (crTableName cRef)
+                , " "
+                , T.unpack (renderFieldCascade (crFieldCascade cRef))
+                ]
+        _ ->
+            ""
     ]
 
 
@@ -1050,14 +1066,14 @@ showAlter table (Change (Column n nu t def gen defConstraintName maxLen _ref)) =
     , " CHANGE "
     , escapeF n
     , " "
-    , showColumn (Column n nu t def gen defConstraintName maxLen Nothing)
+    , showAlterColumn (Column n nu t def gen defConstraintName maxLen Nothing)
     ]
 showAlter table (Add' col) =
     concat
     [ "ALTER TABLE "
     , escapeE table
     , " ADD COLUMN "
-    , showColumn col
+    , showAlterColumn col
     ]
 showAlter table (Drop c) =
     concat
