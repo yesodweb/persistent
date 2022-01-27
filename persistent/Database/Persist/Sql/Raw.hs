@@ -76,7 +76,7 @@ getStmt sql = do
 getStmtConn :: SqlBackend -> Text -> IO Statement
 getStmtConn conn sql = do
     let cacheK = mkCacheKeyFromQuery sql
-    mstmt <- liftIO $ statementCacheLookup (connStmtMap conn) cacheK
+    mstmt <- statementCacheLookup (connStmtMap conn) cacheK
     stmt <- case mstmt of
         Just stmt -> pure stmt
         Nothing -> do
