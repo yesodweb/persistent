@@ -1,5 +1,9 @@
 # Changelog for persistent-mysql
 
+## 2.13.0.4
+
+* No longer errors on `json` columns. [#1333](https://github.com/yesodweb/persistent/pull/1333)
+
 ## 2.13.0.3
 
 * Bugfix: Omit `REFERENCES` in `CREATe TABLE` statements. These are ignored by
