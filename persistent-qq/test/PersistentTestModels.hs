@@ -15,7 +15,7 @@
 module PersistentTestModels where
 
 import Control.Monad.Reader
-import Data.Aeson
+import Data.Aeson hiding (Key)
 import Data.Proxy
 import Data.Text (Text)
 

@@ -1,12 +1,14 @@
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE CPP #-}
 
 -- | This module contains an intermediate representation of values before the
 -- backends serialize them into explicit database types.
 --
 -- @since 2.13.0.0
 module Database.Persist.PersistValue
-    ( module Database.Persist.PersistValue
-    , PersistValue(.., PersistLiteral, PersistLiteralEscaped, PersistDbSpecific)
+    ( PersistValue(.., PersistLiteral, PersistLiteralEscaped, PersistDbSpecific)
+    , fromPersistValueText
+    , LiteralType(..)
     ) where
 
 import qualified Data.ByteString.Base64 as B64
@@ -17,7 +19,6 @@ import Data.Int (Int64)
 import qualified Data.Scientific
 import Data.Text.Encoding.Error (lenientDecode)
 import Data.Bits (shiftL, shiftR)
-import Control.Arrow (second)
 import Numeric (readHex, showHex)
 import qualified Data.Text as Text
 import Data.Text (Text)
@@ -26,7 +27,14 @@ import Data.Time (Day, TimeOfDay, UTCTime)
 import Web.PathPieces (PathPiece(..))
 import qualified Data.Aeson as A
 import qualified Data.ByteString as BS
-import qualified Data.HashMap.Strict as HM
+
+#if MIN_VERSION_aeson(2,0,0)
+import qualified Data.Aeson.Key as K
+import qualified Data.Aeson.KeyMap as AM
+#else
+import qualified Data.HashMap.Strict as AM
+#endif
+
 import Web.HttpApiData
        ( FromHttpApiData(..)
        , ToHttpApiData(..)
@@ -124,6 +132,18 @@ pattern PersistLiteral bs <- PersistLiteral_ _ bs where
 
 {-# DEPRECATED PersistDbSpecific "Deprecated since 2.11 because of inconsistent escaping behavior across backends. The Postgres backend escapes these values, while the MySQL backend does not. If you are using this, please switch to 'PersistLiteral_' and provide a relevant 'LiteralType' for your conversion." #-}
 
+keyToText :: Key -> Text
+keyFromText :: Text -> Key
+#if MIN_VERSION_aeson(2,0,0)
+type Key = K.Key
+keyToText = K.toText
+keyFromText = K.fromText
+#else
+type Key = Text
+keyToText = id
+keyFromText = id
+#endif
+
 instance ToHttpApiData PersistValue where
     toUrlPiece val =
         case fromPersistValueText val of
@@ -174,7 +194,8 @@ instance A.ToJSON PersistValue where
     toJSON (PersistDay d) = A.String $ Text.pack $ 'd' : show d
     toJSON PersistNull = A.Null
     toJSON (PersistList l) = A.Array $ V.fromList $ map A.toJSON l
-    toJSON (PersistMap m) = A.object $ map (second A.toJSON) m
+    toJSON (PersistMap m) = A.object $ map go m
+        where go (k, v) = (keyFromText k, A.toJSON v)
     toJSON (PersistLiteral_ litTy b) =
         let encoded = TE.decodeUtf8 $ B64.encode b
             prefix =
@@ -247,7 +268,7 @@ instance A.FromJSON PersistValue where
     parseJSON A.Null = return PersistNull
     parseJSON (A.Array a) = fmap PersistList (mapM A.parseJSON $ V.toList a)
     parseJSON (A.Object o) =
-        fmap PersistMap $ mapM go $ HM.toList o
+        fmap PersistMap $ mapM go $ AM.toList o
       where
-        go (k, v) = (,) k <$> A.parseJSON v
+        go (k, v) = (,) (keyToText k) <$> A.parseJSON v
 
