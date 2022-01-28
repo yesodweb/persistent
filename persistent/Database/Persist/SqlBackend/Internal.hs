@@ -14,6 +14,7 @@ import Database.Persist.SqlBackend.Internal.IsolationLevel
 import Database.Persist.SqlBackend.Internal.MkSqlBackend
 import Database.Persist.SqlBackend.Internal.Statement
 import Database.Persist.SqlBackend.Internal.StatementCache (StatementCache)
+import Database.Persist.SqlBackend.StatementCache
 import Database.Persist.Types.Base
 
 -- | A 'SqlBackend' represents a handle or connection to a database. It
@@ -166,6 +167,7 @@ mkSqlBackend MkSqlBackendArgs {..} =
         , connInsertManySql = Nothing
         , connVault = Vault.empty
         , connHooks = emptySqlBackendHooks
+        , connStmtMap = mkStatementCache $ mkSimpleStatementCache connStmtMap
         , ..
         }
 

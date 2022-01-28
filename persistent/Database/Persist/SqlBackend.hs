@@ -6,7 +6,7 @@ module Database.Persist.SqlBackend
       SqlBackend
     , mkSqlBackend
     , MkSqlBackendArgs(..)
-    , SqlBackendHooks(..)
+    , SqlBackendHooks
     , emptySqlBackendHooks
     -- * Utilities
 
@@ -30,6 +30,7 @@ module Database.Persist.SqlBackend
     , setConnVault
     , modifyConnVault
     , setConnHooks
+    -- ** SqlBackendHooks
     ) where
 
 import Control.Monad.Reader
@@ -141,7 +142,7 @@ getConnUpsertSql = do
 
 -- | Retrieve the vault from the provided database backend.
 --
--- @since 2.14.0.0
+-- @since 2.13.X.0
 getConnVault
     ::  (BackendCompatible SqlBackend backend, MonadReader backend m)
     => m Vault
@@ -150,7 +151,7 @@ getConnVault = do
 
 -- | Retrieve instrumentation hooks from the provided database backend.
 --
--- @since 2.14.0.0
+-- @since 2.13.X.0
 getConnHooks
     ::  (BackendCompatible SqlBackend backend, MonadReader backend m)
     => m SqlBackendHooks
@@ -160,7 +161,7 @@ getConnHooks = do
 -- | Get a tag displaying what database the 'SqlBackend' is for. Can be
 -- used to differentiate features in downstream libraries for different
 -- database backends.
--- @since 2.14.0.0
+-- @since 2.13.X.0
 getRDBMS
     :: (BackendCompatible SqlBackend backend, MonadReader backend m)
     => m Text
@@ -229,21 +230,21 @@ setConnPutManySql  mkQuery sb =
 
 -- | Set the vault on the provided database backend.
 --
--- @since 2.14.0
+-- @since 2.13.0
 setConnVault :: Vault -> SqlBackend -> SqlBackend
 setConnVault vault sb =
     sb { connVault = vault }
 
 -- | Modify the vault on the provided database backend.
 --
--- @since 2.14.0
+-- @since 2.13.0
 modifyConnVault :: (Vault -> Vault) -> SqlBackend  -> SqlBackend
 modifyConnVault f sb =
     sb { connVault = f $ connVault sb }
 
 -- | Set hooks on the provided database backend.
 --
--- @since 2.14.0
+-- @since 2.13.0
 setConnHooks :: SqlBackendHooks -> SqlBackend -> SqlBackend
 setConnHooks hooks sb =
     sb { connHooks = hooks }

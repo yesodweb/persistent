@@ -295,7 +295,7 @@ open' modConn getVer constructor cstr logFunc = do
     conn <- PG.connectPostgreSQL cstr
     modConn conn
     ver <- getVer conn
-    smap <- mkStatementCache <$> mkSimpleStatementCache
+    smap <- newIORef mempty
     return $ constructor (createBackend logFunc ver smap) conn
 
 -- | Gets the PostgreSQL server version
@@ -364,25 +364,25 @@ openSimpleConn = openSimpleConnWithVersion getServerVersion
 -- @since 2.9.1
 openSimpleConnWithVersion :: (PG.Connection -> IO (Maybe Double)) -> LogFunc -> PG.Connection -> IO SqlBackend
 openSimpleConnWithVersion getVerDouble logFunc conn = do
-    smap <- mkSimpleStatementCache
+    smap <- newIORef mempty
     serverVersion <- oldGetVersionToNew getVerDouble conn
-    return $ createBackend logFunc serverVersion (mkStatementCache smap) conn
+    return $ createBackend logFunc serverVersion smap conn
 
 underlyingConnectionKey :: Vault.Key PG.Connection
 underlyingConnectionKey = unsafePerformIO Vault.newKey
 {-# NOINLINE underlyingConnectionKey #-}
 
--- | Access underlying connection, returning 'Nothing' is the 'SqlBackend'
+-- | Access underlying connection, returning 'Nothing' if the 'SqlBackend'
 -- provided isn't backed by postgresql-simple.
 --
--- @since 2.14.0
+-- @since 2.13.0
 getSimpleConn :: (BackendCompatible SqlBackend backend) => backend -> Maybe PG.Connection
 getSimpleConn = Vault.lookup underlyingConnectionKey <$> getConnVault
 
 -- | Create the backend given a logging function, server version, mutable statement cell,
 -- and connection.
 createBackend :: LogFunc -> NonEmpty Word
-              -> StatementCache -> PG.Connection -> SqlBackend
+              -> IORef (Map.Map Text Statement) -> PG.Connection -> SqlBackend
 createBackend logFunc serverVersion smap conn =
     maybe id setConnPutManySql (upsertFunction putManySql serverVersion) $
     maybe id setConnUpsertSql (upsertFunction upsertSql' serverVersion) $
@@ -1523,7 +1523,7 @@ mockMigrate allDefs _ entity = fmap (fmap $ map showAlterDb) $ do
 -- with the difference that an actual database is not needed.
 mockMigration :: Migration -> IO ()
 mockMigration mig = do
-    smap <- mkStatementCache <$> mkSimpleStatementCache
+    smap <- newIORef mempty
     let sqlbackend =
             mkSqlBackend MkSqlBackendArgs
                 { connPrepare = \_ -> do

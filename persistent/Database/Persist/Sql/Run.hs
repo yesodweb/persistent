@@ -19,7 +19,7 @@ import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Types.Internal
 import Database.Persist.SqlBackend.Internal.StatementCache
-       (StatementCache(statementCacheClear))
+import Database.Persist.SqlBackend.Internal.SqlPoolHooks
 
 -- | Get a connection from the pool, run the given action, and then return the
 -- connection to the pool.
@@ -102,55 +102,11 @@ runSqlPoolWithHooks r pconn i before after onException =
         , runOnException = \b _ e -> void $ onException b e
         }
 
--- | A set of hooks that may be used to alter the behaviour
--- of @runSqlPoolWithExtensibleHooks@ in a backwards-compatible
--- fashion.
-data SqlPoolHooks m backend = SqlPoolHooks
-    { alterBackend :: backend -> m backend
-    -- ^ Alter the backend prior to executing any actions with it.
-    , runBefore :: backend -> Maybe IsolationLevel -> m ()
-    -- ^ Run this action immediately before the action is performed.
-    , runAfter :: backend -> Maybe IsolationLevel -> m ()
-    -- ^ Run this action immediately after the action is completed.
-    , runOnException :: backend -> Maybe IsolationLevel -> UE.SomeException -> m ()
-    -- ^ This action is performed when an exception is received. The
-    -- exception is provided as a convenience - it is rethrown once this
-    -- cleanup function is complete.
-    }
-
--- | Lifecycle hooks that may be altered to extend SQL pool behavior
--- in a backwards compatible fashion.
---
--- By default, the hooks have the following semantics:
---
--- - 'alterBackend' has no effect
--- - 'runBefore' begins a transaction
--- - 'runAfter' commits the current transaction
--- - 'runOnException' rolls back the current transaction
---
--- @since 2.14.0.0
-defaultSqlPoolHooks :: (MonadIO m, BackendCompatible SqlBackend backend) => SqlPoolHooks m backend
-defaultSqlPoolHooks = SqlPoolHooks
-    { alterBackend = pure
-    , runBefore = \conn mi -> do
-        let sqlBackend = projectBackend conn
-        let getter = getStmtConn sqlBackend
-        liftIO $ connBegin sqlBackend getter mi
-    , runAfter = \conn _ -> do
-        let sqlBackend = projectBackend conn
-        let getter = getStmtConn sqlBackend
-        liftIO $ connCommit sqlBackend getter
-    , runOnException = \conn _ _ -> do
-        let sqlBackend = projectBackend conn
-        let getter = getStmtConn sqlBackend
-        liftIO $ connRollback sqlBackend getter
-    }
-
 -- | This function is how 'runSqlPoolWithHooks' is defined.
 --
 -- It's currently the most general function for using a SQL pool.
 --
--- @since 2.14.0.0
+-- @since 2.13.0.0
 runSqlPoolWithExtensibleHooks
     :: forall backend m a. (MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => ReaderT backend m a

@@ -74,9 +74,11 @@ library
 
         Database.Persist.SqlBackend
         Database.Persist.SqlBackend.StatementCache
+        Database.Persist.SqlBackend.SqlPoolHooks
         Database.Persist.SqlBackend.Internal
         Database.Persist.SqlBackend.Internal.InsertSqlResult
         Database.Persist.SqlBackend.Internal.IsolationLevel
+        Database.Persist.SqlBackend.Internal.SqlPoolHooks
         Database.Persist.SqlBackend.Internal.Statement
         Database.Persist.SqlBackend.Internal.StatementCache
         Database.Persist.SqlBackend.Internal.MkSqlBackend
