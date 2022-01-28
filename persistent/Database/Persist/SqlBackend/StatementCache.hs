@@ -18,35 +18,35 @@ import Data.Text (Text)
 
 -- | Configuration parameters for creating a custom statement cache
 --
--- @since 2.13.X
+-- @since 2.13.3
 data MkStatementCache = MkStatementCache
     { statementCacheLookup :: StatementCacheKey -> IO (Maybe Statement)
     -- ^ Retrieve a statement from the cache, or return nothing if it is not found.
     --
-    -- @since 2.13.X
+    -- @since 2.13.3
     , statementCacheInsert :: StatementCacheKey -> Statement -> IO ()
     -- ^ Put a new statement into the cache. An immediate lookup of
     -- the statement MUST return the inserted statement for the given
     -- cache key. Depending on the implementation, the statement cache MAY
     -- choose to evict other statements from the cache within this function.
     --
-    -- @since 2.13.X
+    -- @since 2.13.3
     , statementCacheClear :: IO ()
     -- ^ Remove all statements from the cache. Implementations of this
     -- should be sure to call `stmtFinalize` on all statements removed
     -- from the cache.
     --
-    -- @since 2.13.X
+    -- @since 2.13.3
     , statementCacheSize :: IO Int
     -- ^ Get the current size of the cache.
     --
-    -- @since 2.13.X
+    -- @since 2.13.3
     }
 
 
 -- | Make a simple statement cache that will cache statements if they are not currently cached.
 --
--- @since 2.13.X
+-- @since 2.13.3
 mkSimpleStatementCache :: IORef (Map Text Statement) -> MkStatementCache
 mkSimpleStatementCache stmtMap =
     MkStatementCache

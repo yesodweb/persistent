@@ -142,7 +142,7 @@ getConnUpsertSql = do
 
 -- | Retrieve the vault from the provided database backend.
 --
--- @since 2.13.X.0
+-- @since 2.13.3.0
 getConnVault
     ::  (BackendCompatible SqlBackend backend, MonadReader backend m)
     => m Vault
@@ -151,7 +151,7 @@ getConnVault = do
 
 -- | Retrieve instrumentation hooks from the provided database backend.
 --
--- @since 2.13.X.0
+-- @since 2.13.3.0
 getConnHooks
     ::  (BackendCompatible SqlBackend backend, MonadReader backend m)
     => m SqlBackendHooks
@@ -161,7 +161,7 @@ getConnHooks = do
 -- | Get a tag displaying what database the 'SqlBackend' is for. Can be
 -- used to differentiate features in downstream libraries for different
 -- database backends.
--- @since 2.13.X.0
+-- @since 2.13.3.0
 getRDBMS
     :: (BackendCompatible SqlBackend backend, MonadReader backend m)
     => m Text

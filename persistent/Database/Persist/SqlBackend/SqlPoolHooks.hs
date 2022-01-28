@@ -32,7 +32,7 @@ import Database.Persist.Class.PersistStore
 -- - 'runAfter' commits the current transaction
 -- - 'runOnException' rolls back the current transaction
 --
--- @since 2.13.X.0
+-- @since 2.13.3.0
 defaultSqlPoolHooks :: (MonadIO m, BackendCompatible SqlBackend backend) => SqlPoolHooks m backend
 defaultSqlPoolHooks = SqlPoolHooks
     { alterBackend = pure
