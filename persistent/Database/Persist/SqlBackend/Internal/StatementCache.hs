@@ -6,7 +6,7 @@ import Database.Persist.SqlBackend.Internal.Statement
 -- | A statement cache used to lookup statements that have already been prepared
 -- for a given query.
 --
--- @since 2.13.X
+-- @since 2.13.3
 data StatementCache = StatementCache
     { statementCacheLookup :: StatementCacheKey -> IO (Maybe Statement)
     , statementCacheInsert :: StatementCacheKey -> Statement -> IO ()
