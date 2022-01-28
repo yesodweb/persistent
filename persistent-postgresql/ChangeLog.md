@@ -1,12 +1,22 @@
 # Changelog for persistent-postgresql
 
-## 2.14.0.0 (unreleased)
+## 2.13.4.0 (unreleased)
 
 * [#1341](https://github.com/yesodweb/persistent/pull/1341)
     * Add `SqlBackendHooks` to allow for instrumentation of queries.
 
 * [#1327](https://github.com/yesodweb/persistent/pull/1327)
     * Update backend to support new `StatementCache` interface
+
+## 2.13.3.0
+
+* [#1349](https://github.com/yesodweb/persistent/pull/1349)
+    * Add `BackendCompatible (RawPostgresql b) (RawPostgresql b)` instance.
+
+## 2.13.2.2
+
+* [#1351](https://github.com/yesodweb/persistent/pull/1351/)
+    * Support `aeson-2.0` in test suite.
 
 ## 2.13.2.1
 

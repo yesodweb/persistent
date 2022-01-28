@@ -1,6 +1,6 @@
 # Changelog for persistent
 
-## 2.14.0.0 (unreleased)
+## 2.13.3.0 (unreleased)
 
 * [#1341](https://github.com/yesodweb/persistent/pull/1341)
     * Add `SqlBackendHooks` to allow for instrumentation of queries.
@@ -8,6 +8,10 @@
 * [#1327](https://github.com/yesodweb/persistent/pull/1327)
     * Update `SqlBackend` to use new `StatementCache` interface
       instead of `IORef (Map Text Statement)`
+## 2.13.2.2
+
+* [#1351](https://github.com/yesodweb/persistent/pull/1351/)
+    * `aeson-2.0` support
 
 ## 2.13.2.1
 

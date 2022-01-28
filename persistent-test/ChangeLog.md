@@ -1,5 +1,9 @@
 ## Unreleased changes
 
+## 2.13.0.4
+
+* `aeson-2.0` support
+
 ## 2.13.0.3
 
 * Accidentally released 2.13.0.2 with some testing changes.

@@ -1853,6 +1853,9 @@ data RawPostgresql backend = RawPostgresql
     -- @since 2.13.1.0
     }
 
+instance BackendCompatible (RawPostgresql b) (RawPostgresql b) where
+    projectBackend = id
+
 instance BackendCompatible b (RawPostgresql b) where
     projectBackend = persistentBackend
 

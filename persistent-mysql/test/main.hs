@@ -54,6 +54,7 @@ import qualified CustomConstraintTest
 import qualified ForeignKey
 import qualified GeneratedColumnTestSQL
 import qualified ImplicitUuidSpec
+import qualified JSONTest
 import qualified LongIdentifierTest
 import qualified RenameTest
 import qualified SumTypeTest
@@ -212,6 +213,7 @@ main = do
         xdescribe "The migration for this test currently fails because of MySQL's 64 character limit for identifiers. See https://github.com/yesodweb/persistent/issues/1000 for details" $
             LongIdentifierTest.specsWith db
         GeneratedColumnTestSQL.specsWith db
+        JSONTest.specs
 
 roundFn :: RealFrac a => a -> Integer
 roundFn = round
