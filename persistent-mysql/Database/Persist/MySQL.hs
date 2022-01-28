@@ -45,6 +45,7 @@ import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT, runExceptT)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT)
 import Control.Monad.Trans.Writer (runWriterT)
+import Data.IORef (newIORef)
 import Data.Proxy (Proxy(..))
 
 import Data.Acquire (Acquire, mkAcquire, with)
@@ -132,7 +133,7 @@ openMySQLConn :: MySQL.ConnectInfo -> LogFunc -> IO (MySQL.Connection, SqlBacken
 openMySQLConn ci logFunc = do
     conn <- MySQL.connect ci
     MySQLBase.autocommit conn False -- disable autocommit!
-    smap <- mkStatementCache <$> mkSimpleStatementCache
+    smap <- newIORef mempty
     let
         backend =
             setConnPutManySql putManySql $
@@ -1298,7 +1299,7 @@ mockMigrate _connectInfo allDefs _getter val = do
 -- the actual database isn't already present in the system.
 mockMigration :: Migration -> IO ()
 mockMigration mig = do
-    smap <- mkStatementCache <$> mkSimpleStatementCache
+    smap <- newIORef mempty
     let sqlbackend =
             mkSqlBackend MkSqlBackendArgs
                 { connPrepare = \_ -> do
