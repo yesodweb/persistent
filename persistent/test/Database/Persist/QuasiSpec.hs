@@ -369,7 +369,7 @@ User
     age  Int
     |]
                 let [user] = parse lowerCaseSettings definitions
-                    errMsg = [st|expected only one of: UnboundIdDef {unboundIdEntityName = EntityNameHS {unEntityNameHS = "User"}, unboundIdDBName = FieldNameDB {unFieldNameDB = "id"}, unboundIdAttrs = [FieldAttrOther "Text"], unboundIdCascade = FieldCascade {fcOnUpdate = Nothing, fcOnDelete = Nothing}, unboundIdType = Just (FTTypeCon Nothing "Text")} UnboundIdDef {unboundIdEntityName = EntityNameHS {unEntityNameHS = "User"}, unboundIdDBName = FieldNameDB {unFieldNameDB = "id"}, unboundIdAttrs = [FieldAttrOther "Text"], unboundIdCascade = FieldCascade {fcOnUpdate = Nothing, fcOnDelete = Nothing}, unboundIdType = Just (FTTypeCon Nothing "Text")}|]
+                    errMsg = [st|expected only one Id declaration per entity|]
                 evaluate (unboundEntityDef user) `shouldThrow`
                   errorCall (T.unpack errMsg)
 
@@ -405,7 +405,7 @@ User
     Primary name
     |]
                 let [user] = parse lowerCaseSettings definitions
-                    errMsg = [st|expected only one of: UnboundCompositeDef {unboundCompositeCols = [FieldNameHS {unFieldNameHS = "ref"}], unboundCompositeAttrs = []} UnboundCompositeDef {unboundCompositeCols = [FieldNameHS {unFieldNameHS = "name"}], unboundCompositeAttrs = []}|]
+                    errMsg = [st|expected only one Primary declaration per entity|]
                 evaluate (unboundEntityDef user) `shouldThrow`
                   errorCall (T.unpack errMsg)
 

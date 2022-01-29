@@ -52,7 +52,6 @@ module Database.Persist.Quasi.Internal
 import Prelude hiding (lines)
 
 import Control.Applicative (Alternative((<|>)))
-import Control.Monad (mplus)
 import Data.Char (isLower, isSpace, isUpper, toLower)
 import Data.List (find, foldl')
 import Data.List.NonEmpty (NonEmpty(..))
@@ -693,10 +692,16 @@ mkUnboundEntityDef ps parsedEntDef =
         foldMap (maybe mempty (takeConstraint ps entNameHS cols) . NEL.nonEmpty) textAttribs
 
     idField =
-        entityConstraintDefsIdField entityConstraintDefs
+        case entityConstraintDefsIdField entityConstraintDefs of
+            SetMoreThanOnce -> error "expected only one Id declaration per entity"
+            SetOnce a -> Just a
+            NotSet -> Nothing
 
     primaryComposite =
-        entityConstraintDefsPrimaryComposite entityConstraintDefs
+        case entityConstraintDefsPrimaryComposite entityConstraintDefs of
+            SetMoreThanOnce -> error "expected only one Primary declaration per entity"
+            SetOnce a -> Just a
+            NotSet -> Nothing
 
     cols :: [UnboundFieldDef]
     cols = reverse . fst . foldr (associateComments ps) ([], []) $ reverse attribs
@@ -917,9 +922,26 @@ getSqlNameOr def =
             _ ->
                 Nothing
 
+data SetOnceAtMost a
+  = NotSet
+  | SetOnce a
+  | SetMoreThanOnce
+
+instance Semigroup (SetOnceAtMost a) where
+    a <> b =
+        case (a, b) of
+            (_, NotSet) -> a
+            (NotSet, _) -> b
+            (SetOnce _, SetOnce _) -> SetMoreThanOnce
+            _ -> a
+
+instance Monoid (SetOnceAtMost a) where
+    mempty =
+        NotSet
+
 data EntityConstraintDefs = EntityConstraintDefs
-    { entityConstraintDefsIdField :: Maybe UnboundIdDef
-    , entityConstraintDefsPrimaryComposite :: Maybe UnboundCompositeDef
+    { entityConstraintDefsIdField :: SetOnceAtMost UnboundIdDef
+    , entityConstraintDefsPrimaryComposite :: SetOnceAtMost UnboundCompositeDef
     , entityConstraintDefsUniques :: Maybe (NonEmpty UniqueDef)
     , entityConstraintDefsForeigns :: Maybe (NonEmpty UnboundForeignDef)
     }
@@ -927,25 +949,15 @@ data EntityConstraintDefs = EntityConstraintDefs
 instance Semigroup EntityConstraintDefs where
     a <> b =
         EntityConstraintDefs
-            { entityConstraintDefsIdField = justOneId (entityConstraintDefsIdField a) (entityConstraintDefsIdField b)
-            , entityConstraintDefsPrimaryComposite = justOneComposite (entityConstraintDefsPrimaryComposite a) (entityConstraintDefsPrimaryComposite b)
+            { entityConstraintDefsIdField = entityConstraintDefsIdField a <> entityConstraintDefsIdField b
+            , entityConstraintDefsPrimaryComposite = entityConstraintDefsPrimaryComposite a <> entityConstraintDefsPrimaryComposite b
             , entityConstraintDefsUniques = entityConstraintDefsUniques a <> entityConstraintDefsUniques b
             , entityConstraintDefsForeigns = entityConstraintDefsForeigns a <> entityConstraintDefsForeigns b
             }
 
-justOneId :: Maybe UnboundIdDef -> Maybe UnboundIdDef -> Maybe UnboundIdDef
-justOneId (Just x) (Just y) = error $ "expected only one of: "
-  `mappend` show x `mappend` " " `mappend` show y
-justOneId x y = x `mplus` y
-
-justOneComposite :: Maybe UnboundCompositeDef -> Maybe UnboundCompositeDef -> Maybe UnboundCompositeDef
-justOneComposite (Just x) (Just y) = error $ "expected only one of: "
-  `mappend` show x `mappend` " " `mappend` show y
-justOneComposite x y = x `mplus` y
-
 instance Monoid EntityConstraintDefs where
     mempty =
-        EntityConstraintDefs Nothing Nothing Nothing Nothing
+        EntityConstraintDefs mempty mempty Nothing Nothing
 
 entityConstraintDefsUniquesList :: EntityConstraintDefs -> [UniqueDef]
 entityConstraintDefsUniquesList = foldMap NEL.toList . entityConstraintDefsUniques
@@ -974,12 +986,12 @@ takeConstraint ps entityName defs (n :| rest) =
         "Primary" ->
             mempty
                 { entityConstraintDefsPrimaryComposite =
-                    Just (takeComposite (unboundFieldNameHS <$> defs) rest)
+                    SetOnce (takeComposite (unboundFieldNameHS <$> defs) rest)
                 }
         "Id" ->
             mempty
                 { entityConstraintDefsIdField =
-                    Just (takeId ps entityName rest)
+                    SetOnce (takeId ps entityName rest)
                 }
         _ | isCapitalizedText n ->
             mempty
