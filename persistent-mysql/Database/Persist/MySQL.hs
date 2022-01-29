@@ -45,6 +45,7 @@ import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT, runExceptT)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT)
 import Control.Monad.Trans.Writer (runWriterT)
+import Data.IORef (newIORef)
 import Data.Proxy (Proxy(..))
 
 import Data.Acquire (Acquire, mkAcquire, with)
@@ -57,12 +58,12 @@ import qualified Data.Conduit.List as CL
 import Data.Either (partitionEithers)
 import Data.Fixed (Pico)
 import Data.Function (on)
-import Data.IORef
 import Data.Int (Int64)
 import Data.List (find, groupBy, intercalate, sort)
 import qualified Data.List.NonEmpty as NEL
 import qualified Data.Map as Map
 import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
+import qualified Data.Map as Map
 import Data.Monoid ((<>))
 import qualified Data.Monoid as Monoid
 import Data.Pool (Pool)
@@ -77,6 +78,7 @@ import Database.Persist.Sql
 import Database.Persist.Sql.Types.Internal (makeIsolationLevelStatement)
 import qualified Database.Persist.Sql.Util as Util
 import Database.Persist.SqlBackend
+import Database.Persist.SqlBackend.StatementCache
 
 import qualified Database.MySQL.Base as MySQLBase
 import qualified Database.MySQL.Base.Types as MySQLBase
@@ -131,7 +133,7 @@ openMySQLConn :: MySQL.ConnectInfo -> LogFunc -> IO (MySQL.Connection, SqlBacken
 openMySQLConn ci logFunc = do
     conn <- MySQL.connect ci
     MySQLBase.autocommit conn False -- disable autocommit!
-    smap <- newIORef $ Map.empty
+    smap <- newIORef mempty
     let
         backend =
             setConnPutManySql putManySql $
@@ -1297,7 +1299,7 @@ mockMigrate _connectInfo allDefs _getter val = do
 -- the actual database isn't already present in the system.
 mockMigration :: Migration -> IO ()
 mockMigration mig = do
-    smap <- newIORef $ Map.empty
+    smap <- newIORef mempty
     let sqlbackend =
             mkSqlBackend MkSqlBackendArgs
                 { connPrepare = \_ -> do

@@ -1,5 +1,13 @@
 # Changelog for persistent-mysql
 
+## 2.13.1.0 (unreleased)
+
+* [#1341](https://github.com/yesodweb/persistent/pull/1341)
+    * Add `SqlBackendHooks` to allow for instrumentation of queries.
+
+* [#1327](https://github.com/yesodweb/persistent/pull/1327)
+    * Update backend to support new `StatementCache` interface
+
 ## 2.13.0.4
 
 * No longer errors on `json` columns. [#1333](https://github.com/yesodweb/persistent/pull/1333)

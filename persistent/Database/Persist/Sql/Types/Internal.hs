@@ -1,7 +1,7 @@
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE RankNTypes #-}
-{-# language RecordWildCards #-}
-{-# language DuplicateRecordFields #-}
+{-# LANGUAGE RecordWildCards #-}
 
 -- | Breaking changes to this module are not reflected in the major version
 -- number. Prefer to import from "Database.Persist.Sql" instead. If you neeed
@@ -25,24 +25,28 @@ module Database.Persist.Sql.Types.Internal
     , SqlReadT
     , SqlWriteT
     , IsSqlBackend
+    , SqlBackendHooks (..)
     ) where
 
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Reader (ReaderT, runReaderT, ask)
+import Control.Monad.Trans.Reader (ReaderT, ask, runReaderT)
 
 import Database.Persist.Class
-    ( HasPersistBackend (..)
-    , PersistQueryRead, PersistQueryWrite
-    , PersistStoreRead, PersistStoreWrite
-    , PersistUniqueRead, PersistUniqueWrite
-    , BackendCompatible(..)
-    )
-import Database.Persist.Class.PersistStore (IsPersistBackend (..))
+       ( BackendCompatible(..)
+       , HasPersistBackend(..)
+       , PersistQueryRead
+       , PersistQueryWrite
+       , PersistStoreRead
+       , PersistStoreWrite
+       , PersistUniqueRead
+       , PersistUniqueWrite
+       )
+import Database.Persist.Class.PersistStore (IsPersistBackend(..))
 import Database.Persist.SqlBackend.Internal
 import Database.Persist.SqlBackend.Internal.InsertSqlResult
+import Database.Persist.SqlBackend.Internal.IsolationLevel
 import Database.Persist.SqlBackend.Internal.MkSqlBackend
 import Database.Persist.SqlBackend.Internal.Statement
-import Database.Persist.SqlBackend.Internal.IsolationLevel
 
 -- | An SQL backend which can only handle read queries
 --
