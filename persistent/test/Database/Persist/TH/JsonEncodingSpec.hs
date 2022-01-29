@@ -93,7 +93,7 @@ spec = describe "JsonEncodingSpec" $ do
             json_ = encode Null
         (eitherDecode json_ :: Either String JsonEncoding)
             `shouldBe`
-                Left "Error in $: mzero"
+                Left "Error in $: parsing JsonEncoding failed, expected Object, but encountered Null"
 
     prop "works with a Primary" $ \jsonEncoding -> do
         let

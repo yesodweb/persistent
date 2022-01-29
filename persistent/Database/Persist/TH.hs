@@ -2648,8 +2648,8 @@ mkJSON mps (fixEntityDef -> def) = do
     dotColonE <- [|(.:)|]
     dotColonQE <- [|(.:?)|]
     objectE <- [|object|]
+    withObjectE <- [|withObject|]
     obj <- newName "obj"
-    mzeroE <- [|mzero|]
     let
         fields =
             getUnboundFieldDefs def
@@ -2676,15 +2676,19 @@ mkJSON mps (fixEntityDef -> def) = do
         fromJSONI =
             typeInstanceD ''FromJSON (mpsGeneric mps) typ [parseJSON']
           where
-            parseJSON' = FunD 'parseJSON
-                [ normalClause [ConP 'Object [VarP obj]]
+            entNameStrLit =
+                StringL $ T.unpack (unEntityNameHS (getUnboundEntityNameHS def))
+            parseJSONBody =
+                withObjectE `AppE` LitE entNameStrLit `AppE` decoderImpl
+            parseJSON' =
+                FunD 'parseJSON [ normalClause [] parseJSONBody ]
+            decoderImpl =
+                LamE [VarP obj]
                     (foldl'
                         (\x y -> InfixE (Just x) apE' (Just y))
                         (pureE `AppE` ConE conName)
                         pulls
                     )
-                , normalClause [WildP] mzeroE
-                ]
               where
                 pulls =
                     fmap toPull fields
@@ -2692,6 +2696,7 @@ mkJSON mps (fixEntityDef -> def) = do
                     (Just $ VarE obj)
                     (if maybeNullable f then dotColonQE else dotColonE)
                     (Just $ AppE toKeyE $ LitE $ StringL $ unpack $ unFieldNameHS $ unboundFieldNameHS f)
+
     case mpsEntityJSON mps of
         Nothing ->
             return [toJSONI, fromJSONI]
