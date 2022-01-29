@@ -47,6 +47,7 @@ module Database.Persist.Quasi.Internal
     , ForeignFieldReference(..)
     , mkKeyConType
     , isHaskellUnboundField
+    , FieldTypeLit(..)
     ) where
 
 import Prelude hiding (lines)
@@ -64,6 +65,7 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Database.Persist.EntityDef.Internal
 import Database.Persist.Types
+import Database.Persist.Types.Base
 import Language.Haskell.TH.Syntax (Lift)
 import qualified Text.Read as R
 

@@ -60,7 +60,6 @@ import Database.Persist.Types.Base
        , FieldCascade(..)
        , FieldDef(..)
        , FieldType(..)
-       , FieldTypeLit(..)
        , ForeignDef(..)
        , ForeignFieldDef
        , IsNullable(..)
