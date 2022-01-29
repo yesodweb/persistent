@@ -927,16 +927,21 @@ data EntityConstraintDefs = EntityConstraintDefs
 instance Semigroup EntityConstraintDefs where
     a <> b =
         EntityConstraintDefs
-            { entityConstraintDefsIdField = just1 (entityConstraintDefsIdField a) (entityConstraintDefsIdField b)
-            , entityConstraintDefsPrimaryComposite = just1 (entityConstraintDefsPrimaryComposite a) (entityConstraintDefsPrimaryComposite b)
+            { entityConstraintDefsIdField = justOneId (entityConstraintDefsIdField a) (entityConstraintDefsIdField b)
+            , entityConstraintDefsPrimaryComposite = justOneComposite (entityConstraintDefsPrimaryComposite a) (entityConstraintDefsPrimaryComposite b)
             , entityConstraintDefsUniques = entityConstraintDefsUniques a <> entityConstraintDefsUniques b
             , entityConstraintDefsForeigns = entityConstraintDefsForeigns a <> entityConstraintDefsForeigns b
             }
 
-just1 :: (Show x) => Maybe x -> Maybe x -> Maybe x
-just1 (Just x) (Just y) = error $ "expected only one of: "
+justOneId :: Maybe UnboundIdDef -> Maybe UnboundIdDef -> Maybe UnboundIdDef
+justOneId (Just x) (Just y) = error $ "expected only one of: "
   `mappend` show x `mappend` " " `mappend` show y
-just1 x y = x `mplus` y
+justOneId x y = x `mplus` y
+
+justOneComposite :: Maybe UnboundCompositeDef -> Maybe UnboundCompositeDef -> Maybe UnboundCompositeDef
+justOneComposite (Just x) (Just y) = error $ "expected only one of: "
+  `mappend` show x `mappend` " " `mappend` show y
+justOneComposite x y = x `mplus` y
 
 instance Monoid EntityConstraintDefs where
     mempty =
