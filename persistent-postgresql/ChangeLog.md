@@ -1,5 +1,34 @@
 # Changelog for persistent-postgresql
 
+## 2.13.4.0
+
+* [#1341](https://github.com/yesodweb/persistent/pull/1341)
+    * Add `SqlBackendHooks` to allow for instrumentation of queries.
+* [#1327](https://github.com/yesodweb/persistent/pull/1327)
+    * Update backend to support new `StatementCache` interface
+
+## 2.13.3.0
+
+* [#1349](https://github.com/yesodweb/persistent/pull/1349)
+    * Add `BackendCompatible (RawPostgresql b) (RawPostgresql b)` instance.
+
+## 2.13.2.2
+
+* [#1351](https://github.com/yesodweb/persistent/pull/1351/)
+    * Support `aeson-2.0` in test suite.
+
+## 2.13.2.1
+
+* [#1331](https://github.com/yesodweb/persistent/pull/1331)
+    * Fixes a bug where `upsertWhere` would fail on a database table with
+      `MigrationOnly` fields.
+
+## 2.13.2.0
+* [#1316](https://github.com/yesodweb/persistent/pull/1316)
+  * Expose some internals in the new `Database.Persist.Postgresql.Internal` module.
+    This gives access to the `P` newtype, which is used for de-serializing `PersistValue`s
+    from `postgresql-simple` code.
+
 ## 2.13.1.0
 
 * [#1305](https://github.com/yesodweb/persistent/pull/1305)

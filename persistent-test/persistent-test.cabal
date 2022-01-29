@@ -1,5 +1,5 @@
 name:            persistent-test
-version:         2.13.0.3
+version:         2.13.1.0
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -75,7 +75,7 @@ library
       , monad-logger             >= 0.3.25
       , mtl
       , path-pieces              >= 0.2
-      , persistent               >= 2.13      && < 2.14
+      , persistent               >= 2.13.3      && < 2.14
       , QuickCheck               >= 2.9
       , quickcheck-instances     >= 0.3
       , random                   >= 1.1

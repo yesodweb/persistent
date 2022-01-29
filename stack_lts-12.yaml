@@ -15,3 +15,5 @@ extra-deps:
 - th-lift-0.8.0.1
 - th-lift-instances-0.1.14
 - lift-type-0.1.0.1
+- mysql-0.2.1
+- mysql-simple-0.4.7

@@ -45,22 +45,25 @@ import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT, runExceptT)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT)
 import Control.Monad.Trans.Writer (runWriterT)
+import Data.IORef (newIORef)
+import Data.Proxy (Proxy(..))
 
-import qualified Data.List.NonEmpty as NEL
 import Data.Acquire (Acquire, mkAcquire, with)
 import Data.Aeson
 import Data.Aeson.Types (modifyFailure)
 import Data.ByteString (ByteString)
+import qualified Data.ByteString.Lazy as BSL
 import Data.Conduit
 import qualified Data.Conduit.List as CL
 import Data.Either (partitionEithers)
 import Data.Fixed (Pico)
 import Data.Function (on)
-import Data.IORef
 import Data.Int (Int64)
 import Data.List (find, groupBy, intercalate, sort)
+import qualified Data.List.NonEmpty as NEL
 import qualified Data.Map as Map
 import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
+import qualified Data.Map as Map
 import Data.Monoid ((<>))
 import qualified Data.Monoid as Monoid
 import Data.Pool (Pool)
@@ -72,9 +75,10 @@ import GHC.Stack
 import System.Environment (getEnvironment)
 
 import Database.Persist.Sql
-import Database.Persist.SqlBackend
 import Database.Persist.Sql.Types.Internal (makeIsolationLevelStatement)
 import qualified Database.Persist.Sql.Util as Util
+import Database.Persist.SqlBackend
+import Database.Persist.SqlBackend.StatementCache
 
 import qualified Database.MySQL.Base as MySQLBase
 import qualified Database.MySQL.Base.Types as MySQLBase
@@ -129,7 +133,7 @@ openMySQLConn :: MySQL.ConnectInfo -> LogFunc -> IO (MySQL.Connection, SqlBacken
 openMySQLConn ci logFunc = do
     conn <- MySQL.connect ci
     MySQLBase.autocommit conn False -- disable autocommit!
-    smap <- newIORef $ Map.empty
+    smap <- newIORef mempty
     let
         backend =
             setConnPutManySql putManySql $
@@ -335,6 +339,7 @@ getGetter field = go (MySQLBase.fieldType field)
       case m of
         Just g -> PersistLiteral g
         Nothing -> error "Unexpected null in database specific value"
+    go MySQLBase.Json       _ _  = convertPV PersistByteString
     -- Unsupported
     go other _ _ = error $ "MySQL.getGetter: type " ++
                       show other ++ " not supported."
@@ -453,7 +458,7 @@ addTable cols entity = AddTable $ concat
     , "("
     , idtxt
     , if null nonIdCols then [] else ","
-    , intercalate "," $ map showColumn nonIdCols
+    , intercalate "," $ map showCreateColumn nonIdCols
     , ")"
     ]
   where
@@ -467,7 +472,9 @@ addTable cols entity = AddTable $ concat
                 concat
                     [ " PRIMARY KEY ("
                     , intercalate ","
-                  $ map (escapeF . fieldDB) $ NEL.toList $ compositeFields pdef
+                        $ map (escapeF . fieldDB)
+                        $ NEL.toList
+                        $ compositeFields pdef
                     , ")"
                     ]
             EntityIdField idField ->
@@ -961,8 +968,14 @@ findAlters edef allDefs col@(Column name isNull type_ def gen _defConstraintName
 
 -- | Prints the part of a @CREATE TABLE@ statement about a given
 -- column.
-showColumn :: Column -> String
-showColumn (Column n nu t def gen _defConstraintName maxLen ref) = concat
+showCreateColumn :: Column -> String
+showCreateColumn = showColumn False
+
+showAlterColumn :: Column -> String
+showAlterColumn = showColumn True
+
+showColumn :: Bool -> Column -> String
+showColumn showReferences (Column n nu t def gen _defConstraintName maxLen ref) = concat
     [ escapeF n
     , " "
     , showSqlType t maxLen True
@@ -975,13 +988,21 @@ showColumn (Column n nu t def gen _defConstraintName maxLen ref) = concat
     , if nu then "NULL" else "NOT NULL"
     , case def of
         Nothing -> ""
-        Just s -> -- Avoid DEFAULT NULL, since it is always unnecessary, and is an error for text/blob fields
-                  if T.toUpper s == "NULL" then ""
-                  else " DEFAULT " ++ T.unpack s
+        Just s ->
+            -- Avoid DEFAULT NULL, since it is always unnecessary, and is an error for text/blob fields
+            if T.toUpper s == "NULL"
+                then ""
+                else " DEFAULT " ++ T.unpack s
     , case ref of
-        Nothing -> ""
-        Just cRef -> " REFERENCES " ++ escapeE (crTableName cRef)
-            <> " " <> T.unpack (renderFieldCascade (crFieldCascade cRef))
+        Just cRef | showReferences ->
+            mconcat
+                [ " REFERENCES "
+                , escapeE (crTableName cRef)
+                , " "
+                , T.unpack (renderFieldCascade (crFieldCascade cRef))
+                ]
+        _ ->
+            ""
     ]
 
 
@@ -1050,14 +1071,14 @@ showAlter table (Change (Column n nu t def gen defConstraintName maxLen _ref)) =
     , " CHANGE "
     , escapeF n
     , " "
-    , showColumn (Column n nu t def gen defConstraintName maxLen Nothing)
+    , showAlterColumn (Column n nu t def gen defConstraintName maxLen Nothing)
     ]
 showAlter table (Add' col) =
     concat
     [ "ALTER TABLE "
     , escapeE table
     , " ADD COLUMN "
-    , showColumn col
+    , showAlterColumn col
     ]
 showAlter table (Drop c) =
     concat
@@ -1278,7 +1299,7 @@ mockMigrate _connectInfo allDefs _getter val = do
 -- the actual database isn't already present in the system.
 mockMigration :: Migration -> IO ()
 mockMigration mig = do
-    smap <- newIORef $ Map.empty
+    smap <- newIORef mempty
     let sqlbackend =
             mkSqlBackend MkSqlBackendArgs
                 { connPrepare = \_ -> do

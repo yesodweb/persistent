@@ -1,5 +1,5 @@
 name:            persistent-sqlite
-version:         2.13.0.3
+version:         2.13.1.0
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -44,7 +44,7 @@ flag use-stat4
 
 library
     build-depends:   base                    >= 4.9         && < 5
-                   , persistent              >= 2.13        && < 3
+                   , persistent              >= 2.13.3      && < 3
                    , aeson                   >= 1.0
                    , bytestring              >= 0.10
                    , conduit                 >= 1.2.12

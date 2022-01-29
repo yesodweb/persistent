@@ -74,6 +74,7 @@ import Control.Monad.Reader
 import Data.Char (GeneralCategory(..), generalCategory)
 import Data.Fixed (Micro, Pico)
 import Data.Proxy
+import Data.String (IsString, fromString)
 import qualified Data.Text as T
 import Data.Time
 import Test.Hspec
@@ -213,9 +214,9 @@ truncateUTCTime (UTCTime d dift) = do
       d' = max d $ fromGregorian 1950 1 1
   return $ UTCTime d' $ picosecondsToDiffTime picoi
 
-arbText :: Gen Text
+arbText :: IsString s => Gen s
 arbText =
-     T.pack
+     fromString
   .  filter ((`notElem` forbidden) . generalCategory)
   .  filter (<= '\xFFFF') -- only BMP
   .  filter (/= '\0')     -- no nulls

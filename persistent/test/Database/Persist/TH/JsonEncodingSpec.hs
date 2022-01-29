@@ -19,7 +19,6 @@ module Database.Persist.TH.JsonEncodingSpec where
 import TemplateTestImports
 
 import Data.Aeson
-import qualified Data.HashMap.Lazy as M
 import Data.Text (Text)
 import Test.QuickCheck.Instances ()
 import Test.Hspec.QuickCheck
@@ -73,15 +72,15 @@ spec = describe "JsonEncodingSpec" $ do
     it "encodes without an ID field" $ do
         toJSON subjectEntity
             `shouldBe`
-                Object (M.fromList
+                object
                     [ ("name", String "Bob")
                     , ("age", toJSON (32 :: Int))
                     , ("id", String "Bob")
-                    ])
+                    ]
 
     it "decodes without an ID field" $ do
         let
-            json_ = encode . Object . M.fromList $
+            json_ = encode . object $
                 [ ("name", String "Bob")
                 , ("age", toJSON (32 :: Int))
                 ]
@@ -103,11 +102,11 @@ spec = describe "JsonEncodingSpec" $ do
                 Entity (JsonEncodingKey jsonEncodingName) j
         toJSON ent
             `shouldBe`
-                Object (M.fromList
+                object
                     [ ("name", toJSON jsonEncodingName)
                     , ("age", toJSON jsonEncodingAge)
                     , ("id", toJSON jsonEncodingName)
-                    ])
+                    ]
 
     prop "round trip works with composite key" $ \j@JsonEncoding2{..} -> do
         let
@@ -125,9 +124,9 @@ spec = describe "JsonEncodingSpec" $ do
                 Entity key j
         toJSON ent
             `shouldBe`
-                Object (M.fromList
+                object
                   [ ("name", toJSON jsonEncoding2Name)
                   , ("age", toJSON jsonEncoding2Age)
                   , ("blood", toJSON jsonEncoding2Blood)
                   , ("id", toJSON key)
-                  ])
+                  ]

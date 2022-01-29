@@ -60,7 +60,6 @@ import qualified TreeTest
 import qualified UniqueTest
 import qualified UpsertTest
 import qualified UpsertWhere
-import qualified PgIntervalTest
 
 type Tuple = (,)
 
@@ -100,7 +99,7 @@ instance Arbitrary DataTypeTable where
      <*> arbitrary              -- pico
      <*> (arbitrary) -- utc
      <*> (truncateUTCTime   =<< arbitrary) -- utc
-     <*> arbitrary              -- value
+     <*> fmap getValue arbitrary -- value
 
 setup :: MonadIO m => Migration -> ReaderT SqlBackend m ()
 setup migration = do
