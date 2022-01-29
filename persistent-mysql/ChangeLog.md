@@ -1,5 +1,23 @@
 # Changelog for persistent-mysql
 
+## 2.13.1.0
+
+* [#1341](https://github.com/yesodweb/persistent/pull/1341)
+    * Add `SqlBackendHooks` to allow for instrumentation of queries.
+* [#1327](https://github.com/yesodweb/persistent/pull/1327)
+    * Update backend to support new `StatementCache` interface
+
+## 2.13.0.4
+
+* No longer errors on `json` columns. [#1333](https://github.com/yesodweb/persistent/pull/1333)
+
+## 2.13.0.3
+
+* Bugfix: Omit `REFERENCES` in `CREATe TABLE` statements. These are ignored by
+  MySQL, but are a syntax error for MariaDB.
+  [#1355](https://github.com/yesodweb/persistent/pull/1355), a continuation of
+  [#1283](https://github.com/yesodweb/persistent/pull/1283)
+
 ## 2.13.0.2
 
 * Bugfix: prevent fetching constraint info from other databases during migrations [#1301](https://github.com/yesodweb/persistent/pull/1301)

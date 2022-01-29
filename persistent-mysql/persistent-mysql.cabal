@@ -1,5 +1,5 @@
 name:            persistent-mysql
-version:         2.13.0.2
+version:         2.13.1.0
 license:         MIT
 license-file:    LICENSE
 author:          Felipe Lessa <felipe.lessa@gmail.com>, Michael Snoyman
@@ -28,15 +28,15 @@ extra-source-files: ChangeLog.md
 
 library
     build-depends:   base             >= 4.9      && < 5
-                   , persistent       >= 2.13   && < 3
+                   , persistent       >= 2.13.3   && < 3
                    , aeson            >= 1.0
                    , blaze-builder
                    , bytestring       >= 0.10.8
                    , conduit          >= 1.2.12
                    , containers       >= 0.5
                    , monad-logger
-                   , mysql            >= 0.1.4    && < 0.3
-                   , mysql-simple     >= 0.4.4    && < 0.5
+                   , mysql            >= 0.2.1    && < 0.3
+                   , mysql-simple     >= 0.4.7    && < 0.5
                    , resourcet        >= 1.1
                    , resource-pool
                    , text             >= 1.2
@@ -59,6 +59,7 @@ test-suite test
         InsertDuplicateUpdate
         CustomConstraintTest
         ImplicitUuidSpec
+        JSONTest
     ghc-options:     -Wall
 
     build-depends:   
@@ -66,6 +67,7 @@ test-suite test
       , aeson
       , bytestring
       , containers
+      , conduit
       , fast-logger
       , hspec            >= 2.4
       , http-api-data

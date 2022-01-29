@@ -47,6 +47,7 @@ module Database.Persist.Postgresql
     , upsertManyWhere
     , openSimpleConn
     , openSimpleConnWithVersion
+    , getSimpleConn
     , tableName
     , fieldName
     , mockMigration
@@ -119,6 +120,9 @@ import Database.Persist.Postgresql.Internal
 import Database.Persist.Sql
 import qualified Database.Persist.Sql.Util as Util
 import Database.Persist.SqlBackend
+import Database.Persist.SqlBackend.StatementCache (StatementCache, mkSimpleStatementCache, mkStatementCache)
+import qualified Data.Vault.Strict as Vault
+import System.IO.Unsafe (unsafePerformIO)
 
 -- | A @libpq@ connection string.  A simple example of connection
 -- string would be @\"host=localhost port=5432 user=test
@@ -291,7 +295,7 @@ open' modConn getVer constructor cstr logFunc = do
     conn <- PG.connectPostgreSQL cstr
     modConn conn
     ver <- getVer conn
-    smap <- newIORef $ Map.empty
+    smap <- newIORef mempty
     return $ constructor (createBackend logFunc ver smap) conn
 
 -- | Gets the PostgreSQL server version
@@ -360,9 +364,20 @@ openSimpleConn = openSimpleConnWithVersion getServerVersion
 -- @since 2.9.1
 openSimpleConnWithVersion :: (PG.Connection -> IO (Maybe Double)) -> LogFunc -> PG.Connection -> IO SqlBackend
 openSimpleConnWithVersion getVerDouble logFunc conn = do
-    smap <- newIORef $ Map.empty
+    smap <- newIORef mempty
     serverVersion <- oldGetVersionToNew getVerDouble conn
     return $ createBackend logFunc serverVersion smap conn
+
+underlyingConnectionKey :: Vault.Key PG.Connection
+underlyingConnectionKey = unsafePerformIO Vault.newKey
+{-# NOINLINE underlyingConnectionKey #-}
+
+-- | Access underlying connection, returning 'Nothing' if the 'SqlBackend'
+-- provided isn't backed by postgresql-simple.
+--
+-- @since 2.13.0
+getSimpleConn :: (BackendCompatible SqlBackend backend) => backend -> Maybe PG.Connection
+getSimpleConn = Vault.lookup underlyingConnectionKey <$> getConnVault
 
 -- | Create the backend given a logging function, server version, mutable statement cell,
 -- and connection.
@@ -373,7 +388,7 @@ createBackend logFunc serverVersion smap conn =
     maybe id setConnUpsertSql (upsertFunction upsertSql' serverVersion) $
     setConnInsertManySql insertManySql' $
     maybe id setConnRepsertManySql (upsertFunction repsertManySql serverVersion) $
-    mkSqlBackend MkSqlBackendArgs
+    modifyConnVault (Vault.insert underlyingConnectionKey conn) $ mkSqlBackend MkSqlBackendArgs
         { connPrepare    = prepare' conn
         , connStmtMap    = smap
         , connInsertSql  = insertSql'
@@ -1508,7 +1523,7 @@ mockMigrate allDefs _ entity = fmap (fmap $ map showAlterDb) $ do
 -- with the difference that an actual database is not needed.
 mockMigration :: Migration -> IO ()
 mockMigration mig = do
-    smap <- newIORef $ Map.empty
+    smap <- newIORef mempty
     let sqlbackend =
             mkSqlBackend MkSqlBackendArgs
                 { connPrepare = \_ -> do
@@ -1837,6 +1852,9 @@ data RawPostgresql backend = RawPostgresql
     --
     -- @since 2.13.1.0
     }
+
+instance BackendCompatible (RawPostgresql b) (RawPostgresql b) where
+    projectBackend = id
 
 instance BackendCompatible b (RawPostgresql b) where
     projectBackend = persistentBackend

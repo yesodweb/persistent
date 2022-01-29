@@ -24,7 +24,7 @@
 module Database.Persist.THSpec where
 
 import Control.Applicative (Const(..))
-import Data.Aeson
+import Data.Aeson hiding (Key)
 import Data.ByteString.Lazy.Char8 ()
 import Data.Coerce
 import Data.Functor.Identity (Identity(..))

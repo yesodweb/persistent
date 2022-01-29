@@ -1,23 +1,25 @@
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
 module Database.Persist.Sql.Run where
 
 import Control.Monad.IO.Unlift
-import qualified UnliftIO.Exception as UE
 import Control.Monad.Logger.CallStack
-import Control.Monad.Reader (MonadReader)
+import Control.Monad.Reader (MonadReader, void)
 import qualified Control.Monad.Reader as MonadReader
 import Control.Monad.Trans.Reader hiding (local)
 import Control.Monad.Trans.Resource
 import Data.Acquire (Acquire, ReleaseType(..), mkAcquireType, with)
-import Data.IORef (readIORef)
 import Data.Pool as P
-import qualified Data.Map as Map
 import qualified Data.Text as T
+import qualified UnliftIO.Exception as UE
 
 import Database.Persist.Class.PersistStore
+import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Types.Internal
-import Database.Persist.Sql.Raw
+import Database.Persist.SqlBackend.Internal.StatementCache
+import Database.Persist.SqlBackend.Internal.SqlPoolHooks
 
 -- | Get a connection from the pool, run the given action, and then return the
 -- connection to the pool.
@@ -93,15 +95,36 @@ runSqlPoolWithHooks
     -- cleanup function is complete.
     -> m a
 runSqlPoolWithHooks r pconn i before after onException =
+    runSqlPoolWithExtensibleHooks r pconn i $ SqlPoolHooks
+        { alterBackend = pure
+        , runBefore = \conn _ -> void $ before conn
+        , runAfter = \conn _ -> void $ after conn
+        , runOnException = \b _ e -> void $ onException b e
+        }
+
+-- | This function is how 'runSqlPoolWithHooks' is defined.
+--
+-- It's currently the most general function for using a SQL pool.
+--
+-- @since 2.13.0.0
+runSqlPoolWithExtensibleHooks
+    :: forall backend m a. (MonadUnliftIO m, BackendCompatible SqlBackend backend)
+    => ReaderT backend m a
+    -> Pool backend
+    -> Maybe IsolationLevel
+    -> SqlPoolHooks m backend
+    -> m a
+runSqlPoolWithExtensibleHooks r pconn i SqlPoolHooks{..} =
     withRunInIO $ \runInIO ->
     withResource pconn $ \conn ->
     UE.mask $ \restore -> do
-        _ <- restore $ runInIO $ before conn
-        a <- restore (runInIO (runReaderT r conn))
+        conn' <- restore $ runInIO $ alterBackend conn
+        _ <- restore $ runInIO $ runBefore conn' i
+        a <- restore (runInIO (runReaderT r conn'))
             `UE.catchAny` \e -> do
-                _ <- restore $ runInIO $ onException conn e
+                _ <- restore $ runInIO $ runOnException conn' i e
                 UE.throwIO e
-        _ <- restore $ runInIO $ after conn
+        _ <- restore $ runInIO $ runAfter conn' i
         pure a
 
 rawAcquireSqlConn
@@ -296,5 +319,6 @@ withSqlConn open f = do
 
 close' :: (BackendCompatible SqlBackend backend) => backend -> IO ()
 close' conn = do
-    readIORef (connStmtMap $ projectBackend conn) >>= mapM_ stmtFinalize . Map.elems
-    connClose $ projectBackend conn
+    let backend = projectBackend conn
+    statementCacheClear $ connStmtMap backend
+    connClose backend

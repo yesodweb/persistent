@@ -1,5 +1,13 @@
 ## Unreleased changes
 
+## 2.13.1.0
+
+* Support `persistent-2.13.3.0` [#1341](https://github.com/yesodweb/persistent/pull/1341)
+
+## 2.13.0.4
+
+* `aeson-2.0` support
+
 ## 2.13.0.3
 
 * Accidentally released 2.13.0.2 with some testing changes.

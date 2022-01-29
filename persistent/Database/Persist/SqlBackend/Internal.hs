@@ -1,19 +1,21 @@
-{-# language RecordWildCards #-}
-{-# language RankNTypes #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Database.Persist.SqlBackend.Internal where
 
-import Data.Map (Map)
 import Data.List.NonEmpty (NonEmpty)
 import Data.Text (Text)
+import Data.Vault.Strict (Vault)
+import qualified Data.Vault.Strict as Vault
 import Database.Persist.Class.PersistStore
-import Database.Persist.Types.Base
 import Database.Persist.Names
-import Data.IORef
-import Database.Persist.SqlBackend.Internal.MkSqlBackend
-import Database.Persist.SqlBackend.Internal.Statement
 import Database.Persist.SqlBackend.Internal.InsertSqlResult
 import Database.Persist.SqlBackend.Internal.IsolationLevel
+import Database.Persist.SqlBackend.Internal.MkSqlBackend
+import Database.Persist.SqlBackend.Internal.Statement
+import Database.Persist.SqlBackend.Internal.StatementCache (StatementCache)
+import Database.Persist.SqlBackend.StatementCache
+import Database.Persist.Types.Base
 
 -- | A 'SqlBackend' represents a handle or connection to a database. It
 -- contains functions and values that allow databases to have more
@@ -69,7 +71,7 @@ data SqlBackend = SqlBackend
     -- When left as 'Nothing', we default to using 'defaultPutMany'.
     --
     -- @since 2.8.1
-    , connStmtMap :: IORef (Map Text Statement)
+    , connStmtMap :: StatementCache
     -- ^ A reference to the cache of statements. 'Statement's are keyed by
     -- the 'Text' queries that generated them.
     , connClose :: IO ()
@@ -132,6 +134,21 @@ data SqlBackend = SqlBackend
     -- When left as 'Nothing', we default to using 'defaultRepsertMany'.
     --
     -- @since 2.9.0
+    , connVault :: Vault
+    -- ^ Carry arbitrary payloads for the connection that
+    -- may be used to propagate information into hooks.
+    , connHooks :: SqlBackendHooks
+    -- ^ Instrumentation hooks that may be used to track the
+    -- behaviour of a backend.
+    }
+
+newtype SqlBackendHooks = SqlBackendHooks
+    { hookGetStatement :: SqlBackend -> Text -> Statement -> IO Statement
+    }
+
+emptySqlBackendHooks :: SqlBackendHooks
+emptySqlBackendHooks = SqlBackendHooks
+    { hookGetStatement = \_ _ s -> pure s
     }
 
 -- | A function for creating a value of the 'SqlBackend' type. You should prefer
@@ -148,6 +165,9 @@ mkSqlBackend MkSqlBackendArgs {..} =
         , connPutManySql = Nothing
         , connUpsertSql = Nothing
         , connInsertManySql = Nothing
+        , connVault = Vault.empty
+        , connHooks = emptySqlBackendHooks
+        , connStmtMap = mkStatementCache $ mkSimpleStatementCache connStmtMap
         , ..
         }
 

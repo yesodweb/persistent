@@ -6,35 +6,46 @@ module Database.Persist.SqlBackend
       SqlBackend
     , mkSqlBackend
     , MkSqlBackendArgs(..)
+    , SqlBackendHooks
+    , emptySqlBackendHooks
     -- * Utilities
 
     -- $utilities
 
     -- ** SqlBackend Getters
+    , getRDBMS
     , getEscapedFieldName
     , getEscapedRawName
     , getEscapeRawNameFunction
     , getConnLimitOffset
     , getConnUpsertSql
+    , getConnVault
+    , getConnHooks
     -- ** SqlBackend Setters
     , setConnMaxParams
     , setConnRepsertManySql
     , setConnInsertManySql
     , setConnUpsertSql
     , setConnPutManySql
+    , setConnVault
+    , modifyConnVault
+    , setConnHooks
+    -- ** SqlBackendHooks
     ) where
 
 import Control.Monad.Reader
+import Data.List.NonEmpty (NonEmpty)
 import Data.Text (Text)
+import Data.Vault.Strict (Vault)
 import Database.Persist.Class.PersistStore (BackendCompatible(..))
+import Database.Persist.Names
 import Database.Persist.SqlBackend.Internal
 import qualified Database.Persist.SqlBackend.Internal as SqlBackend
        (SqlBackend(..))
-import Database.Persist.SqlBackend.Internal.MkSqlBackend as Mk (MkSqlBackendArgs(..))
-import Database.Persist.Types.Base
-import Database.Persist.Names
 import Database.Persist.SqlBackend.Internal.InsertSqlResult
-import Data.List.NonEmpty (NonEmpty)
+import Database.Persist.SqlBackend.Internal.MkSqlBackend as Mk
+       (MkSqlBackendArgs(..))
+import Database.Persist.Types.Base
 
 -- $utilities
 --
@@ -129,6 +140,34 @@ getConnUpsertSql
 getConnUpsertSql = do
     asks (SqlBackend.connUpsertSql . projectBackend)
 
+-- | Retrieve the vault from the provided database backend.
+--
+-- @since 2.13.3.0
+getConnVault
+    ::  (BackendCompatible SqlBackend backend, MonadReader backend m)
+    => m Vault
+getConnVault = do
+    asks (SqlBackend.connVault . projectBackend)
+
+-- | Retrieve instrumentation hooks from the provided database backend.
+--
+-- @since 2.13.3.0
+getConnHooks
+    ::  (BackendCompatible SqlBackend backend, MonadReader backend m)
+    => m SqlBackendHooks
+getConnHooks = do
+    asks (SqlBackend.connHooks . projectBackend)
+
+-- | Get a tag displaying what database the 'SqlBackend' is for. Can be
+-- used to differentiate features in downstream libraries for different
+-- database backends.
+-- @since 2.13.3.0
+getRDBMS
+    :: (BackendCompatible SqlBackend backend, MonadReader backend m)
+    => m Text
+getRDBMS = do
+    asks (SqlBackend.connRDBMS . projectBackend)
+
 
 -- | Set the maximum parameters that may be issued in a given SQL query. This
 -- should be used only if the database backend have this limitation.
@@ -188,3 +227,24 @@ setConnPutManySql
     -> SqlBackend
 setConnPutManySql  mkQuery sb =
     sb { connPutManySql = Just mkQuery }
+
+-- | Set the vault on the provided database backend.
+--
+-- @since 2.13.0
+setConnVault :: Vault -> SqlBackend -> SqlBackend
+setConnVault vault sb =
+    sb { connVault = vault }
+
+-- | Modify the vault on the provided database backend.
+--
+-- @since 2.13.0
+modifyConnVault :: (Vault -> Vault) -> SqlBackend  -> SqlBackend
+modifyConnVault f sb =
+    sb { connVault = f $ connVault sb }
+
+-- | Set hooks on the provided database backend.
+--
+-- @since 2.13.0
+setConnHooks :: SqlBackendHooks -> SqlBackend -> SqlBackend
+setConnHooks hooks sb =
+    sb { connHooks = hooks }
