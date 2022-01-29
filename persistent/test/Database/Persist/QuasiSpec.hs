@@ -356,9 +356,9 @@ User
                 (fieldDB <$> idFields) `shouldBe` [FieldNameDB "id"]
                 (fieldType <$> idFields) `shouldBe` [FTTypeCon Nothing "Text"]
                 (unboundFieldNameHS <$> unboundEntityFields user) `shouldBe`
-                  [ FieldNameHS "name"
-                  , FieldNameHS "age"
-                  ]
+                    [ FieldNameHS "name"
+                    , FieldNameHS "age"
+                    ]
 
             it "errors on duplicate custom Id column" $ do
                 let definitions = [st|
@@ -367,11 +367,11 @@ User
     Id   Text
     name Text
     age  Int
-    |]
+|]
                 let [user] = parse lowerCaseSettings definitions
                     errMsg = [st|expected only one Id declaration per entity|]
                 evaluate (unboundEntityDef user) `shouldThrow`
-                  errorCall (T.unpack errMsg)
+                    errorCall (T.unpack errMsg)
 
         describe "primary declaration" $ do
             it "parses Primary declaration" $ do
@@ -390,10 +390,10 @@ User
                 (fieldDB <$> idFields) `shouldBe` [FieldNameDB "id"]
                 (fieldType <$> idFields) `shouldBe` [FTTypeCon Nothing "UserId"]
                 (unboundFieldNameHS <$> unboundEntityFields user) `shouldBe`
-                  [ FieldNameHS "ref"
-                  , FieldNameHS "name"
-                  , FieldNameHS "age"
-                  ]
+                    [ FieldNameHS "ref"
+                    , FieldNameHS "name"
+                    , FieldNameHS "age"
+                    ]
 
             it "errors on duplicate custom Primary declaration" $ do
                 let definitions = [st|
@@ -403,11 +403,11 @@ User
     age  Int
     Primary ref
     Primary name
-    |]
+|]
                 let [user] = parse lowerCaseSettings definitions
                     errMsg = [st|expected only one Primary declaration per entity|]
                 evaluate (unboundEntityDef user) `shouldThrow`
-                  errorCall (T.unpack errMsg)
+                    errorCall (T.unpack errMsg)
 
             it "errors on conflicting Primary/Id declarations" $ do
                 let definitions = [st|
@@ -417,11 +417,11 @@ User
     name Text
     age  Int
     Primary ref
-    |]
+|]
                 let [user] = parse lowerCaseSettings definitions
                     errMsg = [st|Specified both an ID field and a Primary field|]
                 evaluate (unboundEntityDef user) `shouldThrow`
-                  errorCall (T.unpack errMsg)
+                    errorCall (T.unpack errMsg)
 
         describe "foreign keys" $ do
             let definitions = [st|
