@@ -82,6 +82,10 @@ spec = describe "Quasi" $ do
             subject ["asdf"]
                 `shouldBe`
                     Nothing
+        it "errors on invalid input" $ do
+            evaluate (subject ["name", "int"])
+                `shouldThrow`
+                    errorCall "Invalid field type \"int\" PSFail ('i',\"nt\")"
         it "works if it has a name and a type" $ do
             subject ["asdf", "Int"]
                 `shouldBe`
@@ -422,6 +426,37 @@ User
                     errMsg = [st|Specified both an ID field and a Primary field|]
                 evaluate (unboundEntityDef user) `shouldThrow`
                     errorCall (T.unpack errMsg)
+
+            it "triggers error on invalid declaration" $ do
+                let definitions = [st|
+User
+    age Text
+    Primary ref
+|]
+                let [user] = parse lowerCaseSettings definitions
+                case unboundPrimarySpec user of
+                    NaturalKey ucd -> do
+                        evaluate (head $ unboundCompositeCols ucd) `shouldThrow`
+                            errorCall "Unknown column in primary key constraint: \"ref\""
+                    _ ->
+                        error "Expected NaturalKey, failing"
+
+        describe "entity unique constraints" $ do
+            it "triggers error if declared field does not exist" $ do
+                let definitions = [st|
+User
+    name            Text
+    emailFirst      Text
+
+    UniqueEmail emailFirst emailSecond
+|]
+                let [user] = parse lowerCaseSettings definitions
+                    uniques = entityUniques (unboundEntityDef user)
+                    [dbNames] = fmap snd . uniqueFields <$> uniques
+                    errMsg =
+                        "Unknown column in unique constraint: \"emailSecond\" [UnboundFieldDef {unboundFieldNameHS = FieldNameHS {unFieldNameHS = \"name\"}, unboundFieldNameDB = FieldNameDB {unFieldNameDB = \"name\"}, unboundFieldAttrs = [], unboundFieldStrict = True, unboundFieldType = FTTypeCon Nothing \"Text\", unboundFieldCascade = FieldCascade {fcOnUpdate = Nothing, fcOnDelete = Nothing}, unboundFieldGenerated = Nothing, unboundFieldComments = Nothing},UnboundFieldDef {unboundFieldNameHS = FieldNameHS {unFieldNameHS = \"emailFirst\"}, unboundFieldNameDB = FieldNameDB {unFieldNameDB = \"email_first\"}, unboundFieldAttrs = [], unboundFieldStrict = True, unboundFieldType = FTTypeCon Nothing \"Text\", unboundFieldCascade = FieldCascade {fcOnUpdate = Nothing, fcOnDelete = Nothing}, unboundFieldGenerated = Nothing, unboundFieldComments = Nothing}]\"UniqueEmail\" []"
+                evaluate (head (NEL.tail dbNames)) `shouldThrow`
+                    errorCall errMsg
 
         describe "foreign keys" $ do
             let definitions = [st|
