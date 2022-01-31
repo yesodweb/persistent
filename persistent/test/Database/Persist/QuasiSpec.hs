@@ -453,8 +453,10 @@ User
                 let [user] = parse lowerCaseSettings definitions
                     uniques = entityUniques (unboundEntityDef user)
                     [dbNames] = fmap snd . uniqueFields <$> uniques
-                    errMsg =
-                        "Unknown column in unique constraint: \"emailSecond\" [UnboundFieldDef {unboundFieldNameHS = FieldNameHS {unFieldNameHS = \"name\"}, unboundFieldNameDB = FieldNameDB {unFieldNameDB = \"name\"}, unboundFieldAttrs = [], unboundFieldStrict = True, unboundFieldType = FTTypeCon Nothing \"Text\", unboundFieldCascade = FieldCascade {fcOnUpdate = Nothing, fcOnDelete = Nothing}, unboundFieldGenerated = Nothing, unboundFieldComments = Nothing},UnboundFieldDef {unboundFieldNameHS = FieldNameHS {unFieldNameHS = \"emailFirst\"}, unboundFieldNameDB = FieldNameDB {unFieldNameDB = \"email_first\"}, unboundFieldAttrs = [], unboundFieldStrict = True, unboundFieldType = FTTypeCon Nothing \"Text\", unboundFieldCascade = FieldCascade {fcOnUpdate = Nothing, fcOnDelete = Nothing}, unboundFieldGenerated = Nothing, unboundFieldComments = Nothing}]\"UniqueEmail\" []"
+                    errMsg = unwords
+                        [ "Unknown column in \"UniqueEmail\" constraint: \"emailSecond\""
+                        , "possible fields: [\"name\",\"emailFirst\"]"
+                        ]
                 evaluate (head (NEL.tail dbNames)) `shouldThrow`
                     errorCall errMsg
 

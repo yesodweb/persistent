@@ -1152,9 +1152,7 @@ takeUniq ps tableName defs (n : rest)
             _ -> Nothing
     dbName = fromMaybe usualDbName sqlName
 
-    getDBName [] t =
-      error $ "Unknown column in unique constraint: " ++ show t
-              ++ " " ++ show defs ++ show n ++ " " ++ show attrs
+    getDBName [] t = error $ T.unpack (unknownUniqueColumnError t defs n)
     getDBName (d:ds) t
         | unboundFieldNameHS d == FieldNameHS t =
             unboundFieldNameDB d
@@ -1166,6 +1164,15 @@ takeUniq _ tableName _ xs =
           ++ show tableName
           ++ "] expecting an uppercase constraint name xs="
           ++ show xs
+
+unknownUniqueColumnError :: Text -> [UnboundFieldDef] -> Text -> Text
+unknownUniqueColumnError t defs n =
+    "Unknown column in \"" <> n <> "\" constraint: \"" <> t <> "\""
+        <> " possible fields: " <> T.pack (show (toFieldName <$> defs))
+    where
+        toFieldName :: UnboundFieldDef -> Text
+        toFieldName fd =
+            unFieldNameHS (unboundFieldNameHS fd)
 
 -- | Define an explicit foreign key reference.
 --
