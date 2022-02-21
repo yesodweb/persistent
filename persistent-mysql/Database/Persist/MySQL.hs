@@ -1023,8 +1023,10 @@ showSqlType :: SqlType
             -> String
 showSqlType SqlBlob    Nothing    _     = "BLOB"
 showSqlType SqlBlob    (Just i)   _     = "VARBINARY(" ++ show i ++ ")"
--- The non-default display width "(1)" is kept for now to avoid differences
--- between persistent versions running against older MySQL versions (eg 5.7):
+-- "tinyint(1)" has been used historically here.  In MySQL 8, the display width
+-- is deprecated, and in the future it may need to be removed here.  However,
+-- "(1)" is not the default in older MySQL versions, so for them omitting it
+-- would alter the exact form of the column type in the information_schema.
 showSqlType SqlBool    _          _     = "TINYINT(1)"
 showSqlType SqlDay     _          _     = "DATE"
 showSqlType SqlDayTime _          _     = "DATETIME"
