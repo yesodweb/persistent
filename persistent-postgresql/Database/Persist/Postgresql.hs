@@ -26,9 +26,14 @@
 module Database.Persist.Postgresql
     ( withPostgresqlPool
     , withPostgresqlPoolWithVersion
+    , withPostgresqlPoolWithConf
+
+    , withPostgresqlPoolModified
+    , withPostgresqlPoolModifiedWithVersion
+
     , withPostgresqlConn
     , withPostgresqlConnWithVersion
-    , withPostgresqlPoolWithConf
+
     , createPostgresqlPool
     , createPostgresqlPoolModified
     , createPostgresqlPoolModifiedWithVersion
@@ -194,6 +199,34 @@ withPostgresqlPoolWithConf conf hooks = do
       modConn = pgConfHooksAfterCreate hooks
   let logFuncToBackend = open' modConn getVer id (pgConnStr conf)
   withSqlPoolWithConfig logFuncToBackend (postgresConfToConnectionPoolConfig conf)
+
+-- | Same as 'withPostgresqlPool', but with the 'createPostgresqlPoolModified'
+-- feature.
+--
+-- @since 2.13.5.0
+withPostgresqlPoolModified
+    :: (MonadUnliftIO m, MonadLoggerIO m)
+    => (PG.Connection -> IO ()) -- ^ Action to perform after connection is created.
+    -> ConnectionString -- ^ Connection string to the database.
+    -> Int -- ^ Number of connections to be kept open in the pool.
+    -> (Pool SqlBackend -> m t)
+    -> m t
+withPostgresqlPoolModified = withPostgresqlPoolModifiedWithVersion getServerVersion
+
+-- | Same as 'withPostgresqlPool', but with the
+-- 'createPostgresqlPoolModifiedWithVersion' feature.
+--
+-- @since 2.13.5.0
+withPostgresqlPoolModifiedWithVersion
+    :: (MonadUnliftIO m, MonadLoggerIO m)
+    => (PG.Connection -> IO (Maybe Double)) -- ^ Action to perform to get the server version.
+    -> (PG.Connection -> IO ()) -- ^ Action to perform after connection is created.
+    -> ConnectionString -- ^ Connection string to the database.
+    -> Int -- ^ Number of connections to be kept open in the pool.
+    -> (Pool SqlBackend -> m t)
+    -> m t
+withPostgresqlPoolModifiedWithVersion getVerDouble modConn ci = do
+  withSqlPool (open' modConn (oldGetVersionToNew getVerDouble) id ci)
 
 -- | Create a PostgreSQL connection pool.  Note that it's your
 -- responsibility to properly close the connection pool when
