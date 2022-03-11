@@ -1,7 +1,5 @@
 ## Unreleased changes
 
-## 2.13.1.1
-
 * Test migration idempotency on additional integer types [#1359](https://github.com/yesodweb/persistent/pull/1359)
 
 ## 2.13.1.0
