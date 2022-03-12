@@ -1,5 +1,10 @@
 # Changelog for persistent
 
+## (unreleased)
+
+* [#1356](https://github.com/yesodweb/persistent/pull/1356)
+    * Improve parse errors in generated FromJSON instances
+
 ## 2.13.3.0
 
 * [#1341](https://github.com/yesodweb/persistent/pull/1341)

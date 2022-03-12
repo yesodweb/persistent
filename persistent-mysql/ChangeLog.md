@@ -1,5 +1,10 @@
 # Changelog for persistent-mysql
 
+## 2.13.1.1
+
+* [#1360](https://github.com/yesodweb/persistent/pull/1360)
+    * Fix anomalies in migration of integer columns in MySQL 8
+
 ## 2.13.1.0
 
 * [#1341](https://github.com/yesodweb/persistent/pull/1341)

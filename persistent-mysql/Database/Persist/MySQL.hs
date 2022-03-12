@@ -827,9 +827,19 @@ data ColumnInfo = ColumnInfo
 -- @INFORMATION_SCHEMA@ tables.
 parseColumnType :: Text -> ColumnInfo -> ExceptT String IO (SqlType, Maybe Integer)
 -- Ints
-parseColumnType "tinyint" ci | ciColumnType ci == "tinyint(1)" = return (SqlBool, Nothing)
-parseColumnType "int" ci | ciColumnType ci == "int(11)"        = return (SqlInt32, Nothing)
-parseColumnType "bigint" ci | ciColumnType ci == "bigint(20)"  = return (SqlInt64, Nothing)
+-- The display width is deprecated and being removed in MySQL 8.X.  To be
+-- consistent with earlier versions, which do report it, accept either
+-- the bare type in `ciColumnType ci`, or the type adorned with the expected
+-- value for the display width (ie the defaults for int and bigint, or the
+-- value explicitly set in `showSqlType` for SqlBool).
+--
+parseColumnType "tinyint" ci
+    | ciColumnType ci == "tinyint" || ciColumnType ci == "tinyint(1)" = return (SqlBool, Nothing)
+parseColumnType "int" ci
+    | ciColumnType ci == "int"     || ciColumnType ci == "int(11)"    = return (SqlInt32, Nothing)
+parseColumnType "bigint" ci
+    | ciColumnType ci == "bigint"  || ciColumnType ci == "bigint(20)" = return (SqlInt64, Nothing)
+
 -- Double
 parseColumnType x@("double") ci | ciColumnType ci == x         = return (SqlReal, Nothing)
 parseColumnType "decimal" ci                                   =
@@ -1013,10 +1023,14 @@ showSqlType :: SqlType
             -> String
 showSqlType SqlBlob    Nothing    _     = "BLOB"
 showSqlType SqlBlob    (Just i)   _     = "VARBINARY(" ++ show i ++ ")"
+-- "tinyint(1)" has been used historically here.  In MySQL 8, the display width
+-- is deprecated, and in the future it may need to be removed here.  However,
+-- "(1)" is not the default in older MySQL versions, so for them omitting it
+-- would alter the exact form of the column type in the information_schema.
 showSqlType SqlBool    _          _     = "TINYINT(1)"
 showSqlType SqlDay     _          _     = "DATE"
 showSqlType SqlDayTime _          _     = "DATETIME"
-showSqlType SqlInt32   _          _     = "INT(11)"
+showSqlType SqlInt32   _          _     = "INT"
 showSqlType SqlInt64   _          _     = "BIGINT"
 showSqlType SqlReal    _          _     = "DOUBLE"
 showSqlType (SqlNumeric s prec) _ _     = "NUMERIC(" ++ show s ++ "," ++ show prec ++ ")"
