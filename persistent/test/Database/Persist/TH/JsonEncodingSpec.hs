@@ -20,9 +20,9 @@ import TemplateTestImports
 
 import Data.Aeson
 import Data.Text (Text)
-import Test.QuickCheck.Instances ()
 import Test.Hspec.QuickCheck
 import Test.QuickCheck
+import Test.QuickCheck.Instances ()
 
 import Database.Persist.EntityDef
 import Database.Persist.ImplicitIdDef
@@ -87,6 +87,13 @@ spec = describe "JsonEncodingSpec" $ do
         eitherDecode json_
             `shouldBe`
                 Right subjectEntity
+
+    it "has informative decoder errors" $ do
+        let
+            json_ = encode Null
+        (eitherDecode json_ :: Either String JsonEncoding)
+            `shouldBe`
+                Left "Error in $: parsing JsonEncoding failed, expected Object, but encountered Null"
 
     prop "works with a Primary" $ \jsonEncoding -> do
         let
