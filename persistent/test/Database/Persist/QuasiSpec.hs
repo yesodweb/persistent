@@ -7,6 +7,7 @@ module Database.Persist.QuasiSpec where
 
 import Prelude hiding (lines)
 
+import Control.Exception
 import Data.List hiding (lines)
 import Data.List.NonEmpty (NonEmpty(..), (<|))
 import qualified Data.List.NonEmpty as NEL
@@ -23,28 +24,28 @@ import Text.Shakespeare.Text (st)
 
 spec :: Spec
 spec = describe "Quasi" $ do
-    describe "splitExtras" $ do
+    describe "parseEntityFields" $ do
         let helloWorldTokens = Token "hello" :| [Token "world"]
             foobarbazTokens = Token "foo" :| [Token "bar", Token "baz"]
         it "works" $ do
-            splitExtras []
+            parseEntityFields []
                 `shouldBe`
                     mempty
         it "works2" $ do
-            splitExtras
+            parseEntityFields
                 [ Line 0 helloWorldTokens
                 ]
                 `shouldBe`
                     ( [NEL.toList helloWorldTokens], mempty )
         it "works3" $ do
-            splitExtras
+            parseEntityFields
                 [ Line 0 helloWorldTokens
                 , Line 2 foobarbazTokens
                 ]
                 `shouldBe`
                     ( [NEL.toList helloWorldTokens, NEL.toList foobarbazTokens], mempty )
         it "works4" $ do
-            splitExtras
+            parseEntityFields
                 [ Line 0 [Token "Product"]
                 , Line 2 (Token <$> ["name", "Text"])
                 , Line 2 (Token <$> ["added", "UTCTime", "default=CURRENT_TIMESTAMP"])
@@ -59,7 +60,7 @@ spec = describe "Quasi" $ do
                         ) ]
                     )
         it "works5" $ do
-            splitExtras
+            parseEntityFields
                 [ Line 0 [Token "Product"]
                 , Line 2 (Token <$> ["name", "Text"])
                 , Line 4 [Token "ExtraBlock"]
@@ -338,6 +339,89 @@ Notification
             entityComments (unboundEntityDef bicycle) `shouldBe` Nothing
             entityComments (unboundEntityDef car) `shouldBe` Just "This is a Car\n"
             entityComments (unboundEntityDef vehicle) `shouldBe` Nothing
+
+        describe "custom Id column" $ do
+            it "parses custom Id column" $ do
+                let definitions = [st|
+User
+    Id   Text
+    name Text
+    age  Int
+|]
+                let [user] = parse lowerCaseSettings definitions
+                getUnboundEntityNameHS user `shouldBe` EntityNameHS "User"
+                entityDB (unboundEntityDef user) `shouldBe` EntityNameDB "user"
+                let idFields = NEL.toList (entitiesPrimary (unboundEntityDef user))
+                (fieldHaskell <$> idFields) `shouldBe` [FieldNameHS "Id"]
+                (fieldDB <$> idFields) `shouldBe` [FieldNameDB "id"]
+                (fieldType <$> idFields) `shouldBe` [FTTypeCon Nothing "Text"]
+                (unboundFieldNameHS <$> unboundEntityFields user) `shouldBe`
+                    [ FieldNameHS "name"
+                    , FieldNameHS "age"
+                    ]
+
+            it "errors on duplicate custom Id column" $ do
+                let definitions = [st|
+User
+    Id   Text
+    Id   Text
+    name Text
+    age  Int
+|]
+                let [user] = parse lowerCaseSettings definitions
+                    errMsg = [st|expected only one Id declaration per entity|]
+                evaluate (unboundEntityDef user) `shouldThrow`
+                    errorCall (T.unpack errMsg)
+
+        describe "primary declaration" $ do
+            it "parses Primary declaration" $ do
+                let definitions = [st|
+User
+    ref Text
+    name Text
+    age  Int
+    Primary ref
+|]
+                let [user] = parse lowerCaseSettings definitions
+                getUnboundEntityNameHS user `shouldBe` EntityNameHS "User"
+                entityDB (unboundEntityDef user) `shouldBe` EntityNameDB "user"
+                let idFields = NEL.toList (entitiesPrimary (unboundEntityDef user))
+                (fieldHaskell <$> idFields) `shouldBe` [FieldNameHS "Id"]
+                (fieldDB <$> idFields) `shouldBe` [FieldNameDB "id"]
+                (fieldType <$> idFields) `shouldBe` [FTTypeCon Nothing "UserId"]
+                (unboundFieldNameHS <$> unboundEntityFields user) `shouldBe`
+                    [ FieldNameHS "ref"
+                    , FieldNameHS "name"
+                    , FieldNameHS "age"
+                    ]
+
+            it "errors on duplicate custom Primary declaration" $ do
+                let definitions = [st|
+User
+    ref Text
+    name Text
+    age  Int
+    Primary ref
+    Primary name
+|]
+                let [user] = parse lowerCaseSettings definitions
+                    errMsg = [st|expected only one Primary declaration per entity|]
+                evaluate (unboundEntityDef user) `shouldThrow`
+                    errorCall (T.unpack errMsg)
+
+            it "errors on conflicting Primary/Id declarations" $ do
+                let definitions = [st|
+User
+    Id Text
+    ref Text
+    name Text
+    age  Int
+    Primary ref
+|]
+                let [user] = parse lowerCaseSettings definitions
+                    errMsg = [st|Specified both an ID field and a Primary field|]
+                evaluate (unboundEntityDef user) `shouldThrow`
+                    errorCall (T.unpack errMsg)
 
         describe "foreign keys" $ do
             let definitions = [st|

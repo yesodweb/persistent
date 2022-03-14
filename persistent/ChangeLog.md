@@ -32,6 +32,8 @@
 
 ## 2.13.2.0
 
+* [#1315](https://github.com/yesodweb/persistent/pull/1315)
+    * Refactor entity constraint parsing in Quasi module
 * [#1314](https://github.com/yesodweb/persistent/pull/1314)
     * Fix typos and minor documentation issues in Database.Persist and
       Database.Persist.Quasi.
