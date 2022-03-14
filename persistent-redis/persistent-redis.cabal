@@ -47,22 +47,22 @@ library
 test-suite  basic
     type: exitcode-stdio-1.0
     main-is: tests/basic-test.hs
-    build-depends:   base                  >= 4.9      && < 5
-                   , persistent            >= 2.10     && < 3.0
+    build-depends:   base                  
+                   , persistent            
                    , persistent-redis
-                   , aeson                 >= 1.0
-                   , bytestring            >= 0.10.8   && < 0.11
-                   , binary                >= 0.8      && < 0.9
-                   , hedis                 >= 0.9
+                   , aeson                 
+                   , bytestring            
+                   , binary                
+                   , hedis                 
                    , http-api-data
-                   , mtl                   >= 2.2.1    && < 2.3
-                   , path-pieces           >= 0.2
+                   , mtl                   
+                   , path-pieces           
                    , scientific
                    , template-haskell
-                   , text                  >= 1.2
-                   , time                  >= 1.6
-                   , transformers          >= 0.5      && < 0.6
-                   , utf8-string           >= 1.0      && < 1.1
+                   , text                  
+                   , time                  
+                   , transformers          
+                   , utf8-string           
 
     other-modules:   Database.Persist.Redis
                      Database.Persist.Redis.Config
