@@ -49,7 +49,7 @@ cleanDB'
 cleanDB' = deleteWhere ([] :: [Filter (DataTypeTableGeneric backend)])
 
 roundFn :: RealFrac a => a -> Integer
-roundFn = round
+roundFn = truncate
 
 roundTime :: TimeOfDay -> TimeOfDay
 roundTime t = timeToTimeOfDay $ fromIntegral $ roundFn $ timeOfDayToTime t
