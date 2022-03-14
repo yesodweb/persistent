@@ -130,6 +130,13 @@ import Database.Persist.EntityDef.Internal (EntityDef(..))
 import Database.Persist.ImplicitIdDef (autoIncrementingInteger)
 import Database.Persist.ImplicitIdDef.Internal
 
+#if MIN_VERSION_template_haskell(2,18,0)
+conp :: Name -> [Pat] -> Pat
+conp name pats = ConP name [] pats
+#else
+conp = ConP
+#endif
+
 -- | Converts a quasi-quoted syntax into a list of entity definitions, to be
 -- used as input to the template haskell generation code (mkPersist).
 persistWith :: PersistSettings -> QuasiQuoter
@@ -1287,7 +1294,7 @@ mkToPersistFields mps ed = do
     go = do
         xs <- sequence $ replicate fieldCount $ newName "x"
         let name = mkEntityDefName ed
-            pat = ConP name $ fmap VarP xs
+            pat = conp name $ fmap VarP xs
         sp <- [|SomePersistField|]
         let bod = ListE $ fmap (AppE sp . VarE) xs
         return $ normalClause [pat] bod
@@ -1309,7 +1316,7 @@ mkToPersistFields mps ed = do
                 , [sp `AppE` VarE x]
                 , after
                 ]
-        return $ normalClause [ConP name [VarP x]] body
+        return $ normalClause [conp name [VarP x]] body
 
 mkToFieldNames :: [UniqueDef] -> Q Dec
 mkToFieldNames pairs = do
@@ -1331,7 +1338,7 @@ mkUniqueToValues pairs = do
     go :: UniqueDef -> Q Clause
     go (UniqueDef constr _ names _) = do
         xs <- mapM (const $ newName "x") names
-        let pat = ConP (mkConstraintName constr) $ fmap VarP $ toList xs
+        let pat = conp (mkConstraintName constr) $ fmap VarP $ toList xs
         tpv <- [|toPersistValue|]
         let bod = ListE $ fmap (AppE tpv . VarE) $ toList xs
         return $ normalClause [pat] bod
@@ -1370,7 +1377,7 @@ mkFromPersistValues mps entDef
     mkClauses _ [] = return []
     mkClauses before (field:after) = do
         x <- newName "x"
-        let null' = ConP 'PersistNull []
+        let null' = conp 'PersistNull []
             pat = ListP $ mconcat
                 [ fmap (const null') before
                 , [VarP x]
@@ -1407,20 +1414,20 @@ mkLensClauses mps entDef = do
     valName <- newName "value"
     xName <- newName "x"
     let idClause = normalClause
-            [ConP (keyIdName entDef) []]
+            [conp (keyIdName entDef) []]
             (lens' `AppE` getId `AppE` setId)
     return $ idClause : if unboundEntitySum entDef
         then fmap (toSumClause lens' keyVar valName xName) (getUnboundFieldDefs entDef)
         else fmap (toClause lens' getVal dot keyVar valName xName) (getUnboundFieldDefs entDef)
   where
     toClause lens' getVal dot keyVar valName xName fieldDef = normalClause
-        [ConP (filterConName mps entDef fieldDef) []]
+        [conp (filterConName mps entDef fieldDef) []]
         (lens' `AppE` getter `AppE` setter)
       where
         fieldName = fieldDefToRecordName mps entDef fieldDef
         getter = InfixE (Just $ VarE fieldName) dot (Just getVal)
         setter = LamE
-            [ ConP 'Entity [VarP keyVar, VarP valName]
+            [ conp 'Entity [VarP keyVar, VarP valName]
             , VarP xName
             ]
             $ ConE 'Entity `AppE` VarE keyVar `AppE` RecUpdE
@@ -1428,20 +1435,20 @@ mkLensClauses mps entDef = do
                 [(fieldName, VarE xName)]
 
     toSumClause lens' keyVar valName xName fieldDef = normalClause
-        [ConP (filterConName mps entDef fieldDef) []]
+        [conp (filterConName mps entDef fieldDef) []]
         (lens' `AppE` getter `AppE` setter)
       where
         emptyMatch = Match WildP (NormalB $ VarE 'error `AppE` LitE (StringL "Tried to use fieldLens on a Sum type")) []
         getter = LamE
-            [ ConP 'Entity [WildP, VarP valName]
+            [ conp 'Entity [WildP, VarP valName]
             ] $ CaseE (VarE valName)
-            $ Match (ConP (sumConstrName mps entDef fieldDef) [VarP xName]) (NormalB $ VarE xName) []
+            $ Match (conp (sumConstrName mps entDef fieldDef) [VarP xName]) (NormalB $ VarE xName) []
 
             -- FIXME It would be nice if the types expressed that the Field is
             -- a sum type and therefore could result in Maybe.
             : if length (getUnboundFieldDefs entDef) > 1 then [emptyMatch] else []
         setter = LamE
-            [ ConP 'Entity [VarP keyVar, WildP]
+            [ conp 'Entity [VarP keyVar, WildP]
             , VarP xName
             ]
             $ ConE 'Entity `AppE` VarE keyVar `AppE` (ConE (sumConstrName mps entDef fieldDef) `AppE` VarE xName)
@@ -2363,7 +2370,7 @@ mkUniqueKeys def = do
             x' <- newName $ '_' : unpack (unFieldNameHS x)
             return (x, x')
         let pcs = fmap (go xs) $ entityUniques $ unboundEntityDef def
-        let pat = ConP
+        let pat = conp
                 (mkEntityDefName def)
                 (fmap (VarP . snd) xs)
         return $ normalClause [pat] (ListE pcs)
@@ -2552,7 +2559,7 @@ mkField mps entityMap et fieldDef = do
             maybeIdType mps entityMap fieldDef Nothing Nothing
     bod <- mkLookupEntityField et (unboundFieldNameHS fieldDef)
     let cla = normalClause
-                [ConP name []]
+                [conp name []]
                 bod
     return $ EntityFieldTH con cla
   where
@@ -2582,7 +2589,7 @@ mkIdField mps ued = do
                 [mkEqualP (VarT $ mkName "typ") entityIdType]
                 $ NormalC name []
         , entityFieldTHClause =
-            normalClause [ConP name []] clause
+            normalClause [conp name []] clause
         }
 
 lookupEntityField
@@ -2665,7 +2672,7 @@ mkJSON mps (fixEntityDef -> def) = do
             typeInstanceD ''ToJSON (mpsGeneric mps) typ [toJSON']
           where
             toJSON' = FunD 'toJSON $ return $ normalClause
-                [ConP conName $ fmap VarP xs]
+                [conp conName $ fmap VarP xs]
                 (objectE `AppE` ListE pairs)
               where
                 pairs = zipWith toPair fields xs
