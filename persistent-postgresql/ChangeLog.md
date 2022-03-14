@@ -1,5 +1,10 @@
 # Changelog for persistent-postgresql
 
+## 2.13.5.0
+
+* [#1362](https://github.com/yesodweb/persistent/pull/1362/)
+    * Define `withPostgresqlPoolModifiedWithVersion`
+
 ## 2.13.4.1
 
 * [#1367](https://github.com/yesodweb/persistent/pull/1367),
