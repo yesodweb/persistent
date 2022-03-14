@@ -1,5 +1,13 @@
 # Changelog for persistent-mysql
 
+##  2.13.1.2
+
+* [#1367](https://github.com/yesodweb/persistent/pull/1367),
+  [#1366](https://github.com/yesodweb/persistent/pull/1367),
+  [#1338](https://github.com/yesodweb/persistent/pull/1338),
+  [#1335](https://github.com/yesodweb/persistent/pull/1335)
+    * Support GHC 9.2
+
 ## 2.13.1.1
 
 * [#1360](https://github.com/yesodweb/persistent/pull/1360)
