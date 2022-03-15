@@ -46,7 +46,7 @@ import Database.Persist.TH
 import TemplateTestImports
 
 
-import qualified Database.Persist.TH.PersistWithSpec as PersistWithSpec
+import qualified Database.Persist.TH.CommentSpec as CommentSpec
 import qualified Database.Persist.TH.DiscoverEntitiesSpec as DiscoverEntitiesSpec
 import qualified Database.Persist.TH.EmbedSpec as EmbedSpec
 import qualified Database.Persist.TH.ForeignRefSpec as ForeignRefSpec
@@ -57,10 +57,11 @@ import qualified Database.Persist.TH.MaybeFieldDefsSpec as MaybeFieldDefsSpec
 import qualified Database.Persist.TH.MigrationOnlySpec as MigrationOnlySpec
 import qualified Database.Persist.TH.MultiBlockSpec as MultiBlockSpec
 import qualified Database.Persist.TH.OverloadedLabelSpec as OverloadedLabelSpec
+import qualified Database.Persist.TH.PersistWithSpec as PersistWithSpec
+import qualified Database.Persist.TH.RequireOnlyPersistImportSpec as RequireOnlyPersistImportSpec
 import qualified Database.Persist.TH.SharedPrimaryKeyImportedSpec as SharedPrimaryKeyImportedSpec
 import qualified Database.Persist.TH.SharedPrimaryKeySpec as SharedPrimaryKeySpec
 import qualified Database.Persist.TH.ToFromPersistValuesSpec as ToFromPersistValuesSpec
-import qualified Database.Persist.TH.CommentSpec as CommentSpec
 
 -- test to ensure we can have types ending in Id that don't trash the TH
 -- machinery

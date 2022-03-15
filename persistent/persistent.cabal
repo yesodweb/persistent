@@ -182,6 +182,7 @@ test-suite test
         Database.Persist.TH.MultiBlockSpec
         Database.Persist.TH.MultiBlockSpec.Model
         Database.Persist.TH.OverloadedLabelSpec
+        Database.Persist.TH.RequireOnlyPersistImportSpec
         Database.Persist.TH.SharedPrimaryKeyImportedSpec
         Database.Persist.TH.SharedPrimaryKeySpec
         Database.Persist.THSpec
