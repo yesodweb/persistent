@@ -15,7 +15,7 @@ module Database.Persist.TH.RequireOnlyPersistImportSpec where
 -- See: https://github.com/yesodweb/persistent/pull/1369
 import Database.Persist.TH
 
--- always explicitly import Hspec in the context of this spec
+-- always explicitly import qualified Hspec in the context of this spec
 import qualified Test.Hspec as HS
 
 mkPersist sqlSettings [persistLowerCase|
