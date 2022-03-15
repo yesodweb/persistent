@@ -2,7 +2,7 @@
 
 ## 2.13.3.3
 
-* [#]()
+* [#1369](https://github.com/yesodweb/persistent/pull/1369)
     * Fix `withObject` needing to be imported
 
 ## 2.13.3.2
