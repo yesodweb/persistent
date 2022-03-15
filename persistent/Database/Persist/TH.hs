@@ -81,6 +81,7 @@ import Data.Aeson
        , (.:)
        , (.:?)
        , (.=)
+       , withObject
        )
 #if MIN_VERSION_aeson(2,0,0)
 import qualified Data.Aeson.Key as Key
@@ -2646,16 +2647,17 @@ mkJSON mps (fixEntityDef -> def) = do
     requireExtensions [[FlexibleInstances]]
     pureE <- [|pure|]
     apE' <- [|(<*>)|]
+
+    let objectE = VarE 'object
+        withObjectE = VarE 'withObject
+        dotEqualE = VarE '(.=)
+        dotColonE = VarE '(.:)
+        dotColonQE = VarE '(.:?)
 #if MIN_VERSION_aeson(2,0,0)
-    toKeyE <- [|Key.fromString|]
+        toKeyE = VarE 'Key.fromString
 #else
-    toKeyE <- [|pack|]
+        toKeyE = VarE 'pack
 #endif
-    dotEqualE <- [|(.=)|]
-    dotColonE <- [|(.:)|]
-    dotColonQE <- [|(.:?)|]
-    objectE <- [|object|]
-    withObjectE <- [|withObject|]
     obj <- newName "obj"
     let
         fields =

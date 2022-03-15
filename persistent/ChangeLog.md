@@ -1,5 +1,10 @@
 # Changelog for persistent
 
+## 2.13.3.3
+
+* [#]()
+    * Fix `withObject` needing to be imported
+
 ## 2.13.3.2
 
 * [#1315](https://github.com/yesodweb/persistent/pull/1315)
