@@ -149,6 +149,11 @@ spec = describe "Quasi" $ do
                         ]
                     )
 
+        it "should error if quotes are unterminated" $ do
+            evaluate (parseLine "    \"foo bar")
+                `shouldThrow`
+                    errorCall "Unterminated quoted string starting with foo bar"
+
         it "handles quotes mid-token" $
             parseLine "  x=\"foo bar\"  \"baz\"" `shouldBe`
                 Just
@@ -344,6 +349,37 @@ Notification
             entityComments (unboundEntityDef car) `shouldBe` Just "This is a Car\n"
             entityComments (unboundEntityDef vehicle) `shouldBe` Nothing
 
+        it "should error on malformed input, unterminated parens" $ do
+            let definitions = [st|
+User
+    name Text
+    age  (Maybe Int
+|]
+            let [user] = parse lowerCaseSettings definitions
+            evaluate (unboundEntityDef user)
+                `shouldThrow`
+                    errorCall "Unterminated parens string starting with Maybe Int"
+
+        it "errors on duplicate cascade update declarations" $ do
+            let definitions = [st|
+User
+    age  Int OnUpdateCascade OnUpdateCascade
+|]
+            let [user] = parse lowerCaseSettings definitions
+            mapM (evaluate . unboundFieldCascade) (unboundEntityFields user)
+                `shouldThrow`
+                    errorCall "found more than one OnUpdate action, tokens: [\"OnUpdateCascade\",\"OnUpdateCascade\"]"
+
+        it "errors on duplicate cascade delete declarations" $ do
+            let definitions = [st|
+User
+    age  Int OnDeleteCascade OnDeleteCascade
+|]
+            let [user] = parse lowerCaseSettings definitions
+            mapM (evaluate . unboundFieldCascade) (unboundEntityFields user)
+                `shouldThrow`
+                    errorCall "found more than one OnDelete action, tokens: [\"OnDeleteCascade\",\"OnDeleteCascade\"]"
+
         describe "custom Id column" $ do
             it "parses custom Id column" $ do
                 let definitions = [st|
@@ -459,6 +495,16 @@ User
                         ]
                 evaluate (head (NEL.tail dbNames)) `shouldThrow`
                     errorCall errMsg
+
+            it "triggers error if no valid constraint name provided" $ do
+                let definitions = [st|
+User
+    age Text
+    Unique some
+|]
+                let [user] = parse lowerCaseSettings definitions
+                evaluate (unboundPrimarySpec user) `shouldThrow`
+                    errorCall "invalid unique constraint on table[\"User\"] expecting an uppercase constraint name xs=[\"some\"]"
 
         describe "foreign keys" $ do
             let definitions = [st|

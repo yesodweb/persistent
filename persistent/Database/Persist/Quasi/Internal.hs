@@ -1407,7 +1407,7 @@ parseCascade allTokens =
                                     Nothing ->
                                         go acc mupd (Just cascDel) rest
                                     Just _ ->
-                                        nope "found more than one OnDelete action: "
+                                        nope "found more than one OnDelete action"
                             Nothing ->
                                 go (this : acc) mupd mdel rest
     nope msg =
