@@ -1,5 +1,7 @@
 # Changelog for persistent
 
+* [#1374](https://github.com/yesodweb/persistent/pull/1374)
+    * Increasing test coverage for errors thrown when parsing entity definitions
 * [#1370](https://github.com/yesodweb/persistent/pull/1370)
     * Add spec to assert Persistent.TH is the only import required when defining entities
 
