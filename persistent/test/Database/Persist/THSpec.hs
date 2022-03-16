@@ -24,7 +24,7 @@
 module Database.Persist.THSpec where
 
 import Control.Applicative (Const(..))
-import Data.Aeson hiding (Key)
+import Data.Aeson (decode, encode)
 import Data.ByteString.Lazy.Char8 ()
 import Data.Coerce
 import Data.Functor.Identity (Identity(..))
@@ -58,6 +58,7 @@ import qualified Database.Persist.TH.MigrationOnlySpec as MigrationOnlySpec
 import qualified Database.Persist.TH.MultiBlockSpec as MultiBlockSpec
 import qualified Database.Persist.TH.OverloadedLabelSpec as OverloadedLabelSpec
 import qualified Database.Persist.TH.PersistWithSpec as PersistWithSpec
+import qualified Database.Persist.TH.RequireOnlyPersistImportSpec as RequireOnlyPersistImportSpec
 import qualified Database.Persist.TH.SharedPrimaryKeyImportedSpec as SharedPrimaryKeyImportedSpec
 import qualified Database.Persist.TH.SharedPrimaryKeySpec as SharedPrimaryKeySpec
 import qualified Database.Persist.TH.ToFromPersistValuesSpec as ToFromPersistValuesSpec

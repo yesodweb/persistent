@@ -4,6 +4,28 @@
 
 * [#1264](https://github.com/yesodweb/persistent/pull/1264)
     * Support declaring Maybe before the type in model definitions
+* [#1370](https://github.com/yesodweb/persistent/pull/1370)
+    * Add spec to assert Persistent.TH is the only import required when defining entities
+
+## 2.13.3.3
+
+* [#1369](https://github.com/yesodweb/persistent/pull/1369)
+    * Fix `withObject` needing to be imported
+
+## 2.13.3.2
+
+* [#1315](https://github.com/yesodweb/persistent/pull/1315)
+    * Refactor entity constraint parsing in Quasi module
+
+## 2.13.3.1
+
+* [#1367](https://github.com/yesodweb/persistent/pull/1367),
+  [#1366](https://github.com/yesodweb/persistent/pull/1367),
+  [#1338](https://github.com/yesodweb/persistent/pull/1338),
+  [#1335](https://github.com/yesodweb/persistent/pull/1335)
+    * Support GHC 9.2
+* [#1356](https://github.com/yesodweb/persistent/pull/1356)
+    * Improve parse errors in generated FromJSON instances
 
 ## 2.13.3.0
 

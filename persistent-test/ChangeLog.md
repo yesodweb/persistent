@@ -1,5 +1,14 @@
 ## Unreleased changes
 
+## 2.13.1.2
+
+* [#1367](https://github.com/yesodweb/persistent/pull/1367),
+  [#1366](https://github.com/yesodweb/persistent/pull/1367),
+  [#1338](https://github.com/yesodweb/persistent/pull/1338),
+  [#1335](https://github.com/yesodweb/persistent/pull/1335)
+    * Support GHC 9.2
+* Test migration idempotency on additional integer types [#1359](https://github.com/yesodweb/persistent/pull/1359)
+
 ## 2.13.1.0
 
 * Support `persistent-2.13.3.0` [#1341](https://github.com/yesodweb/persistent/pull/1341)
