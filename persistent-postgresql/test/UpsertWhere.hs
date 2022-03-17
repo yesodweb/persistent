@@ -46,9 +46,6 @@ wipe = runConnAssert $ do
     deleteWhere ([] :: [Filter Item])
     deleteWhere ([] :: [Filter ItemMigOnly])
 
-itDb :: String -> SqlPersistT (LoggingT (ResourceT IO)) a -> SpecWith (Arg (IO ()))
-itDb msg action = it msg $ runConnAssert $ void action
-
 specs :: Spec
 specs = describe "UpsertWhere" $ do
     let item1 = Item "item1" "" (Just 3) Nothing

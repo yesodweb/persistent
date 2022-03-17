@@ -227,3 +227,6 @@ instance Arbitrary AValue where
                 $ listOf -- [(,)] -> (,)
                 . liftA2 (,) arbText -- (,) -> Text and Value
                 $ limitIt 4 (fmap getValue arbitrary) -- Again, precaution against divergent recursion.
+
+itDb :: String -> SqlPersistT (LoggingT (ResourceT IO)) a -> SpecWith (Arg (IO ()))
+itDb msg action = it msg $ runConnAssert $ void action
