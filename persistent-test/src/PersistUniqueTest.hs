@@ -4,8 +4,7 @@ module PersistUniqueTest where
 
 import Init
 
--- mpsGeneric = False is due to a bug or at least lack of a feature in mkKeyTypeDec TH.hs
-share [mkPersist persistSettings { mpsGeneric = False }, mkMigrate "migration"] [persistLowerCase|
+share [mkPersist persistSettings, mkMigrate "migration"] [persistLowerCase|
   Fo
       foo Int
       bar Int

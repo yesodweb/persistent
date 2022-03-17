@@ -67,7 +67,7 @@ import qualified Database.Persist.TH.ToFromPersistValuesSpec as ToFromPersistVal
 -- machinery
 type TextId = Text
 
-share [mkPersist sqlSettings { mpsGeneric = False, mpsDeriveInstances = [''Generic] }] [persistUpperCase|
+share [mkPersist sqlSettings { mpsDeriveInstances = [''Generic] }] [persistUpperCase|
 
 Person json
     name Text
@@ -145,7 +145,7 @@ KeyTable
 
 |]
 
-share [mkPersist sqlSettings { mpsGeneric = False, mpsGenerateLenses = True }] [persistLowerCase|
+share [mkPersist sqlSettings { mpsGenerateLenses = True }] [persistLowerCase|
 Lperson json
     name Text
     age Int Maybe

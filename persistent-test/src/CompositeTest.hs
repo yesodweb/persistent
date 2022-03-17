@@ -10,8 +10,7 @@ import Data.Maybe (isJust)
 import Init
 
 
--- mpsGeneric = False is due to a bug or at least lack of a feature in mkKeyTypeDec TH.hs
-share [mkPersist persistSettings { mpsGeneric = False }, mkMigrate "compositeMigrate"] [persistLowerCase|
+share [mkPersist persistSettings, mkMigrate "compositeMigrate"] [persistLowerCase|
   TestParent
       name  String maxlen=20
       name2 String maxlen=20

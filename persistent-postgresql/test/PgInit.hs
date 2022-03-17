@@ -138,7 +138,7 @@ dockerPg = do
     _ -> Nothing
 
 persistSettings :: MkPersistSettings
-persistSettings = sqlSettings { mpsGeneric = True }
+persistSettings = sqlSettings
 
 runConn :: MonadUnliftIO m => SqlPersistT (LoggingT m) t -> m ()
 runConn f = runConn_ f >>= const (return ())

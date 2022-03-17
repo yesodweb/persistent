@@ -20,8 +20,8 @@ data BackendUpsertKeyBehavior
     | UpsertPreserveOldKey
 
 specsWith
-    :: forall backend m. Runner backend m
-    => RunDb backend m
+    :: forall m. Runner SqlBackend m
+    => RunDb SqlBackend m
     -> BackendNullUpdateBehavior
     -> BackendUpsertKeyBehavior
     -> Spec
@@ -35,7 +35,7 @@ specsWith runDb handleNull handleKey = describe "UpsertTests" $ do
   describe "upsert" $ do
     it "adds a new row with no updates" $ runDb $ do
         Entity _ u <- upsert (Upsert "a" "new" "" 2) [UpsertAttr =. "update"]
-        c <- count ([] :: [Filter (UpsertGeneric backend)])
+        c <- count ([] :: [Filter Upsert])
         c @== 1
         upsertAttr u @== "new"
     it "keeps the existing row" $ runDb $ do
@@ -85,7 +85,7 @@ specsWith runDb handleNull handleKey = describe "UpsertTests" $ do
                 uniqueEmail
                 (UpsertBy "a" "Boston" "new")
                 [UpsertByAttr =. "update"]
-        c <- count ([] :: [Filter (UpsertByGeneric backend)])
+        c <- count ([] :: [Filter UpsertBy])
         c @== 1
         upsertByAttr u @== "new"
     it "keeps the existing row" $ runDb $ do

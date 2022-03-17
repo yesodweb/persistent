@@ -8,7 +8,7 @@ import qualified Data.Text as T
 import Database.Persist.TH
 import Init
 
-share [mkPersist persistSettings { mpsGeneric = True }, mkMigrate "sumTypeMigrate"] [persistLowerCase|
+share [mkPersist persistSettings, mkMigrate "sumTypeMigrate"] [persistLowerCase|
 Bicycle
     brand T.Text
 Car
@@ -17,22 +17,15 @@ Car
 +Vehicle
     bicycle BicycleId
     car CarId
+    deriving Eq Show
 |]
-
--- This is needed for mpsGeneric = True
--- The typical persistent user sets mpsGeneric = False
--- https://ghc.haskell.org/trac/ghc/ticket/8100
-deriving instance Show (BackendKey backend) => Show (VehicleGeneric backend)
-deriving instance Eq (BackendKey backend) => Eq (VehicleGeneric backend)
 
 specsWith
     ::
-    ( PersistQueryWrite backend
-    , BaseBackend backend ~ backend
-    , MonadIO m, MonadFail m
+    ( MonadIO m, MonadFail m
     )
-    => RunDb backend m
-    -> Maybe (ReaderT backend m a)
+    => RunDb SqlBackend m
+    -> Maybe (ReaderT SqlBackend m a)
     -- ^ Optional migrations for SQL backends
     -> Spec
 specsWith runDb mmigrate = describe "sum types" $

@@ -10,8 +10,7 @@ import Init
 
 import Database.Persist.EntityDef.Internal (entityExtra)
 
--- mpsGeneric = False is due to a bug or at least lack of a feature in mkKeyTypeDec TH.hs
-share [mkPersist persistSettings { mpsGeneric = False }, mkMigrate "compositeMigrate"] [persistLowerCase|
+share [mkPersist persistSettings, mkMigrate "compositeMigrate"] [persistLowerCase|
 SimpleCascadeChild
     ref SimpleCascadeId OnDeleteCascade
     deriving Show Eq

@@ -5,7 +5,7 @@ module EntityEmbedTest where
 -- this is used in EmbedTest
 import Init
 
-mkPersist persistSettings { mpsGeneric = True } [persistUpperCase|
+mkPersist persistSettings [persistUpperCase|
   ARecord
     name Text
     deriving Show Eq Read Ord

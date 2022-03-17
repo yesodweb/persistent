@@ -10,7 +10,7 @@ import Init
 debug :: Show s => s -> s
 debug x = trace (show x) x
 
-share [mkPersist sqlSettings { mpsGeneric = True }, mkMigrate "embedOrderMigrate"] [persistUpperCase|
+share [mkPersist sqlSettings, mkMigrate "embedOrderMigrate"] [persistUpperCase|
 Foo sql=foo_embed_order
     bars [Bar]
     deriving Eq Show
@@ -21,12 +21,12 @@ Bar sql=bar_embed_order
     deriving Eq Show
 |]
 
-cleanDB :: Runner backend m => ReaderT backend m ()
+cleanDB :: Runner SqlBackend m => ReaderT SqlBackend m ()
 cleanDB = do
-  deleteWhere ([] :: [Filter (FooGeneric backend)])
-  deleteWhere ([] :: [Filter (BarGeneric backend)])
+  deleteWhere ([] :: [Filter Foo])
+  deleteWhere ([] :: [Filter Bar])
 
-specsWith :: Runner backend m => RunDb backend m -> Spec
+specsWith :: Runner SqlBackend m => RunDb SqlBackend m -> Spec
 specsWith db = describe "embedded entities" $ do
     it "preserves ordering" $ db $ do
         let foo = Foo [Bar "b" "u" "g"]

@@ -13,7 +13,7 @@ import Init
 type TextId = Text
 
 -- Test lower case names
-share [mkPersist sqlSettings { mpsGeneric = True }, mkMigrate "migration"] [persistLowerCase|
+share [mkPersist sqlSettings, mkMigrate "migration"] [persistLowerCase|
 -- This just tests that a field can be named "key"
 KeyTable
     key Text
@@ -52,26 +52,13 @@ ForeignIdTable
     idId IdTableId
 |]
 
-cleanDB
-    :: forall backend.
-    ( BaseBackend backend ~ backend
-    , PersistQueryWrite backend
-    )
-    => ReaderT backend IO ()
+cleanDB :: SqlPersistT IO ()
 cleanDB = do
-  deleteWhere ([] :: [Filter (IdTableGeneric backend)])
-  deleteWhere ([] :: [Filter (LowerCaseTableGeneric backend)])
-  deleteWhere ([] :: [Filter (RefTableGeneric backend)])
+  deleteWhere ([] :: [Filter IdTable])
+  deleteWhere ([] :: [Filter LowerCaseTable])
+  deleteWhere ([] :: [Filter RefTable])
 
-specsWith
-    ::
-    ( PersistStoreWrite backend, PersistQueryRead backend
-    , backend ~ BaseBackend backend
-    , MonadIO m, MonadFail m
-    , Eq (BackendKey backend)
-    )
-    => RunDb backend m
-    -> Spec
+specsWith :: ( MonadIO m, MonadFail m) => RunDb SqlBackend m -> Spec
 specsWith runDb = describe "rename specs" $ do
     describe "LowerCaseTable" $ do
         it "LowerCaseTable has the right sql name" $ do
@@ -88,7 +75,7 @@ specsWith runDb = describe "rename specs" $ do
         insertKey key rec
         Just rec' <- get key
         rec' @== rec
-        (Entity key' _):_ <- selectList ([] :: [Filter (IdTableGeneric backend)]) []
+        (Entity key' _):_ <- selectList ([] :: [Filter IdTable]) []
         key' @== key
 
     it "extra blocks" $

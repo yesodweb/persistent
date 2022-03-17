@@ -45,11 +45,8 @@ autoIncrementingInteger =
             FTTypeCon Nothing $ unEntityNameHS entName `mappend` "Id"
         , iidFieldSqlType =
             SqlInt64
-        , iidType = \isMpsGeneric mpsBackendType ->
-            ConT ''BackendKey `AppT`
-                if isMpsGeneric
-                then VarT (mkName "backend")
-                else mpsBackendType
+        , iidType = \mpsBackendType ->
+            ConT ''BackendKey `AppT` mpsBackendType
         , iidDefault =
             Nothing
         , iidMaxLen =

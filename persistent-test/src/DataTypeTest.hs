@@ -43,10 +43,8 @@ DataTypeTable no-json
     utc UTCTime
 |]
 
-cleanDB'
-    ::
-    ( MonadIO m, PersistStoreWrite (BaseBackend backend), PersistQuery backend) => ReaderT backend m ()
-cleanDB' = deleteWhere ([] :: [Filter (DataTypeTableGeneric backend)])
+cleanDB' :: (MonadIO m) => SqlPersistT m ()
+cleanDB' = deleteWhere ([] :: [Filter DataTypeTable])
 
 roundFn :: RealFrac a => a -> Integer
 roundFn = truncate
@@ -81,14 +79,10 @@ instance Arbitrary DataTypeTable where
 specsWith
     :: forall db backend m entity.
     ( db ~ ReaderT backend m
-    , PersistStoreRead backend
+    , backend ~ SqlBackend
     , PersistEntity entity
-    , PersistEntityBackend entity ~ BaseBackend backend
+    , PersistEntityBackend entity ~ SqlBackend
     , Arbitrary entity
-    , PersistStoreWrite backend
-    , PersistStoreWrite (BaseBackend backend)
-    , PersistQueryWrite (BaseBackend backend)
-    , PersistQueryWrite backend
     , MonadFail m
     , MonadIO m
     )

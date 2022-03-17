@@ -19,7 +19,7 @@ import Data.Text (append)
 -- just need to ensure this compiles
 import PersistentTestModelsImports()
 
-share [mkPersist persistSettings { mpsGeneric = True },  mkMigrate "testMigrate"] [persistUpperCase|
+share [mkPersist persistSettings,  mkMigrate "testMigrate"] [persistUpperCase|
 
 -- Dedented comment
   -- Header-level comment
@@ -44,14 +44,16 @@ share [mkPersist persistSettings { mpsGeneric = True },  mkMigrate "testMigrate"
     name Text Maybe
     color Text Maybe
     deriving Show Eq
+
   Pet
     ownerId PersonId
     name Text
-    -- deriving Show Eq
 -- Dedented comment
   -- Header-level comment
     -- Indented comment
     type PetType
+    deriving Show Eq
+
   MaybeOwnedPet
     ownerId PersonId Maybe
     name Text
@@ -113,6 +115,7 @@ share [mkPersist persistSettings { mpsGeneric = True },  mkMigrate "testMigrate"
       -- | Fields should be documentable.
       name String
       parent RelationshipId Maybe
+      deriving Show Eq
 
   MutA
     mutB    MutBId
@@ -122,37 +125,26 @@ share [mkPersist persistSettings { mpsGeneric = True },  mkMigrate "testMigrate"
 
 |]
 
-deriving instance Show (BackendKey backend) => Show (PetGeneric backend)
-deriving instance Eq (BackendKey backend) => Eq (PetGeneric backend)
-
-deriving instance Show (BackendKey backend) => Show (RelationshipGeneric backend)
-deriving instance Eq (BackendKey backend) => Eq (RelationshipGeneric backend)
-
 share [mkPersist persistSettings {
           mpsPrefixFields = False
         , mpsFieldLabelModifier = \_ _ -> "" -- this field is ignored when mpsPrefixFields == False
         , mpsConstraintLabelModifier = \_ _ -> "" -- this field is ignored when mpsPrefixFields == False
-        , mpsGeneric = True
         }
       , mkMigrate "noPrefixMigrate"
       ] [persistLowerCase|
 NoPrefix1
     someFieldName Int
+    deriving Eq Show
 NoPrefix2
     someOtherFieldName Int
     unprefixedRef NoPrefix1Id
+    deriving Eq Show
 +NoPrefixSum
     unprefixedLeft Int
     unprefixedRight String
     deriving Show Eq
 
 |]
-
-deriving instance Show (BackendKey backend) => Show (NoPrefix1Generic backend)
-deriving instance Eq (BackendKey backend) => Eq (NoPrefix1Generic backend)
-
-deriving instance Show (BackendKey backend) => Show (NoPrefix2Generic backend)
-deriving instance Eq (BackendKey backend) => Eq (NoPrefix2Generic backend)
 
 share [mkPersist persistSettings {
           mpsFieldLabelModifier = \entity field -> case entity of
@@ -164,12 +156,12 @@ share [mkPersist persistSettings {
             "CustomPrefix2" -> append "CP2" field
             "CustomPrefixSum" -> append "CP" field
             _ -> error "should not be called"
-        , mpsGeneric = True
         }
       , mkMigrate "customPrefixMigrate"
       ] [persistLowerCase|
 CustomPrefix1
     customFieldName Int
+    deriving Show Eq
 CustomPrefix2
     otherCustomFieldName Int
     customPrefixedRef CustomPrefix1Id
@@ -179,13 +171,7 @@ CustomPrefix2
     deriving Show Eq
 |]
 
-deriving instance Show (BackendKey backend) => Show (CustomPrefix1Generic backend)
-deriving instance Eq (BackendKey backend) => Eq (CustomPrefix1Generic backend)
-
-deriving instance Show (BackendKey backend) => Show (CustomPrefix2Generic backend)
-deriving instance Eq (BackendKey backend) => Eq (CustomPrefix2Generic backend)
-
-share [mkPersist persistSettings { mpsPrefixFields = False, mpsGeneric = False }
+share [mkPersist persistSettings { mpsPrefixFields = False }
       , mkMigrate "treeMigrate"
       ] [persistLowerCase|
 
@@ -227,17 +213,15 @@ instance (PersistEntity a) => PersistEntity (ReverseFieldOrder a) where
     persistIdField = error "ReverseFieldOrder.persistIdField"
     fieldLens x = error "ReverseFieldOrder.fieldLens"
 
-cleanDB
-    :: (MonadIO m, PersistQuery backend, PersistStoreWrite (BaseBackend backend))
-    => ReaderT backend m ()
+cleanDB :: (MonadIO m) => SqlPersistT m ()
 cleanDB = do
-  deleteWhere ([] :: [Filter (PersonGeneric backend)])
-  deleteWhere ([] :: [Filter (Person1Generic backend)])
-  deleteWhere ([] :: [Filter (PetGeneric backend)])
-  deleteWhere ([] :: [Filter (MaybeOwnedPetGeneric backend)])
-  deleteWhere ([] :: [Filter (NeedsPetGeneric backend)])
-  deleteWhere ([] :: [Filter (OutdoorPetGeneric backend)])
-  deleteWhere ([] :: [Filter (UserPTGeneric backend)])
-  deleteWhere ([] :: [Filter (EmailPTGeneric backend)])
-  deleteWhere ([] :: [Filter (UpsertGeneric backend)])
-  deleteWhere ([] :: [Filter (UpsertByGeneric backend)])
+  deleteWhere ([] :: [Filter Person])
+  deleteWhere ([] :: [Filter Person1])
+  deleteWhere ([] :: [Filter Pet])
+  deleteWhere ([] :: [Filter MaybeOwnedPet])
+  deleteWhere ([] :: [Filter NeedsPet])
+  deleteWhere ([] :: [Filter OutdoorPet])
+  deleteWhere ([] :: [Filter UserPT])
+  deleteWhere ([] :: [Filter EmailPT])
+  deleteWhere ([] :: [Filter Upsert])
+  deleteWhere ([] :: [Filter UpsertBy])
