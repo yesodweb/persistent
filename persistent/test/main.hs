@@ -6,6 +6,7 @@ import qualified Database.Persist.ClassSpec as ClassSpec
 import qualified Database.Persist.PersistValueSpec as PersistValueSpec
 import qualified Database.Persist.QuasiSpec as QuasiSpec
 import qualified Database.Persist.THSpec as THSpec
+import qualified Database.Persist.Sql.RawSpec as RawSpec
 
 main :: IO ()
 main = hspec $ do
@@ -14,3 +15,6 @@ main = hspec $ do
         QuasiSpec.spec
         ClassSpec.spec
         PersistValueSpec.spec
+        describe "Sql" $ do
+            describe "RawSpec" $ do
+                RawSpec.spec

@@ -31,7 +31,7 @@ import qualified Data.Text as T
 
 import Database.Persist hiding (updateField)
 import Database.Persist.Sql.Orphan.PersistStore (withRawQuery)
-import Database.Persist.Sql.Raw
+import Database.Persist.Sql.Raw.Internal
 import Database.Persist.Sql.Types.Internal
        (SqlBackend(..), SqlReadBackend, SqlWriteBackend)
 import Database.Persist.Sql.Util

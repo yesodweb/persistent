@@ -68,7 +68,9 @@ library
         Database.Persist.Quasi.Internal
 
         Database.Persist.Sql
+        Database.Persist.Sql.Internal
         Database.Persist.Sql.Migration
+        Database.Persist.Sql.Raw.Internal
         Database.Persist.Sql.Types.Internal
         Database.Persist.Sql.Util
 
@@ -95,9 +97,7 @@ library
     other-modules:   
         Database.Persist.Types.Base
 
-        Database.Persist.Sql.Internal
         Database.Persist.Sql.Types
-        Database.Persist.Sql.Raw
         Database.Persist.Sql.Run
         Database.Persist.Sql.Class
         Database.Persist.Sql.Orphan.PersistQuery
@@ -166,26 +166,27 @@ test-suite test
         Database.Persist.ClassSpec
         Database.Persist.PersistValueSpec
         Database.Persist.QuasiSpec
+        Database.Persist.Sql.RawSpec
+        Database.Persist.TH.CommentSpec
         Database.Persist.TH.DiscoverEntitiesSpec
         Database.Persist.TH.EmbedSpec
         Database.Persist.TH.ForeignRefSpec
-        Database.Persist.TH.PersistWith.Model
-        Database.Persist.TH.PersistWith.Model2
-        Database.Persist.TH.PersistWithSpec
-        Database.Persist.TH.CommentSpec
         Database.Persist.TH.ImplicitIdColSpec
         Database.Persist.TH.JsonEncodingSpec
         Database.Persist.TH.KindEntitiesSpec
         Database.Persist.TH.KindEntitiesSpecImports
-        Database.Persist.TH.MigrationOnlySpec
         Database.Persist.TH.MaybeFieldDefsSpec
+        Database.Persist.TH.MigrationOnlySpec
         Database.Persist.TH.MultiBlockSpec
         Database.Persist.TH.MultiBlockSpec.Model
         Database.Persist.TH.OverloadedLabelSpec
+        Database.Persist.TH.PersistWith.Model
+        Database.Persist.TH.PersistWith.Model2
+        Database.Persist.TH.PersistWithSpec
         Database.Persist.TH.SharedPrimaryKeyImportedSpec
         Database.Persist.TH.SharedPrimaryKeySpec
-        Database.Persist.THSpec
         Database.Persist.TH.ToFromPersistValuesSpec
+        Database.Persist.THSpec
         TemplateTestImports
     default-language: Haskell2010
 

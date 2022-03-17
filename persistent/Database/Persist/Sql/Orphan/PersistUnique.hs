@@ -17,7 +17,7 @@ import Database.Persist
 import Database.Persist.Class.PersistUnique (defaultUpsertBy, defaultPutMany, persistUniqueKeyValues)
 
 import Database.Persist.Sql.Types.Internal
-import Database.Persist.Sql.Raw
+import Database.Persist.Sql.Raw.Internal
 import Database.Persist.Sql.Orphan.PersistStore (withRawQuery)
 import Database.Persist.Sql.Util (dbColumns, parseEntityValues, updatePersistValue, mkUpdateText')
 

@@ -15,7 +15,7 @@ import qualified Data.Text as T
 import qualified UnliftIO.Exception as UE
 
 import Database.Persist.Class.PersistStore
-import Database.Persist.Sql.Raw
+import Database.Persist.Sql.Raw.Internal
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Types.Internal
 import Database.Persist.SqlBackend.Internal.StatementCache

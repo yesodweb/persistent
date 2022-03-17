@@ -40,7 +40,7 @@ import Web.PathPieces (PathPiece)
 import Database.Persist
 import Database.Persist.Class ()
 import Database.Persist.Sql.Class (PersistFieldSql)
-import Database.Persist.Sql.Raw
+import Database.Persist.Sql.Raw.Internal
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Types.Internal
 import Database.Persist.Sql.Util

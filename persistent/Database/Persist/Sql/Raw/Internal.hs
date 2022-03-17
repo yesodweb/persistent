@@ -1,4 +1,6 @@
-module Database.Persist.Sql.Raw where
+-- | This module is a internal. Breaking changes to the API of this module will
+-- not be reflected in a major version bump.
+module Database.Persist.Sql.Raw.Internal where
 
 import Control.Exception (throwIO)
 import Control.Monad (liftM, when)
@@ -216,10 +218,10 @@ rawSql stmt = run
       process = rawSqlProcessRow
 
       withStmt' colSubsts params sink = do
-            srcRes <- rawQueryRes sql params
+            srcRes <- rawQueryRes sql' params
             liftIO $ with srcRes (\src -> runConduit $ src .| sink)
           where
-            sql = T.concat $ makeSubsts colSubsts $ T.splitOn placeholder stmt
+            sql' = T.concat $ makeSubsts colSubsts $ T.splitOn placeholder stmt
             placeholder = "??"
             makeSubsts (s:ss) (t:ts) = t : s : makeSubsts ss ts
             makeSubsts []     []     = []

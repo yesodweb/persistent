@@ -16,7 +16,7 @@ module Database.Persist.SqlBackend.SqlPoolHooks
 
 import Control.Exception
 import Control.Monad.IO.Class
-import Database.Persist.Sql.Raw
+import Database.Persist.Sql.Raw.Internal
 import Database.Persist.SqlBackend.Internal
 import Database.Persist.SqlBackend.Internal.SqlPoolHooks
 import Database.Persist.SqlBackend.Internal.IsolationLevel

@@ -68,7 +68,7 @@ import System.IO
 import System.IO.Silently (hSilence)
 
 import Database.Persist.Sql.Orphan.PersistStore ()
-import Database.Persist.Sql.Raw
+import Database.Persist.Sql.Raw.Internal
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Types.Internal
 import Database.Persist.Types
