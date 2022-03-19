@@ -1,5 +1,11 @@
 # Changelog for persistent-mysql
 
+##  2.13.1.3
+
+* [#1372](https://github.com/yesodweb/persistent/pull/1372)
+    * Fix migrations which add a new column in `persistent-mysql` ([#1373](https://github.com/yesodweb/persistent/issues/1373))
+    * Include MigrationTest in `persistent-mysql` tests
+
 ##  2.13.1.2
 
 * [#1367](https://github.com/yesodweb/persistent/pull/1367),
