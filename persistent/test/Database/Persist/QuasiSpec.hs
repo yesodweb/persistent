@@ -514,12 +514,12 @@ CustomerTransfer
             let maybeCon = FTTypeCon Nothing "Maybe"
                 int = FTTypeCon Nothing "Int"
             parseFieldType "Maybe (Maybe [Int])" `shouldBe` Right
-              (maybeCon `FTApp` (maybeCon `FTApp` FTList int))
+                (maybeCon `FTApp` (maybeCon `FTApp` FTList int))
         it "nested list / parens (parens inside list)" $ do
             let maybeCon = FTTypeCon Nothing "Maybe"
                 int = FTTypeCon Nothing "Int"
             parseFieldType "[Maybe (Maybe Int)]" `shouldBe` Right
-              (FTList (maybeCon `FTApp` (maybeCon `FTApp` int)))
+                (FTList (maybeCon `FTApp` (maybeCon `FTApp` int)))
         it "fails on lowercase starts" $ do
             parseFieldType "nothanks" `shouldBe` Left "PSFail ('n',\"othanks\")"
 
