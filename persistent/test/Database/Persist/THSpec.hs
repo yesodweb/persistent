@@ -53,6 +53,7 @@ import qualified Database.Persist.TH.ForeignRefSpec as ForeignRefSpec
 import qualified Database.Persist.TH.ImplicitIdColSpec as ImplicitIdColSpec
 import qualified Database.Persist.TH.JsonEncodingSpec as JsonEncodingSpec
 import qualified Database.Persist.TH.KindEntitiesSpec as KindEntitiesSpec
+import qualified Database.Persist.TH.NestedSymbolsInTypeSpec as NestedSymbolsInTypeSpec
 import qualified Database.Persist.TH.MaybeFieldDefsSpec as MaybeFieldDefsSpec
 import qualified Database.Persist.TH.MigrationOnlySpec as MigrationOnlySpec
 import qualified Database.Persist.TH.MultiBlockSpec as MultiBlockSpec
@@ -174,6 +175,7 @@ spec :: Spec
 spec = describe "THSpec" $ do
     PersistWithSpec.spec
     KindEntitiesSpec.spec
+    NestedSymbolsInTypeSpec.spec
     OverloadedLabelSpec.spec
     SharedPrimaryKeySpec.spec
     SharedPrimaryKeyImportedSpec.spec
