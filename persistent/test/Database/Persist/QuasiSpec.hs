@@ -541,6 +541,16 @@ WithFinite
         it "string type literals" $ do
             let expected = FTApp (FTTypeCon Nothing "Labelled") (FTLit (TextTypeLit "twenty"))
             parseFieldType "Labelled \"twenty\"" `shouldBe` Right expected
+        it "nested list / parens (list inside parens)" $ do
+            let maybeCon = FTTypeCon Nothing "Maybe"
+                int = FTTypeCon Nothing "Int"
+            parseFieldType "Maybe (Maybe [Int])" `shouldBe` Right
+                (maybeCon `FTApp` (maybeCon `FTApp` FTList int))
+        it "nested list / parens (parens inside list)" $ do
+            let maybeCon = FTTypeCon Nothing "Maybe"
+                int = FTTypeCon Nothing "Int"
+            parseFieldType "[Maybe (Maybe Int)]" `shouldBe` Right
+                (FTList (maybeCon `FTApp` (maybeCon `FTApp` int)))
         it "fails on lowercase starts" $ do
             parseFieldType "nothanks" `shouldBe` Left "PSFail \"nothanks\""
 

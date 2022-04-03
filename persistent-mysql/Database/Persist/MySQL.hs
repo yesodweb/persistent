@@ -921,7 +921,7 @@ findAlters edef allDefs col@(Column name isNull type_ def gen _defConstraintName
     -- new fkey that didn't exist before
         [] ->
             case ref of
-                Nothing -> ([Add' col],[])
+                Nothing -> ([Add' col],cols)
                 Just cr ->
                     let tname = crTableName cr
                         cname = crConstraintName cr
