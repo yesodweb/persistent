@@ -1,5 +1,7 @@
 # Changelog for persistent
 
+# 2.13.3.4
+
 * [#1379](https://github.com/yesodweb/persistent/pull/1379)
     * `mkPersist` now generates code that compiles under `NoFieldSelectors` and `DuplicateRecordFields` even if field labels are not prefixed
 * [#1376](https://github.com/yesodweb/persistent/pull/1376)
