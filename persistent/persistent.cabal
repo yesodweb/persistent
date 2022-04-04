@@ -183,6 +183,7 @@ test-suite test
         Database.Persist.TH.MultiBlockSpec.Model
         Database.Persist.TH.NestedSymbolsInTypeSpec
         Database.Persist.TH.NestedSymbolsInTypeSpecImports
+        Database.Persist.TH.NoFieldSelectorsSpec
         Database.Persist.TH.OverloadedLabelSpec
         Database.Persist.TH.RequireOnlyPersistImportSpec
         Database.Persist.TH.SharedPrimaryKeyImportedSpec
