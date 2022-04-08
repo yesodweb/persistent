@@ -1,5 +1,14 @@
 # Changelog for persistent
 
+* []()
+    * `Entity` is given a `HasField` instance that uses the database field
+      names. This is primarily done to support `OverloadedRecordDot` in GHC 9.2
+      and above.
+    * A consequence of this is that the `Entity` constructor has been renamed to
+      `Entity'`. A pattern synonym is provided that should work in almost all
+      cases. You may incur a `MonadFail m` constraint if you are pattern
+      matching directly on the constructor in a `do` result.
+
 # 2.13.3.4
 
 * [#1379](https://github.com/yesodweb/persistent/pull/1379)
