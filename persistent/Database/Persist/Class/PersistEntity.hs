@@ -240,6 +240,8 @@ data Entity record =
 pattern Entity :: Key rec -> rec -> Entity rec
 pattern Entity { entityKey,  entityVal } = Entity' entityKey entityVal
 
+{-# COMPLETE Entity #-}
+
 deriving instance (Generic (Key record), Generic record) => Generic (Entity record)
 deriving instance (Eq (Key record), Eq record) => Eq (Entity record)
 deriving instance (Ord (Key record), Ord record) => Ord (Entity record)
