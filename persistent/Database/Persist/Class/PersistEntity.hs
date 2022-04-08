@@ -238,7 +238,6 @@ data Entity record =
     Entity' (Key record) record
 
 pattern Entity :: Key rec -> rec -> Entity rec
--- pattern Entity { entityKey, entityVal } <- Entity' entityKey entityVal
 pattern Entity { entityKey,  entityVal } = Entity' entityKey entityVal
 
 deriving instance (Generic (Key record), Generic record) => Generic (Entity record)
