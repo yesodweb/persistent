@@ -1,11 +1,19 @@
 # Changelog for persistent
 
+## 2.14.0.0 (unreleased)
+
 * [#1384](https://github.com/yesodweb/persistent/pull/1384)
     * Add `tabulateEntityA` to the `PersistEntity` class, allowing you to
       construct an `Entity a` by providing a function `EntityField a t -> f t`.
       Note that this doesn't make sense for sum entities, and the implementation
       `error`s.
     * Add `tabulateEntity` as a pure version of that.
+
+## 2.13.3.5
+
+* [#1374](https://github.com/yesodweb/persistent/pull/1374)
+    * Increasing test coverage for errors thrown when parsing entity definitions
+
 
 ## 2.13.3.4
 
