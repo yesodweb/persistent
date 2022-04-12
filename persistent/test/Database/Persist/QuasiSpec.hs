@@ -484,7 +484,7 @@ User
                 let [user] = parse lowerCaseSettings definitions
                 case unboundPrimarySpec user of
                     NaturalKey ucd -> do
-                        evaluate (head $ unboundCompositeCols ucd) `shouldThrow`
+                        evaluate (NEL.head $ unboundCompositeCols ucd) `shouldThrow`
                             errorCall "Unknown column in primary key constraint: \"ref\""
                     _ ->
                         error "Expected NaturalKey, failing"
