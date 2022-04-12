@@ -1,5 +1,8 @@
 # Changelog for persistent
 
+* []()
+    * Primary keys have a `NonEmpty` of fields, not a `[]` of fields.
+
 # 2.13.3.4
 
 * [#1379](https://github.com/yesodweb/persistent/pull/1379)

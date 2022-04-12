@@ -394,6 +394,18 @@ User
                     , FieldNameHS "name"
                     , FieldNameHS "age"
                     ]
+                entityUniques (unboundEntityDef user) `shouldBe`
+                    [ UniqueDef
+                        { uniqueHaskell =
+                            ConstraintNameHS "UserPrimaryKey"
+                        , uniqueDBName =
+                            ConstraintNameDB "primary_key"
+                        , uniqueFields =
+                            pure (FieldNameHS "ref", FieldNameDB "ref")
+                        , uniqueAttrs =
+                            []
+                        }
+                    ]
 
             it "errors on duplicate custom Primary declaration" $ do
                 let definitions = [st|
@@ -405,9 +417,9 @@ User
     Primary name
 |]
                 let [user] = parse lowerCaseSettings definitions
-                    errMsg = [st|expected only one Primary declaration per entity|]
+                    errMsg = "expected only one Primary declaration per entity"
                 evaluate (unboundEntityDef user) `shouldThrow`
-                    errorCall (T.unpack errMsg)
+                    errorCall errMsg
 
             it "errors on conflicting Primary/Id declarations" $ do
                 let definitions = [st|
