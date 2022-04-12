@@ -37,3 +37,4 @@ language_extensions:
   - TemplateHaskell
   - TypeApplications
   - ViewPatterns
+  - QuasiQuotes

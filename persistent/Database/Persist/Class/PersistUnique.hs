@@ -601,7 +601,8 @@ checkUniqueUpdateable
        , PersistRecordBackend record backend
        , PersistUniqueRead backend)
     => Entity record -> ReaderT backend m (Maybe (Unique record))
-checkUniqueUpdateable (Entity key record) = checkUniqueKeysUpdateable key (persistUniqueKeys record)
+checkUniqueUpdateable (Entity key record) =
+    checkUniqueKeysUpdateable key (persistUniqueKeys record)
 
 checkUniqueKeysUpdateable
     :: forall record backend m. ( MonadIO m
@@ -612,10 +613,13 @@ checkUniqueKeysUpdateable _ [] = return Nothing
 checkUniqueKeysUpdateable key (x:xs) = do
     y <- getBy x
     case y of
-        Nothing -> checkUniqueKeysUpdateable key xs
+        Nothing ->
+            checkUniqueKeysUpdateable key xs
         Just (Entity k _)
-          | key == k -> checkUniqueKeysUpdateable key xs
-        Just _ ->  return (Just x)
+          | key == k ->
+              checkUniqueKeysUpdateable key xs
+        Just _ ->
+            return (Just x)
 
 -- | The slow but generic 'upsertBy' implementation for any 'PersistUniqueRead'.
 -- * Lookup corresponding entities (if any) 'getBy'.

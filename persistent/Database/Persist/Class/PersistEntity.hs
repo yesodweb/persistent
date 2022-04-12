@@ -1,6 +1,7 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# language PatternSynonyms #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GADTs #-}
@@ -14,13 +15,14 @@
 
 module Database.Persist.Class.PersistEntity
     ( PersistEntity (..)
+    , tabulateEntity
     , Update (..)
     , BackendSpecificUpdate
     , SelectOpt (..)
     , Filter (..)
     , FilterValue (..)
     , BackendSpecificFilter
-    , Entity (..)
+    , Entity (.., Entity, entityKey, entityVal)
 
     , recordName
     , entityValues
@@ -32,6 +34,8 @@ module Database.Persist.Class.PersistEntity
       -- * Support for @OverloadedLabels@ with 'EntityField'
     , SymbolToField (..)
     ) where
+
+import Data.Functor.Constant
 
 import Data.Aeson
        ( FromJSON(..)
@@ -47,6 +51,7 @@ import qualified Data.Aeson.Parser as AP
 import Data.Aeson.Text (encodeToTextBuilder)
 import Data.Aeson.Types (Parser, Result(Error, Success))
 import Data.Attoparsec.ByteString (parseOnly)
+import Data.Functor.Identity
 
 #if MIN_VERSION_aeson(2,0,0)
 import qualified Data.Aeson.KeyMap as AM
@@ -54,6 +59,7 @@ import qualified Data.Aeson.KeyMap as AM
 import qualified Data.HashMap.Strict as AM
 #endif
 
+import GHC.Records
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Maybe (isJust)
 import Data.Text (Text)
@@ -113,9 +119,40 @@ class ( PersistField (Key record), ToJSON (Key record), FromJSON (Key record)
     -- | Return meta-data for a given 'EntityField'.
     persistFieldDef :: EntityField record typ -> FieldDef
     -- | A meta-operation to get the database fields of a record.
-    toPersistFields :: record -> [SomePersistField]
+    toPersistFields :: record -> [PersistValue]
     -- | A lower-level operation to convert from database values to a Haskell record.
     fromPersistValues :: [PersistValue] -> Either Text record
+
+    -- | This function allows you to build an @'Entity' a@ by specifying an
+    -- action that returns a value for the field in the callback function.
+    -- Let's look at an example.
+    --
+    -- @
+    -- parseFromEnvironmentVariables :: IO (Entity User)
+    -- parseFromEnvironmentVariables =
+    --     tabulateEntityA $ \\userField ->
+    --         case userField of
+    --             UserName ->
+    --                 getEnv "USER_NAME"
+    --             UserAge -> do
+    --                 ageVar <- getEnv "USER_AGE"
+    --                 case readMaybe ageVar of
+    --                     Just age ->
+    --                         pure age
+    --                     Nothing ->
+    --                         error $ "Failed to parse Age from: " <> ageVar
+    --             UserAddressId -> do
+    --                 addressVar <- getEnv "USER_ADDRESS_ID"
+    --                 pure $ AddressKey addressVar
+    -- @
+    --
+    -- @since 2.14.0.0
+    tabulateEntityA
+        :: Applicative f
+        => (forall a. EntityField record a -> f a)
+        -- ^ A function that builds a fragment of a record in an
+        -- 'Applicative' context.
+        -> f (Entity record)
 
     -- | Unique keys besides the 'Key'.
     data Unique record
@@ -138,6 +175,45 @@ class ( PersistField (Key record), ToJSON (Key record), FromJSON (Key record)
     -- @since 2.11.0.0
     keyFromRecordM :: Maybe (record -> Key record)
     keyFromRecordM = Nothing
+
+-- | Construct an @'Entity' record@ by providing a value for each of the
+-- record's fields.
+--
+-- These constructions are equivalent:
+--
+-- @
+-- entityMattConstructor, entityMattTabulate :: Entity User
+-- entityMattConstructor =
+--     Entity
+--         { entityKey = toSqlKey 123
+--         , entityVal =
+--             User
+--                 { userName = "Matt"
+--                 , userAge = 33
+--                 }
+--         }
+--
+-- entityMattTabulate =
+--     tabulateEntity $ \\case
+--         UserId ->
+--             toSqlKey 123
+--         UserName ->
+--             "Matt"
+--         UserAge ->
+--             33
+-- @
+--
+-- This is a specialization of 'tabulateEntityA', which allows you to
+-- construct an 'Entity' by providing an 'Applicative' action for each
+-- field instead of a regular function.
+--
+-- @since 2.14.0.0
+tabulateEntity
+    :: PersistEntity record
+    => (forall a. EntityField record a -> a)
+    -> Entity record
+tabulateEntity fromField =
+    runIdentity (tabulateEntityA (Identity . fromField))
 
 type family BackendSpecificUpdate backend record
 
@@ -231,14 +307,28 @@ data FilterValue typ where
 -- Entity backend b)@), then you must you use @SELECT ??, ??
 -- WHERE ...@, and so on.
 data Entity record =
-    Entity { entityKey :: Key record
-           , entityVal :: record }
+    Entity' (Key record) record
+
+pattern Entity :: Key rec -> rec -> Entity rec
+pattern Entity { entityKey,  entityVal } = Entity' entityKey entityVal
+
+{-# COMPLETE Entity #-}
 
 deriving instance (Generic (Key record), Generic record) => Generic (Entity record)
 deriving instance (Eq (Key record), Eq record) => Eq (Entity record)
 deriving instance (Ord (Key record), Ord record) => Ord (Entity record)
 deriving instance (Show (Key record), Show record) => Show (Entity record)
 deriving instance (Read (Key record), Read record) => Read (Entity record)
+
+instance
+    ( SymbolToField sym ent typ
+    , PersistEntity ent
+    )
+  =>
+    HasField sym (Entity ent) typ
+  where
+    getField ent =
+        getConstant ((fieldLens (symbolToField @sym @ent @typ)) Constant ent)
 
 -- | Get list of values corresponding to given entity.
 entityValues :: PersistEntity record => Entity record -> [PersistValue]

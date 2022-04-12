@@ -435,7 +435,6 @@ data ReferenceDef
     -- ^ A ForeignRef has a late binding to the EntityDef it references via name
     -- and has the Haskell type of the foreign key in the form of FieldType
     | EmbedRef EntityNameHS
-    | CompositeRef CompositeDef
     | SelfReference
     -- ^ A SelfReference stops an immediate cycle which causes non-termination at compile-time (issue #311).
     deriving (Show, Eq, Read, Ord, Lift)

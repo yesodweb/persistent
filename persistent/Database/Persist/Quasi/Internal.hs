@@ -53,8 +53,8 @@ module Database.Persist.Quasi.Internal
 import Prelude hiding (lines)
 
 import Control.Applicative (Alternative((<|>)))
-import Control.Monad (guard, mplus)
 import Data.Char (isDigit, isLower, isSpace, isUpper, toLower)
+import Control.Monad
 import Data.List (find, foldl')
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NEL
@@ -498,7 +498,7 @@ unbindCompositeDef :: CompositeDef -> UnboundCompositeDef
 unbindCompositeDef cd =
     UnboundCompositeDef
         { unboundCompositeCols =
-            NEL.toList $ fmap fieldHaskell (compositeFields cd)
+            fmap fieldHaskell (compositeFields cd)
         , unboundCompositeAttrs =
             compositeAttrs cd
         }
@@ -1021,10 +1021,16 @@ takeConstraint ps entityName defs (n :| rest) =
                     Just $ pure (takeForeign ps entityName rest)
                 }
         "Primary" ->
-            mempty
-                { entityConstraintDefsPrimaryComposite =
-                    SetOnce (takeComposite (unboundFieldNameHS <$> defs) rest)
-                }
+            let
+                unboundComposite =
+                    takeComposite (unboundFieldNameHS <$> defs) rest
+            in
+                mempty
+                    { entityConstraintDefsPrimaryComposite =
+                        SetOnce unboundComposite
+                    , entityConstraintDefsUniques =
+                        Just $ pure $ compositeToUniqueDef entityName defs unboundComposite
+                    }
         "Id" ->
             mempty
                 { entityConstraintDefsIdField =
@@ -1104,7 +1110,7 @@ takeId ps entityName texts =
 --
 -- @since.2.13.0.0
 data UnboundCompositeDef = UnboundCompositeDef
-    { unboundCompositeCols :: [FieldNameHS]
+    { unboundCompositeCols :: NonEmpty FieldNameHS
     -- ^ The field names for the primary key.
     --
     -- @since 2.13.0.0
@@ -1116,6 +1122,31 @@ data UnboundCompositeDef = UnboundCompositeDef
     }
     deriving (Eq, Ord, Show, Lift)
 
+compositeToUniqueDef :: EntityNameHS -> [UnboundFieldDef] -> UnboundCompositeDef -> UniqueDef
+compositeToUniqueDef entityName fields UnboundCompositeDef {..} =
+    UniqueDef
+        { uniqueHaskell =
+            ConstraintNameHS (unEntityNameHS entityName <> "PrimaryKey")
+        , uniqueDBName =
+            ConstraintNameDB "primary_key"
+        , uniqueFields =
+            fmap (\hsName -> (hsName, getDbNameFor hsName)) unboundCompositeCols
+        , uniqueAttrs =
+            unboundCompositeAttrs
+        }
+  where
+    getDbNameFor hsName =
+        case mapMaybe (matchHsName hsName) fields of
+            [] ->
+                error "Unable to find `hsName` in fields"
+            (a : _) ->
+                a
+    matchHsName hsName UnboundFieldDef {..} = do
+        guard $ unboundFieldNameHS == hsName
+        pure unboundFieldNameDB
+
+
+
 takeComposite
     :: [FieldNameHS]
     -> [Text]
@@ -1123,11 +1154,17 @@ takeComposite
 takeComposite fields pkcols =
     UnboundCompositeDef
         { unboundCompositeCols =
-            map (getDef fields) cols
+            fmap (getDef fields) neCols
         , unboundCompositeAttrs =
             attrs
         }
   where
+    neCols =
+        case NEL.nonEmpty cols of
+            Nothing ->
+                error "No fields provided for primary key"
+            Just xs ->
+                xs
     (cols, attrs) = break ("!" `T.isPrefixOf`) pkcols
     getDef [] t = error $ "Unknown column in primary key constraint: " ++ show t
     getDef (d:ds) t
