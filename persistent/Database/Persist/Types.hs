@@ -24,7 +24,6 @@ module Database.Persist.Types
     -- database and Haskell types.
     , module Database.Persist.PersistValue
     -- * Other Useful Stuff
-    , SomePersistField (..)
     , Update (..)
     , BackendSpecificUpdate
     , SelectOpt (..)

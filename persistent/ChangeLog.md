@@ -11,6 +11,9 @@
       `Entity'`. A pattern synonym is provided that should work in almost all
       cases. You may incur a `MonadFail m` constraint if you are pattern
       matching directly on the constructor in a `do` result.
+* [#1364](https://github.com/yesodweb/persistent/pull/1346)
+    * The type `SomePersistField` was removed in favor of using `PersistValue`
+      directly.
 * [#1386](https://github.com/yesodweb/persistent/pull/1386)
     * The module `Database.Persist.Class.DeleteCascade` was deleted since you
       can put cascade behavior directly on your database models.
