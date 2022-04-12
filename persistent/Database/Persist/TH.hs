@@ -2362,13 +2362,6 @@ persistFieldFromEntity mps entDef = do
 share :: [[a] -> Q [Dec]] -> [a] -> Q [Dec]
 share fs x = mconcat <$> mapM ($ x) fs
 
-data Dep = Dep
-    { depTarget :: EntityNameHS
-    , depSourceTable :: EntityNameHS
-    , depSourceField :: FieldNameHS
-    , depSourceNull  :: IsNullable
-    }
-
 -- | Creates a declaration for the @['EntityDef']@ from the @persistent@
 -- schema. This is necessary because the Persistent QuasiQuoter is unable
 -- to know the correct type of ID fields, and assumes that they are all
