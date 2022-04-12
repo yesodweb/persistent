@@ -2,6 +2,13 @@
 
 ## 2.14.0.0 (unreleased)
 
+* [#1386](https://github.com/yesodweb/persistent/pull/1386)
+    * The module `Database.Persist.Class.DeleteCascade` was deleted since you
+      can put cascade behavior directly on your database models.
+    * Removed `mkSave` from `Database.Persist.TH`. Use `mkEntityDefList`
+      instead.
+    * Remove the `CompositeDef` constructor from `ReferenceDef` which was not
+      used internally anymore.
 * [#1384](https://github.com/yesodweb/persistent/pull/1384)
     * Add `tabulateEntityA` to the `PersistEntity` class, allowing you to
       construct an `Entity a` by providing a function `EntityField a t -> f t`.
