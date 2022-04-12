@@ -1825,6 +1825,50 @@ mkEntity embedEntityMap entityMap mps preDef = do
             entityFieldTHCon <$> efthAllFields fields
         allEntDefClauses =
             entityFieldTHClause <$> efthAllFields fields
+
+    mkTabulateA <- do
+        fromFieldName <- newName "fromField"
+        let names'types =
+                filter (\(n, _) -> n /= mkName "Id") $ map (getConNameAndType . entityFieldTHCon) $ entityFieldsTHFields fields
+            getConNameAndType = \case
+                ForallC [] [EqualityT `AppT` _ `AppT` fieldTy] (NormalC name []) ->
+                    (name, fieldTy)
+                other ->
+                    error $ mconcat
+                        [ "persistent internal error: field constructor did not have xpected shape. \n"
+                        , "Expected: \n"
+                        , "    ForallC [] [EqualityT `AppT` _ `AppT` fieldTy] (NormalC name [])\n"
+                        , "Got: \n"
+                        , "    " <> show other
+                        ]
+            mkEntityVal =
+                List.foldl'
+                    (\acc (n, _) ->
+                        InfixE
+                            (Just acc)
+                            (VarE '(<*>))
+                            (Just (VarE fromFieldName `AppE` ConE n))
+                    )
+                    (VarE 'pure `AppE` ConE (mkEntityNameHSName entName))
+                    names'types
+            primaryKeyField =
+                fst $ getConNameAndType $ entityFieldTHCon $ entityFieldsTHPrimary fields
+        body <-
+            if isEntitySum $ unboundEntityDef entDef
+            then [| error "tabulateEntityA does not make sense for sum type" |]
+            else
+                [|
+                    Entity
+                        <$> $(varE fromFieldName) $(conE primaryKeyField)
+                        <*> $(pure mkEntityVal)
+                |]
+
+
+        pure $
+          FunD 'tabulateEntityA
+            [ Clause [VarP fromFieldName] (NormalB body) []
+            ]
+
     return $ addSyn $
        dtd : mconcat fkc `mappend`
       ( [ TySynD (keyIdName entDef) [] $
@@ -1835,6 +1879,7 @@ mkEntity embedEntityMap entityMap mps preDef = do
         , keyToValues'
         , keyFromValues'
         , keyFromRecordM'
+        , mkTabulateA
         , FunD 'entityDef [normalClause [WildP] entityDefExp]
         , tpf
         , FunD 'fromPersistValues fpv
