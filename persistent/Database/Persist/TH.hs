@@ -807,6 +807,7 @@ mkPersistWith mps preexistingEntities ents' = do
         , jsonDecs
         , uniqueKeyInstances
         , symbolToFieldInstances
+        , safeToInsertInstances
         ]
 
 mkSafeToInsertInstance :: MkPersistSettings -> UnboundEntityDef -> Q [Dec]
@@ -832,14 +833,27 @@ mkSafeToInsertInstance mps ued =
             instanceOkay
 
   where
-    typ :: Q Type
-    typ = pure $ genericDataType mps (getUnboundEntityNameHS ued) backendT
+    typ :: Type
+    typ = genericDataType mps (getUnboundEntityNameHS ued) backendT
 
+    mkInstance merr =
+        InstanceD Nothing (maybe id (:) merr withPersistStoreWriteCxt) (ConT ''SafeToInsert `AppT` typ) []
     instanceOkay =
-        [d| instance SafeToInsert $(typ) |]
-    badInstance =
-        [d| instance (TypeError (SafeToInsertErrorMessage $(typ))) => SafeToInsert $(typ) |]
+        pure
+            [ mkInstance Nothing
+            ]
+    badInstance = do
+        err <- [t| TypeError (SafeToInsertErrorMessage $(pure typ)) |]
+        pure
+            [ mkInstance (Just err)
+            ]
 
+    withPersistStoreWriteCxt =
+        if mpsGeneric mps
+            then
+                [ConT ''PersistStoreWrite `AppT` backendT]
+            else
+                []
 
 
 -- we can't just use 'isInstance' because TH throws an error
