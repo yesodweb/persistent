@@ -1761,6 +1761,15 @@ fieldError tableName fieldName err = mconcat
 
 mkEntity :: M.Map EntityNameHS a -> EntityMap -> MkPersistSettings -> UnboundEntityDef -> Q [Dec]
 mkEntity embedEntityMap entityMap mps preDef = do
+    when (isEntitySum (unboundEntityDef preDef)) $ do
+        reportWarning $ unlines
+            [ "persistent has deprecated sum type entities as of 2.14.0.0."
+            , "We will delete support for these entities in 2.15.0.0."
+            , "If you need these, please add a comment on this GitHub issue:"
+            , ""
+            , "    https://github.com/yesodweb/persistent/issues/987"
+            ]
+
     entityDefExp <- liftAndFixKeys mps embedEntityMap entityMap preDef
     let
         entDef =
