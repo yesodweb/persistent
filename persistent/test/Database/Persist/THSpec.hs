@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
@@ -23,6 +24,8 @@
 
 module Database.Persist.THSpec where
 
+import System.Environment
+import Data.Time
 import Control.Applicative (Const(..))
 import Data.Aeson (decode, encode)
 import Data.ByteString.Lazy.Char8 ()
@@ -64,6 +67,7 @@ import qualified Database.Persist.TH.RequireOnlyPersistImportSpec as RequireOnly
 import qualified Database.Persist.TH.SharedPrimaryKeyImportedSpec as SharedPrimaryKeyImportedSpec
 import qualified Database.Persist.TH.SharedPrimaryKeySpec as SharedPrimaryKeySpec
 import qualified Database.Persist.TH.ToFromPersistValuesSpec as ToFromPersistValuesSpec
+import qualified Database.Persist.TH.SumSpec as SumSpec
 
 -- test to ensure we can have types ending in Id that don't trash the TH
 -- machinery
@@ -174,6 +178,7 @@ instance Arbitrary Address where
 
 spec :: Spec
 spec = describe "THSpec" $ do
+    describe "SumSpec" $ SumSpec.spec
     PersistWithSpec.spec
     KindEntitiesSpec.spec
     NestedSymbolsInTypeSpec.spec
@@ -426,6 +431,54 @@ spec = describe "THSpec" $ do
 
             show (CustomPrimaryKeyKey 0) `shouldBe` "CustomPrimaryKeyKey {unCustomPrimaryKeyKey = 0}"
             read (show (CustomPrimaryKeyKey 0)) `shouldBe` CustomPrimaryKeyKey 0
+
+    describe "tabulateEntityA" $ do
+        it "works" $ do
+            person <-
+                tabulateEntityA $ \case
+                    PersonName ->
+                        pure "Matt"
+                    PersonAge -> do
+                        (year, _, _) <- toGregorian . utctDay <$> getCurrentTime
+                        pure $ Just (fromInteger year - 1988)
+                    PersonFoo -> do
+                        _ <- lookupEnv "PERSON_FOO" :: IO (Maybe String)
+                        pure Bar
+                    PersonAddress ->
+                        pure $ Address  "lol no" "Denver" Nothing
+                    PersonId ->
+                        pure $ toSqlKey 123
+            expectedAge <- fromInteger . subtract 1988 . (\(a, _, _) -> a) . toGregorian . utctDay <$> getCurrentTime
+            person `shouldBe` Entity (toSqlKey 123) Person
+                { personName =
+                    "Matt"
+                , personAge =
+                    Just expectedAge
+                , personFoo =
+                    Bar
+                , personAddress =
+                    Address  "lol no" "Denver" Nothing
+                }
+
+    describe "tabulateEntity" $ do
+        it "works" $ do
+            let
+                addressTabulate =
+                    tabulateEntity $ \case
+                        AddressId ->
+                            toSqlKey 123
+                        AddressStreet ->
+                            "nope"
+                        AddressCity ->
+                            "Denver"
+                        AddressZip ->
+                            Nothing
+            addressTabulate `shouldBe`
+                Entity (toSqlKey 123) Address
+                    { addressStreet = "nope"
+                    , addressCity = "Denver"
+                    , addressZip = Nothing
+                    }
 
 (&) :: a -> (a -> b) -> b
 x & f = f x

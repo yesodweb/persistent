@@ -8,6 +8,26 @@
       record, with the name `#{entityName}PrimaryKey`. This also affects the
       generation of `AtLeastOneUniqueKey` and `OnlyOneUniqueKey` instances, so
       you may need to change behavior on these classes.
+* [#1364](https://github.com/yesodweb/persistent/pull/1346)
+    * The type `SomePersistField` was removed in favor of using `PersistValue`
+      directly.
+* [#1386](https://github.com/yesodweb/persistent/pull/1386)
+    * The module `Database.Persist.Class.DeleteCascade` was deleted since you
+      can put cascade behavior directly on your database models.
+    * Removed `mkSave` from `Database.Persist.TH`. Use `mkEntityDefList`
+      instead.
+    * Remove the `CompositeDef` constructor from `ReferenceDef` which was not
+      used internally anymore.
+* [#1385](https://github.com/yesodweb/persistent/pull/1385)
+    * The support for entity-level sum types is deprecated. It adds a
+      considerable amount of complexity to the code, and the pattern is not
+      particularly good for actually supporting sum types in most databases.
+* [#1384](https://github.com/yesodweb/persistent/pull/1384)
+    * Add `tabulateEntityA` to the `PersistEntity` class, allowing you to
+      construct an `Entity a` by providing a function `EntityField a t -> f t`.
+      Note that this doesn't make sense for sum entities, and the implementation
+      `error`s.
+    * Add `tabulateEntity` as a pure version of that.
 
 ## 2.13.3.5
 
