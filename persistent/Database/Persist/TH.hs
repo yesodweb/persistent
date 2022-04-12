@@ -372,18 +372,18 @@ liftAndFixKeys mps emEntities entityMap unboundEnt =
                             , "\n\nYou can use the References keyword to fix this."
                             ]
                     | otherwise =
-                        zip (fmap (withDbName fieldStore) fieldNames) parentKeyFieldNames
+                        zip (fmap (withDbName fieldStore) fieldNames) (toList parentKeyFieldNames)
                   where
                     parentKeyFieldNames
-                        :: [(FieldNameHS, FieldNameDB)]
+                        :: NonEmpty (FieldNameHS, FieldNameDB)
                     parentKeyFieldNames =
                         case unboundPrimarySpec parentDef of
                             NaturalKey ucd ->
                                 fmap (withDbName parentFieldStore) (unboundCompositeCols ucd)
                             SurrogateKey uid ->
-                                [(FieldNameHS "Id", unboundIdDBName  uid)]
+                                pure (FieldNameHS "Id", unboundIdDBName  uid)
                             DefaultKey dbName ->
-                                [(FieldNameHS "Id", dbName)]
+                                pure (FieldNameHS "Id", dbName)
                 withDbName store fieldNameHS =
                     ( fieldNameHS
                     , findDBName store fieldNameHS
@@ -582,7 +582,7 @@ fixPrimarySpec mps unboundEnt= do
 bindCompositeDef :: UnboundEntityDef -> UnboundCompositeDef -> Q Exp
 bindCompositeDef ued ucd = do
     fieldDefs <-
-       fmap ListE $ forM (unboundCompositeCols ucd) $ \col ->
+       fmap ListE $ forM (toList $ unboundCompositeCols ucd) $ \col ->
            mkLookupEntityField ued col
     [|
         CompositeDef
@@ -1521,7 +1521,7 @@ mkKeyTypeDec mps entDef = do
   where
     keyConE = keyConExp entDef
     unKeyE = unKeyExp entDef
-    dec = RecC (keyConName entDef) (keyFields mps entDef)
+    dec = RecC (keyConName entDef) (toList $ keyFields mps entDef)
     k = ''Key
     recordType =
         genericDataType mps (getUnboundEntityNameHS entDef) backendT
@@ -1607,7 +1607,7 @@ defaultIdType entDef =
         _ ->
             False
 
-keyFields :: MkPersistSettings -> UnboundEntityDef -> [(Name, Strict, Type)]
+keyFields :: MkPersistSettings -> UnboundEntityDef -> NonEmpty (Name, Strict, Type)
 keyFields mps entDef =
     case unboundPrimarySpec entDef of
         NaturalKey ucd ->
@@ -1656,7 +1656,7 @@ mkKeyToValues mps entDef = do
                     [|(:[]) . toPersistValue . $(pure $ unKeyExp entDef)|]
   where
     toValuesPrimary recName ucd =
-        ListE <$> mapM (f recName) (unboundCompositeCols ucd)
+        ListE <$> mapM (f recName) (toList $ unboundCompositeCols ucd)
     f recName fieldNameHS =
         [|
         toPersistValue ($(varE $ keyFieldName mps entDef fieldNameHS) $(varE recName))
@@ -1674,7 +1674,7 @@ mkKeyFromValues _mps entDef =
     FunD 'keyFromValues <$>
         case unboundPrimarySpec entDef of
             NaturalKey ucd ->
-                fromValues entDef "keyFromValues" keyConE (unboundCompositeCols ucd)
+                fromValues entDef "keyFromValues" keyConE (toList $ unboundCompositeCols ucd)
             _ -> do
                 e <- [|fmap $(return keyConE) . fromPersistValue . headNote|]
                 return [normalClause [] e]

@@ -1,8 +1,13 @@
 # Changelog for persistent
 
+# 2.14.0.0 (unreleased)
 
-## 2.14.0.0 (unreleased)
-
+* [#1383](https://github.com/yesodweb/persistent/pull/1383)
+    * Primary keys have a `NonEmpty` of fields, not a `[]` of fields.
+    * A `Primary` key on an entity now creates a `Unique` constructror for that
+      record, with the name `#{entityName}PrimaryKey`. This also affects the
+      generation of `AtLeastOneUniqueKey` and `OnlyOneUniqueKey` instances, so
+      you may need to change behavior on these classes.
 * [#1381](https://github.com/yesodweb/persistent/pull/1381)
     * `Entity` is given a `HasField` instance that uses the database field
       names. This is primarily done to support `OverloadedRecordDot` in GHC 9.2
