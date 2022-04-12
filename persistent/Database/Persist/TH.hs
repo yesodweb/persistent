@@ -121,6 +121,7 @@ import Language.Haskell.TH.Syntax
 import Web.HttpApiData (FromHttpApiData(..), ToHttpApiData(..))
 import Web.PathPieces (PathPiece(..))
 
+import Database.Persist.Class.PersistEntity
 import Database.Persist
 import Database.Persist.Quasi
 import Database.Persist.Quasi.Internal
@@ -798,6 +799,7 @@ mkPersistWith mps preexistingEntities ents' = do
     entityDecs <- fmap mconcat $ mapM (mkEntity embedEntityMap entityMap mps) ents
     jsonDecs <- fmap mconcat $ mapM (mkJSON mps) ents
     uniqueKeyInstances <- fmap mconcat $ mapM (mkUniqueKeyInstances mps) ents
+    safeToInsertInstances <- mconcat <$> mapM (mkSafeToInsertInstance mps) ents
     symbolToFieldInstances <- fmap mconcat $ mapM (mkSymbolToFieldInstances mps entityMap) ents
     return $ mconcat
         [ persistFieldDecs
@@ -806,6 +808,39 @@ mkPersistWith mps preexistingEntities ents' = do
         , uniqueKeyInstances
         , symbolToFieldInstances
         ]
+
+mkSafeToInsertInstance :: MkPersistSettings -> UnboundEntityDef -> Q [Dec]
+mkSafeToInsertInstance mps ued =
+    case unboundPrimarySpec ued of
+        NaturalKey _ ->
+            instanceOkay
+        SurrogateKey uidDef -> do
+            let attrs =
+                    unboundIdAttrs uidDef
+                isDefaultFieldAttr = \case
+                    FieldAttrDefault _ ->
+                        True
+                    _ ->
+                        False
+            case List.find isDefaultFieldAttr attrs of
+                Nothing ->
+                    badInstance
+                Just _ ->
+                    instanceOkay
+
+        DefaultKey _ ->
+            instanceOkay
+
+  where
+    typ :: Q Type
+    typ = pure $ genericDataType mps (getUnboundEntityNameHS ued) backendT
+
+    instanceOkay =
+        [d| instance SafeToInsert $(typ) |]
+    badInstance =
+        [d| instance (TypeError (SafeToInsertErrorMessage $(typ))) => SafeToInsert $(typ) |]
+
+
 
 -- we can't just use 'isInstance' because TH throws an error
 shouldGenerateCode :: UnboundEntityDef -> Q Bool

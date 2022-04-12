@@ -30,6 +30,7 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.Maybe as Maybe
 import qualified Data.Text as T
+import GHC.Stack
 
 import Database.Persist.Class.PersistEntity
 import Database.Persist.Class.PersistField
@@ -239,7 +240,7 @@ class
     -- > +-----+------+-----+
     -- > |3    |John  |30   |
     -- > +-----+------+-----+
-    insert :: forall record m. (MonadIO m, PersistRecordBackend record backend)
+    insert :: forall record m. (MonadIO m, PersistRecordBackend record backend, SafeToInsert record)
            => record -> ReaderT backend m (Key record)
 
     -- | Same as 'insert', but doesn't return a @Key@.
@@ -262,7 +263,7 @@ class
     -- > +-----+------+-----+
     -- > |3    |John  |30   |
     -- > +-----+------+-----+
-    insert_ :: forall record m. (MonadIO m, PersistRecordBackend record backend)
+    insert_ :: forall record m. (MonadIO m, PersistRecordBackend record backend, SafeToInsert record)
             => record -> ReaderT backend m ()
     insert_ record = insert record >> return ()
 
@@ -300,7 +301,7 @@ class
     -- > +-----+------+-----+
     -- > |5    |Jane  |20   |
     -- > +-----+------+-----+
-    insertMany :: forall record m. (MonadIO m, PersistRecordBackend record backend)
+    insertMany :: forall record m. (MonadIO m, PersistRecordBackend record backend, SafeToInsert record)
                => [record] -> ReaderT backend m [Key record]
     insertMany = mapM insert
 
@@ -331,7 +332,7 @@ class
     -- > +-----+------+-----+
     -- > |5    |Jane  |20   |
     -- > +-----+------+-----+
-    insertMany_ :: forall record m. (MonadIO m, PersistRecordBackend record backend)
+    insertMany_ :: forall record m. (MonadIO m, PersistRecordBackend record backend, SafeToInsert record)
                 => [record] -> ReaderT backend m ()
     insertMany_ x = insertMany x >> return ()
 
@@ -701,11 +702,16 @@ belongsToJust getForeignKey model = getJust $ getForeignKey model
 insertEntity :: forall e backend m.
     ( PersistStoreWrite backend
     , PersistRecordBackend e backend
+    , SafeToInsert e
     , MonadIO m
+    , HasCallStack
     ) => e -> ReaderT backend m (Entity e)
 insertEntity e = do
     eid <- insert e
-    return $ Entity eid e
+    Maybe.fromMaybe (error errorMessage) <$> getEntity eid
+  where
+    errorMessage =
+        "persistent: failed to get record from database despite receiving key from the database"
 
 -- | Like @get@, but returns the complete @Entity@.
 --
@@ -759,11 +765,19 @@ getEntity key = do
 -- > |3    |Dave  |50   |
 -- > +-----+------+-----+
 insertRecord
-  :: forall record backend m. (PersistEntityBackend record ~ BaseBackend backend
-     ,PersistEntity record
-     ,MonadIO m
-     ,PersistStoreWrite backend)
+  :: forall record backend m.
+   ( PersistEntityBackend record ~ BaseBackend backend
+   , PersistEntity record
+   , MonadIO m
+   , PersistStoreWrite backend
+   , SafeToInsert record
+   , HasCallStack
+   )
   => record -> ReaderT backend m record
 insertRecord record = do
-  insert_ record
-  return $ record
+  k <- insert record
+  let errorMessage =
+          "persistent: failed to retrieve a record despite receiving a key from the database"
+  mentity <- get k
+  return $ Maybe.fromMaybe (error errorMessage) mentity
+

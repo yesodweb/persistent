@@ -1,3 +1,4 @@
+{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
@@ -31,6 +32,9 @@ module Database.Persist.Class.PersistEntity
     , toPersistValueEnum, fromPersistValueEnum
       -- * Support for @OverloadedLabels@ with 'EntityField'
     , SymbolToField (..)
+    , -- * Safety check for inserts
+      SafeToInsert
+    , SafeToInsertErrorMessage
     ) where
 
 import Data.Aeson
@@ -456,3 +460,22 @@ class SymbolToField (sym :: Symbol) rec typ | sym rec -> typ where
 -- @since 2.11.0.0
 instance SymbolToField sym rec typ => IsLabel sym (EntityField rec typ) where
     fromLabel = symbolToField @sym
+
+-- | A type class which is used to witness that a type is safe to insert into
+-- the database without providing a primary key.
+--
+-- The @TemplateHaskell@ function 'mkPersist' will generate instances of this
+-- class for any entity that it works on. If the entity has a default primary
+-- key, then it provides a regular instance. If the entity has a @Primary@
+-- natural key, then this works fine. But if the entity has an @Id@ column with
+-- no @default=@, then this does a 'TypeError' and forces the user to use
+-- 'insertKey'.
+--
+-- @since 2.14.0.0
+class PersistEntity a => SafeToInsert a where
+
+type SafeToInsertErrorMessage a
+    = 'Text "The PersistEntity " ':<>: ShowType a ':<>: 'Text " does not have a default primary key."
+    ':$$: 'Text "This means that 'insert' will fail with a database error."
+    ':$$: 'Text "Please  provide a default= clause inthe entity definition,"
+    ':$$: 'Text "or use 'insertKey' instead to provide one."
