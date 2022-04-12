@@ -1,6 +1,6 @@
 # Changelog for persistent
 
-## 2.14.0.0
+## 2.14.0.0 (unreleased)
 
 * [#1386](https://github.com/yesodweb/persistent/pull/1386)
     * The module `Database.Persist.Class.DeleteCascade` was deleted since you
