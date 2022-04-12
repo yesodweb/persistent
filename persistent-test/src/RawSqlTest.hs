@@ -7,6 +7,7 @@ import qualified Data.Conduit as C
 import qualified Data.Conduit.List as CL
 import qualified Data.Text as T
 
+import Database.Persist.Class.PersistEntity
 import Init
 import Database.Persist.SqlBackend
 import PersistTestPetType
@@ -104,7 +105,7 @@ specsWith runDb = describe "rawSql" $ do
 
 
     it "OUTER JOIN" $ runDb $ do
-        let insert' :: (PersistStore backend, PersistEntity val, PersistEntityBackend val ~ BaseBackend backend, MonadIO m)
+        let insert' :: (PersistStore backend, PersistEntity val, PersistEntityBackend val ~ BaseBackend backend, MonadIO m, SafeToInsert val)
                     => val -> ReaderT backend m (Key val, val)
             insert' v = insert v >>= \k -> return (k, v)
         (p1k, p1) <- insert' $ Person "Mathias"   23 Nothing

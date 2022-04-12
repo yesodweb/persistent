@@ -20,6 +20,7 @@ import Test.QuickCheck.Arbitrary (Arbitrary, arbitrary)
 import Test.QuickCheck.Gen (Gen(..))
 import Test.QuickCheck.Instances ()
 import Test.QuickCheck.Random (newQCGen)
+import Database.Persist.Class.PersistEntity
 
 import Database.Persist.TH
 import Init
@@ -91,6 +92,7 @@ specsWith
     , PersistQueryWrite backend
     , MonadFail m
     , MonadIO m
+    , SafeToInsert entity
     )
     => (db () -> IO ())
     -- ^ DB Runner
