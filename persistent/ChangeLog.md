@@ -1,5 +1,10 @@
 # Changelog for persistent
 
+(unreleased)
+
+* [#1374](https://github.com/yesodweb/persistent/pull/1374)
+    * Increasing test coverage for errors thrown when parsing entity definitions
+
 # 2.13.3.4
 
 * [#1379](https://github.com/yesodweb/persistent/pull/1379)
