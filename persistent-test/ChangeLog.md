@@ -1,5 +1,9 @@
 ## Unreleased changes
 
+## 2.13.1.3
+
+* Support persistent-2.14 with `SafeToInsert` class
+
 ## 2.13.1.2
 
 * [#1367](https://github.com/yesodweb/persistent/pull/1367),
