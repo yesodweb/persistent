@@ -1,5 +1,16 @@
 # Changelog for persistent-sqlite
 
+## 2.13.1.0
+
+* [#1341](https://github.com/yesodweb/persistent/pull/1341)
+    * Add `SqlBackendHooks` to allow for instrumentation of queries.
+* [#1327](https://github.com/yesodweb/persistent/pull/1327)
+    * Update backend to support new `StatementCache` interface
+
+## 2.13.0.4
+
+* `aeson-2.0` support [#1351](https://github.com/yesodweb/persistent/pull/1351/)
+
 ## 2.13.0.3
 
 * Somehow failed to properly release the safe-to-remove changes.

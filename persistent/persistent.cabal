@@ -1,5 +1,5 @@
 name:            persistent
-version:         2.13.2.1
+version:         2.13.3.5
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -17,7 +17,7 @@ extra-source-files: ChangeLog.md README.md
 library
     build-depends:   
         base                     >= 4.11.1.0     && < 5
-      , aeson                    >= 1.0 && < 1.6
+      , aeson                    >= 1.0 && < 2.1
       , attoparsec
       , base64-bytestring
       , blaze-html               >= 0.9
@@ -34,7 +34,7 @@ library
       , resourcet                >= 1.1.10
       , scientific
       , silently
-      , template-haskell         >= 2.13 && < 2.18
+      , template-haskell         >= 2.13 && < 2.19
       , text                     >= 1.2
       , th-lift-instances        >= 0.1.14    && < 0.2
       , time                     >= 1.6
@@ -42,6 +42,7 @@ library
       , unliftio
       , unliftio-core
       , unordered-containers
+      , vault
       , vector
 
     default-extensions: 
@@ -72,10 +73,14 @@ library
         Database.Persist.Sql.Util
 
         Database.Persist.SqlBackend
+        Database.Persist.SqlBackend.StatementCache
+        Database.Persist.SqlBackend.SqlPoolHooks
         Database.Persist.SqlBackend.Internal
         Database.Persist.SqlBackend.Internal.InsertSqlResult
         Database.Persist.SqlBackend.Internal.IsolationLevel
+        Database.Persist.SqlBackend.Internal.SqlPoolHooks
         Database.Persist.SqlBackend.Internal.Statement
+        Database.Persist.SqlBackend.Internal.StatementCache
         Database.Persist.SqlBackend.Internal.MkSqlBackend
 
         Database.Persist.Class
@@ -176,7 +181,11 @@ test-suite test
         Database.Persist.TH.MaybeFieldDefsSpec
         Database.Persist.TH.MultiBlockSpec
         Database.Persist.TH.MultiBlockSpec.Model
+        Database.Persist.TH.NestedSymbolsInTypeSpec
+        Database.Persist.TH.NestedSymbolsInTypeSpecImports
+        Database.Persist.TH.NoFieldSelectorsSpec
         Database.Persist.TH.OverloadedLabelSpec
+        Database.Persist.TH.RequireOnlyPersistImportSpec
         Database.Persist.TH.SharedPrimaryKeyImportedSpec
         Database.Persist.TH.SharedPrimaryKeySpec
         Database.Persist.THSpec

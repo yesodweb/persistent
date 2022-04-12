@@ -4,7 +4,7 @@
 {-# LANGUAGE UndecidableInstances #-} -- FIXME
 module PersistentTestModels where
 
-import Data.Aeson
+import Data.Aeson hiding (Key)
 
 import qualified Data.List.NonEmpty as NEL
 import Data.Proxy

@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -99,7 +100,7 @@ instance Arbitrary DataTypeTable where
      <*> arbitrary              -- pico
      <*> (arbitrary) -- utc
      <*> (truncateUTCTime   =<< arbitrary) -- utc
-     <*> arbitrary              -- value
+     <*> fmap getValue arbitrary -- value
 
 setup :: MonadIO m => Migration -> ReaderT SqlBackend m ()
 setup migration = do

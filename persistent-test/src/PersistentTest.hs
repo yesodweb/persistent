@@ -17,7 +17,6 @@ import Data.Conduit
 import qualified Data.Conduit.List as CL
 import Data.Functor.Constant
 import Data.Functor.Identity
-import qualified Data.HashMap.Lazy as M
 import qualified Data.Map as Map
 import Data.Maybe (fromJust)
 import Test.Hspec.QuickCheck(prop)
@@ -632,7 +631,7 @@ specsWith runDb = describe "persistent" $ do
       let p = Person "D" 0 Nothing
       k <- insert p
       liftIO $ toJSON (Entity k p) @?=
-        Object (M.fromList [("id", toJSON k), ("color",Null),("name",String "D"),("age",Number 0)])
+        object [("id", toJSON k), ("color",Null),("name",String "D"),("age",Number 0)]
 
 {- FIXME
     prop "fromJSON . toJSON $ key" $ \(person :: Key Person) ->

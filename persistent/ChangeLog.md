@@ -1,5 +1,52 @@
 # Changelog for persistent
 
+## 2.13.3.5
+
+* [#1374](https://github.com/yesodweb/persistent/pull/1374)
+    * Increasing test coverage for errors thrown when parsing entity definitions
+
+## 2.13.3.4
+
+* [#1379](https://github.com/yesodweb/persistent/pull/1379)
+    * `mkPersist` now generates code that compiles under `NoFieldSelectors` and `DuplicateRecordFields` even if field labels are not prefixed
+* [#1376](https://github.com/yesodweb/persistent/pull/1376)
+    * Add coverage for parsing nested parens/lists in field types
+* [#1370](https://github.com/yesodweb/persistent/pull/1370)
+    * Add spec to assert Persistent.TH is the only import required when defining entities
+
+## 2.13.3.3
+
+* [#1369](https://github.com/yesodweb/persistent/pull/1369)
+    * Fix `withObject` needing to be imported
+
+## 2.13.3.2
+
+* [#1315](https://github.com/yesodweb/persistent/pull/1315)
+    * Refactor entity constraint parsing in Quasi module
+
+## 2.13.3.1
+
+* [#1367](https://github.com/yesodweb/persistent/pull/1367),
+  [#1366](https://github.com/yesodweb/persistent/pull/1367),
+  [#1338](https://github.com/yesodweb/persistent/pull/1338),
+  [#1335](https://github.com/yesodweb/persistent/pull/1335)
+    * Support GHC 9.2
+* [#1356](https://github.com/yesodweb/persistent/pull/1356)
+    * Improve parse errors in generated FromJSON instances
+
+## 2.13.3.0
+
+* [#1341](https://github.com/yesodweb/persistent/pull/1341)
+    * Add `SqlBackendHooks` to allow for instrumentation of queries.
+* [#1327](https://github.com/yesodweb/persistent/pull/1327)
+    * Update `SqlBackend` to use new `StatementCache` interface
+      instead of `IORef (Map Text Statement)`
+
+## 2.13.2.2
+
+* [#1351](https://github.com/yesodweb/persistent/pull/1351/)
+    * `aeson-2.0` support
+
 ## 2.13.2.1
 
 * [#1329](https://github.com/yesodweb/persistent/pull/1329)

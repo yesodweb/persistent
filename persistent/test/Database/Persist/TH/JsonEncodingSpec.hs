@@ -19,11 +19,10 @@ module Database.Persist.TH.JsonEncodingSpec where
 import TemplateTestImports
 
 import Data.Aeson
-import qualified Data.HashMap.Lazy as M
 import Data.Text (Text)
-import Test.QuickCheck.Instances ()
 import Test.Hspec.QuickCheck
 import Test.QuickCheck
+import Test.QuickCheck.Instances ()
 
 import Database.Persist.EntityDef
 import Database.Persist.ImplicitIdDef
@@ -73,21 +72,28 @@ spec = describe "JsonEncodingSpec" $ do
     it "encodes without an ID field" $ do
         toJSON subjectEntity
             `shouldBe`
-                Object (M.fromList
+                object
                     [ ("name", String "Bob")
                     , ("age", toJSON (32 :: Int))
                     , ("id", String "Bob")
-                    ])
+                    ]
 
     it "decodes without an ID field" $ do
         let
-            json_ = encode . Object . M.fromList $
+            json_ = encode . object $
                 [ ("name", String "Bob")
                 , ("age", toJSON (32 :: Int))
                 ]
         eitherDecode json_
             `shouldBe`
                 Right subjectEntity
+
+    it "has informative decoder errors" $ do
+        let
+            json_ = encode Null
+        (eitherDecode json_ :: Either String JsonEncoding)
+            `shouldBe`
+                Left "Error in $: parsing JsonEncoding failed, expected Object, but encountered Null"
 
     prop "works with a Primary" $ \jsonEncoding -> do
         let
@@ -103,11 +109,11 @@ spec = describe "JsonEncodingSpec" $ do
                 Entity (JsonEncodingKey jsonEncodingName) j
         toJSON ent
             `shouldBe`
-                Object (M.fromList
+                object
                     [ ("name", toJSON jsonEncodingName)
                     , ("age", toJSON jsonEncodingAge)
                     , ("id", toJSON jsonEncodingName)
-                    ])
+                    ]
 
     prop "round trip works with composite key" $ \j@JsonEncoding2{..} -> do
         let
@@ -125,9 +131,9 @@ spec = describe "JsonEncodingSpec" $ do
                 Entity key j
         toJSON ent
             `shouldBe`
-                Object (M.fromList
+                object
                   [ ("name", toJSON jsonEncoding2Name)
                   , ("age", toJSON jsonEncoding2Age)
                   , ("blood", toJSON jsonEncoding2Blood)
                   , ("id", toJSON key)
-                  ])
+                  ]

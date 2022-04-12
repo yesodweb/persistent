@@ -1,5 +1,13 @@
 # Changelog for persistent-mongoDB
 
+## 2.13.0.1
+
+* [#1367](https://github.com/yesodweb/persistent/pull/1367),
+  [#1366](https://github.com/yesodweb/persistent/pull/1367),
+  [#1338](https://github.com/yesodweb/persistent/pull/1338),
+  [#1335](https://github.com/yesodweb/persistent/pull/1335)
+    * Support GHC 9.2
+
 ## 2.13.0.0
 
 * Fix persistent 2.13 changes [#1286](https://github.com/yesodweb/persistent/pull/1286)
