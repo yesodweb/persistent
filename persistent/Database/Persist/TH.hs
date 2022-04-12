@@ -2362,13 +2362,6 @@ persistFieldFromEntity mps entDef = do
 share :: [[a] -> Q [Dec]] -> [a] -> Q [Dec]
 share fs x = mconcat <$> mapM ($ x) fs
 
-data Dep = Dep
-    { depTarget :: EntityNameHS
-    , depSourceTable :: EntityNameHS
-    , depSourceField :: FieldNameHS
-    , depSourceNull  :: IsNullable
-    }
-
 -- | Creates a declaration for the @['EntityDef']@ from the @persistent@
 -- schema. This is necessary because the Persistent QuasiQuoter is unable
 -- to know the correct type of ID fields, and assumes that they are all
@@ -2671,12 +2664,19 @@ ftToType = \case
         ConT ''Int64
     FTTypeCon (Just m) t ->
         ConT $ mkName $ unpack $ concat [m, ".", t]
+    FTLit l ->
+        LitT (typeLitToTyLit l)
     FTTypePromoted t ->
         PromotedT $ mkName $ T.unpack t
     FTApp x y ->
         ftToType x `AppT` ftToType y
     FTList x ->
         ListT `AppT` ftToType x
+
+typeLitToTyLit :: FieldTypeLit -> TyLit
+typeLitToTyLit = \case
+    IntTypeLit n -> NumTyLit n
+    TextTypeLit t -> StrTyLit (T.unpack t)
 
 infixr 5 ++
 (++) :: Monoid m => m -> m -> m

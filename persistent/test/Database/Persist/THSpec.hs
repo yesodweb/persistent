@@ -67,6 +67,7 @@ import qualified Database.Persist.TH.RequireOnlyPersistImportSpec as RequireOnly
 import qualified Database.Persist.TH.SharedPrimaryKeyImportedSpec as SharedPrimaryKeyImportedSpec
 import qualified Database.Persist.TH.SharedPrimaryKeySpec as SharedPrimaryKeySpec
 import qualified Database.Persist.TH.ToFromPersistValuesSpec as ToFromPersistValuesSpec
+import qualified Database.Persist.TH.TypeLitFieldDefsSpec as TypeLitFieldDefsSpec
 import qualified Database.Persist.TH.SumSpec as SumSpec
 
 -- test to ensure we can have types ending in Id that don't trash the TH
@@ -187,6 +188,7 @@ spec = describe "THSpec" $ do
     SharedPrimaryKeyImportedSpec.spec
     ImplicitIdColSpec.spec
     MaybeFieldDefsSpec.spec
+    TypeLitFieldDefsSpec.spec
     MigrationOnlySpec.spec
     NoFieldSelectorsSpec.spec
     EmbedSpec.spec

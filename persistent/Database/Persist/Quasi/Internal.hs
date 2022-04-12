@@ -47,13 +47,14 @@ module Database.Persist.Quasi.Internal
     , ForeignFieldReference(..)
     , mkKeyConType
     , isHaskellUnboundField
+    , FieldTypeLit(..)
     ) where
 
 import Prelude hiding (lines)
 
 import Control.Applicative (Alternative((<|>)))
+import Data.Char (isDigit, isLower, isSpace, isUpper, toLower)
 import Control.Monad
-import Data.Char (isLower, isSpace, isUpper, toLower)
 import Data.List (find, foldl')
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NEL
@@ -64,8 +65,9 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Database.Persist.EntityDef.Internal
 import Database.Persist.Types
+import Database.Persist.Types.Base
 import Language.Haskell.TH.Syntax (Lift)
-import Text.Read (readEither)
+import qualified Text.Read as R
 
 data ParseState a = PSDone | PSFail String | PSSuccess a Text deriving Show
 
@@ -95,17 +97,48 @@ parseFieldType t0 =
           x -> PSFail $ show x
 
     parse1 :: Text -> ParseState FieldType
-    parse1 t =
+    parse1 t = fromMaybe (PSFail (show t)) $ do
         case T.uncons t of
-            Nothing -> PSDone
-            Just (c, t')
-                | isSpace c -> parse1 $ T.dropWhile isSpace t'
-                | c == '(' -> parseEnclosed ')' id t'
-                | c == '[' -> parseEnclosed ']' FTList t'
-                | isUpper c || c == '\'' ->
-                    let (a, b) = T.break (\x -> isSpace x || x `elem` ("()[]"::String)) t'
-                     in PSSuccess (parseFieldTypePiece c a) b
-                | otherwise -> PSFail $ show (c, t')
+            Nothing -> pure PSDone
+            Just (x, xs) ->
+                parseSpace x xs
+                <|> parseParenEnclosed x xs
+                <|> parseList x xs
+                <|> parseNumericLit x xs
+                <|> parseTextLit x xs
+                <|> parseTypeCon x xs
+
+    parseSpace :: Char -> Text -> Maybe (ParseState FieldType)
+    parseSpace c t = do
+        guard (isSpace c)
+        pure $ parse1 (T.dropWhile isSpace t)
+
+    parseParenEnclosed c t = do
+        guard (c == '(')
+        pure $ parseEnclosed ')' id t
+
+    parseList c t = do
+        guard (c == '[')
+        pure $ parseEnclosed ']' FTList t
+
+    parseTextLit :: Char -> Text -> Maybe (ParseState FieldType)
+    parseTextLit c t = do
+        guard (c == '"')
+        let (a, b) = T.break (== '"') t
+            lit = FTLit (TextTypeLit a)
+        pure $ PSSuccess lit (T.drop 1 b)
+
+    parseNumericLit :: Char -> Text -> Maybe (ParseState FieldType)
+    parseNumericLit c t = do
+        guard (isDigit c && T.all isDigit t)
+        let (a, b) = breakAtNextSpace t
+        lit <- FTLit . IntTypeLit <$> readMaybe (T.cons c a)
+        pure $ PSSuccess lit b
+
+    parseTypeCon c t = do
+        guard (isUpper c || c == '\'')
+        let (a, b) = breakAtNextSpace t
+        pure $ PSSuccess (parseFieldTypePiece c a) b
 
     goMany :: ([FieldType] -> a) -> Text -> ParseState a
     goMany front t =
@@ -113,7 +146,10 @@ parseFieldType t0 =
             PSSuccess x t' -> goMany (front . (x:)) t'
             PSFail err -> PSFail err
             PSDone -> PSSuccess (front []) t
-            -- _ ->
+
+breakAtNextSpace :: Text -> (Text, Text)
+breakAtNextSpace =
+    T.break isSpace
 
 parseFieldTypePiece :: Char -> Text -> FieldType
 parseFieldTypePiece fstChar rest =
@@ -1457,11 +1493,7 @@ parseCascadeAction
     -> Maybe CascadeAction
 parseCascadeAction prfx text = do
     cascadeStr <- T.stripPrefix ("On" <> toPrefix prfx) text
-    case readEither (T.unpack cascadeStr) of
-        Right a ->
-            Just a
-        Left _ ->
-            Nothing
+    readMaybe cascadeStr
   where
     toPrefix cp =
         case cp of
@@ -1486,3 +1518,6 @@ isHaskellUnboundField fd =
 -- @since 2.13.0.0
 getUnboundEntityNameHS :: UnboundEntityDef -> EntityNameHS
 getUnboundEntityNameHS = entityHaskell . unboundEntityDef
+
+readMaybe :: Read a => Text -> Maybe a
+readMaybe = R.readMaybe . T.unpack

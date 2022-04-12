@@ -48,6 +48,7 @@ import Init
        , MonadFail
        , RunDb
        , TestFn(..)
+       , UUID(..)
        , arbText
        , asIO
        , assertEmpty
@@ -55,35 +56,35 @@ import Init
        , assertNotEqual
        , isTravis
        , liftA2
+       , sqlSettingsUuid
        , truncateTimeOfDay
        , truncateToMicro
        , truncateUTCTime
        , (==@)
        , (@/=)
        , (@==)
-       , UUID(..)
-       , sqlSettingsUuid
        )
 
 -- re-exports
 import Control.Exception (SomeException)
 import Control.Monad (forM_, liftM, replicateM, void, when)
 import Control.Monad.Trans.Reader
-import Data.Aeson (ToJSON, FromJSON, Value(..), object)
+import Data.Aeson (FromJSON, ToJSON, Value(..), object)
+import qualified Data.Text.Encoding as TE
 import Database.Persist.Postgresql.JSON ()
 import Database.Persist.Sql.Raw.QQ
 import Database.Persist.SqlBackend
 import Database.Persist.TH
        ( MkPersistSettings(..)
-       , mkMigrate
        , migrateModels
+       , mkEntityDefList
+       , mkMigrate
        , mkPersist
        , persistLowerCase
        , persistUpperCase
+       , setImplicitIdDef
        , share
        , sqlSettings
-       , setImplicitIdDef
-       , mkEntityDefList
        )
 import Test.Hspec
        ( Arg
@@ -102,7 +103,6 @@ import Test.Hspec
 import Test.Hspec.Expectations.Lifted
 import Test.QuickCheck.Instances ()
 import UnliftIO
-import qualified Data.Text.Encoding as TE
 
 -- testing
 import Test.HUnit (Assertion, assertBool, assertFailure, (@=?), (@?=))

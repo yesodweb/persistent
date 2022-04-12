@@ -1,15 +1,16 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE EmptyDataDecls #-}
-{-# LANGUAGE DataKinds, ExistentialQuantification #-}
+{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE StandaloneDeriving #-}
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
 import qualified Data.ByteString as BS
@@ -17,8 +18,8 @@ import Data.IntMap (IntMap)
 import qualified Data.Text as T
 import Data.Time
 import Database.MongoDB (runCommand1)
-import Text.Blaze.Html
 import Test.QuickCheck
+import Text.Blaze.Html
 
 -- FIXME: should this be added? (RawMongoHelpers module wasn't used)
 -- import qualified RawMongoHelpers
@@ -53,6 +54,7 @@ import qualified PersistentTest
 import qualified Recursive
 import qualified RenameTest
 import qualified SumTypeTest
+import qualified TypeLitFieldDefsTest
 import qualified UpsertTest
 
 type Tuple = (,)
@@ -130,6 +132,7 @@ main = do
         (db' (deleteWhere ([] :: [Filter (LargeNumberTest.NumberGeneric backend)])))
     MaxLenTest.specsWith dbNoCleanup
     MaybeFieldDefsTest.specsWith dbNoCleanup
+    TypeLitFieldDefsTest.specsWith dbNoCleanup
     Recursive.specsWith (db' Recursive.cleanup)
 
     SumTypeTest.specsWith (dbNoCleanup) Nothing

@@ -7,6 +7,7 @@ module Database.Persist.QuasiSpec where
 
 import Prelude hiding (lines)
 
+import Control.Monad
 import Control.Exception
 import Data.List hiding (lines)
 import Data.List.NonEmpty (NonEmpty(..), (<|))
@@ -83,9 +84,9 @@ spec = describe "Quasi" $ do
                 `shouldBe`
                     Nothing
         it "errors on invalid input" $ do
-            evaluate (subject ["name", "int"])
-                `shouldThrow`
-                    errorCall "Invalid field type \"int\" PSFail ('i',\"nt\")"
+            void (evaluate (subject ["name", "int"]))
+                `catch` \(ErrorCall msg) ->
+                    msg `shouldBe` "Invalid field type \"int\" PSFail \"int\""
         it "works if it has a name and a type" $ do
             subject ["asdf", "Int"]
                 `shouldBe`
@@ -715,7 +716,7 @@ CustomerTransfer
             parseFieldType "[Maybe (Maybe Int)]" `shouldBe` Right
                 (FTList (maybeCon `FTApp` (maybeCon `FTApp` int)))
         it "fails on lowercase starts" $ do
-            parseFieldType "nothanks" `shouldBe` Left "PSFail ('n',\"othanks\")"
+            parseFieldType "nothanks" `shouldBe` Left "PSFail \"nothanks\""
 
     describe "#1175 empty entity" $ do
         let subject =

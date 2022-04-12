@@ -165,30 +165,32 @@ test-suite test
         Database.Persist.ClassSpec
         Database.Persist.PersistValueSpec
         Database.Persist.QuasiSpec
+        Database.Persist.TH.CommentSpec
         Database.Persist.TH.DiscoverEntitiesSpec
         Database.Persist.TH.EmbedSpec
         Database.Persist.TH.ForeignRefSpec
-        Database.Persist.TH.PersistWith.Model
-        Database.Persist.TH.PersistWith.Model2
-        Database.Persist.TH.PersistWithSpec
-        Database.Persist.TH.CommentSpec
         Database.Persist.TH.ImplicitIdColSpec
         Database.Persist.TH.JsonEncodingSpec
         Database.Persist.TH.KindEntitiesSpec
         Database.Persist.TH.KindEntitiesSpecImports
-        Database.Persist.TH.MigrationOnlySpec
         Database.Persist.TH.MaybeFieldDefsSpec
+        Database.Persist.TH.MigrationOnlySpec
         Database.Persist.TH.MultiBlockSpec
         Database.Persist.TH.MultiBlockSpec.Model
         Database.Persist.TH.NestedSymbolsInTypeSpec
         Database.Persist.TH.NestedSymbolsInTypeSpecImports
         Database.Persist.TH.NoFieldSelectorsSpec
         Database.Persist.TH.OverloadedLabelSpec
+        Database.Persist.TH.PersistWith.Model
+        Database.Persist.TH.PersistWith.Model2
+        Database.Persist.TH.PersistWithSpec
         Database.Persist.TH.RequireOnlyPersistImportSpec
         Database.Persist.TH.SharedPrimaryKeyImportedSpec
         Database.Persist.TH.SharedPrimaryKeySpec
-        Database.Persist.THSpec
+        Database.Persist.TH.SumSpec
         Database.Persist.TH.ToFromPersistValuesSpec
+        Database.Persist.TH.TypeLitFieldDefsSpec
+        Database.Persist.THSpec
         TemplateTestImports
     default-language: Haskell2010
 
