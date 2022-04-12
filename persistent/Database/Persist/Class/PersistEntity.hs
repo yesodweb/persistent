@@ -14,6 +14,7 @@
 
 module Database.Persist.Class.PersistEntity
     ( PersistEntity (..)
+    , tabulateEntity
     , Update (..)
     , BackendSpecificUpdate
     , SelectOpt (..)
@@ -47,6 +48,7 @@ import qualified Data.Aeson.Parser as AP
 import Data.Aeson.Text (encodeToTextBuilder)
 import Data.Aeson.Types (Parser, Result(Error, Success))
 import Data.Attoparsec.ByteString (parseOnly)
+import Data.Functor.Identity
 
 #if MIN_VERSION_aeson(2,0,0)
 import qualified Data.Aeson.KeyMap as AM
@@ -117,6 +119,37 @@ class ( PersistField (Key record), ToJSON (Key record), FromJSON (Key record)
     -- | A lower-level operation to convert from database values to a Haskell record.
     fromPersistValues :: [PersistValue] -> Either Text record
 
+    -- | This function allows you to build an @'Entity' a@ by specifying an
+    -- action that returns a value for the field in the callback function.
+    -- Let's look at an example.
+    --
+    -- @
+    -- parseFromEnvironmentVariables :: IO (Entity User)
+    -- parseFromEnvironmentVariables =
+    --     tabulateEntityA $ \\userField ->
+    --         case userField of
+    --             UserName ->
+    --                 getEnv "USER_NAME"
+    --             UserAge -> do
+    --                 ageVar <- getEnv "USER_AGE"
+    --                 case readMaybe ageVar of
+    --                     Just age ->
+    --                         pure age
+    --                     Nothing ->
+    --                         error $ "Failed to parse Age from: " <> ageVar
+    --             UserAddressId -> do
+    --                 addressVar <- getEnv "USER_ADDRESS_ID"
+    --                 pure $ AddressKey addressVar
+    -- @
+    --
+    -- @since 2.14.0.0
+    tabulateEntityA
+        :: Applicative f
+        => (forall a. EntityField record a -> f a)
+        -- ^ A function that builds a fragment of a record in an
+        -- 'Applicative' context.
+        -> f (Entity record)
+
     -- | Unique keys besides the 'Key'.
     data Unique record
     -- | A meta operation to retrieve all the 'Unique' keys.
@@ -138,6 +171,45 @@ class ( PersistField (Key record), ToJSON (Key record), FromJSON (Key record)
     -- @since 2.11.0.0
     keyFromRecordM :: Maybe (record -> Key record)
     keyFromRecordM = Nothing
+
+-- | Construct an @'Entity' record@ by providing a value for each of the
+-- record's fields.
+--
+-- These constructions are equivalent:
+--
+-- @
+-- entityMattConstructor, entityMattTabulate :: Entity User
+-- entityMattConstructor =
+--     Entity
+--         { entityKey = toSqlKey 123
+--         , entityVal =
+--             User
+--                 { userName = "Matt"
+--                 , userAge = 33
+--                 }
+--         }
+--
+-- entityMattTabulate =
+--     tabulateEntity $ \\case
+--         UserId ->
+--             toSqlKey 123
+--         UserName ->
+--             "Matt"
+--         UserAge ->
+--             33
+-- @
+--
+-- This is a specialization of 'tabulateEntityA', which allows you to
+-- construct an 'Entity' by providing an 'Applicative' action for each
+-- field instead of a regular function.
+--
+-- @since 2.14.0.0
+tabulateEntity
+    :: PersistEntity record
+    => (forall a. EntityField record a -> a)
+    -> Entity record
+tabulateEntity fromField =
+    runIdentity (tabulateEntityA (Identity . fromField))
 
 type family BackendSpecificUpdate backend record
 

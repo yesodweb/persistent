@@ -13,4 +13,3 @@ spec = describe "Class" $ do
                 fromPersistValue (PersistText "2018-02-27 10:49:42.123")
                     `shouldBe`
                         Right (UTCTime (fromGregorian 2018 02 27) (timeOfDayToTime (TimeOfDay 10 49 42.123)))
-

@@ -1,6 +1,12 @@
 # Changelog for persistent
 
-# 2.13.3.4
+* []()
+    * Add `tabulateEntityA` to the `PersistEntity` class, allowing you to
+      construct an `Entity a` by providing a function `EntityField a t -> f t`.
+    * Add `tabulateEntity` as a pure version of that.
+
+
+## 2.13.3.4
 
 * [#1379](https://github.com/yesodweb/persistent/pull/1379)
     * `mkPersist` now generates code that compiles under `NoFieldSelectors` and `DuplicateRecordFields` even if field labels are not prefixed
