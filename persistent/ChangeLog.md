@@ -1,5 +1,10 @@
 # Changelog for persistent
 
+* []()
+    * The support for entity-level sum types is deprecated. It adds a
+      considerable amount of complexity to the code, and the pattern is not
+      particularly good for actually supporting sum types in most databases.
+
 * [#1384](https://github.com/yesodweb/persistent/pull/1384)
     * Add `tabulateEntityA` to the `PersistEntity` class, allowing you to
       construct an `Entity a` by providing a function `EntityField a t -> f t`.
