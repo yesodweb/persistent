@@ -13,6 +13,7 @@ module Database.Persist.EntityDef
     , getEntityFieldsDatabase
     , getEntityForeignDefs
     , getEntityUniques
+    , getEntityUniquesNoPrimaryKey
     , getEntityId
     , getEntityIdField
     , getEntityKeyFields
@@ -31,30 +32,43 @@ module Database.Persist.EntityDef
     , EntityIdDef(..)
     ) where
 
-import Data.Text (Text)
-import Data.Map (Map)
 import Data.List.NonEmpty (NonEmpty)
+import Data.Map (Map)
+import Data.Text (Text)
 
 import Database.Persist.EntityDef.Internal
 import Database.Persist.FieldDef
 
-import Database.Persist.Types.Base
-    ( UniqueDef
-    , ForeignDef
-    , entityKeyFields
-    )
 import Database.Persist.Names
+import Database.Persist.Types.Base (ForeignDef, UniqueDef(..), entityKeyFields)
 
--- | Retrieve the list of 'UniqueDef' from an 'EntityDef'. This currently does
--- not include a @Primary@ key, if one is defined. A future version of
--- @persistent@ will include a @Primary@ key among the 'Unique' constructors for
--- the 'Entity'.
+-- | Retrieve the list of 'UniqueDef' from an 'EntityDef'. This does not include
+-- a @Primary@ key, if one is defined. A future version of @persistent@ will
+-- include a @Primary@ key among the 'Unique' constructors for the 'Entity'.
+--
+-- @since 2.14.0.0
+getEntityUniquesNoPrimaryKey
+    :: EntityDef
+    -> [UniqueDef]
+getEntityUniquesNoPrimaryKey ed =
+    filter isNotPrimaryKey $ entityUniques ed
+  where
+    isNotPrimaryKey ud =
+        let
+            constraintName = unConstraintNameHS $ uniqueHaskell ud
+         in
+            constraintName /= unEntityNameHS (getEntityHaskellName ed) <> "PrimaryKey"
+
+-- | Retrieve the list of 'UniqueDef' from an 'EntityDef'.  As of version 2.14,
+-- this will also include the primary key on the entity, if one is defined. If
+-- you do not want the primary key, see 'getEntityUniquesNoPrimaryKey'.
 --
 -- @since 2.13.0.0
 getEntityUniques
     :: EntityDef
     -> [UniqueDef]
-getEntityUniques = entityUniques
+getEntityUniques =
+    entityUniques
 
 -- | Retrieve the Haskell name of the given entity.
 --

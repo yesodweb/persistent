@@ -578,7 +578,7 @@ instance PersistStoreWrite DB.MongoContext where
         either err instantiate result
       where
         instantiate doc = do
-            Entity _ rec <- fromPersistValuesThrow t doc
+            rec <- entityVal <$> fromPersistValuesThrow t doc
             return rec
         err msg = Trans.liftIO $ throwIO $ KeyNotFound $ show key ++ msg
         t = entityDefFromKey key
@@ -589,7 +589,7 @@ instance PersistStoreRead DB.MongoContext where
             case d of
               Nothing -> return Nothing
               Just doc -> do
-                Entity _ ent <- fromPersistValuesThrow t doc
+                ent <- entityVal <$> fromPersistValuesThrow t doc
                 return $ Just ent
           where
             t = entityDefFromKey k

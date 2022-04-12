@@ -57,8 +57,8 @@ instance PersistStoreRead R.Connection where
         if null r
             then return Nothing
             else do
-                Entity _ val <- liftIO $ mkEntity k r
-                return $ Just val
+                entity <- liftIO $ mkEntity k r
+                return $ Just (entityVal entity)
 
 instance PersistStoreWrite R.Connection where
     insert val = do
@@ -98,7 +98,7 @@ instance PersistStoreWrite R.Connection where
             then pure ()
             else do
                 v <- liftIO $ mkEntity k r
-                let (Entity _ val) = cmdUpdate v upds
+                let val = entityVal $ cmdUpdate v upds
                 insertKey k val
         return()
 
