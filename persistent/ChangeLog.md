@@ -2,7 +2,7 @@
 
 # 2.14.0.0 (unreleased)
 
-* []()
+* [#1383](https://github.com/yesodweb/persistent/pull/1383)
     * Primary keys have a `NonEmpty` of fields, not a `[]` of fields.
     * A `Primary` key on an entity now creates a `Unique` constructror for that
       record, with the name `#{entityName}PrimaryKey`. This also affects the

@@ -51,8 +51,8 @@ module Database.Persist.Quasi.Internal
 
 import Prelude hiding (lines)
 
-import Control.Monad
 import Control.Applicative (Alternative((<|>)))
+import Control.Monad
 import Data.Char (isLower, isSpace, isUpper, toLower)
 import Data.List (find, foldl')
 import Data.List.NonEmpty (NonEmpty(..))

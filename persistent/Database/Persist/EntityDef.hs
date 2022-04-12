@@ -32,19 +32,15 @@ module Database.Persist.EntityDef
     , EntityIdDef(..)
     ) where
 
-import Data.Text (Text)
-import Data.Map (Map)
 import Data.List.NonEmpty (NonEmpty)
+import Data.Map (Map)
+import Data.Text (Text)
 
 import Database.Persist.EntityDef.Internal
 import Database.Persist.FieldDef
 
-import Database.Persist.Types.Base
-    ( UniqueDef(..)
-    , ForeignDef
-    , entityKeyFields
-    )
 import Database.Persist.Names
+import Database.Persist.Types.Base (ForeignDef, UniqueDef(..), entityKeyFields)
 
 -- | Retrieve the list of 'UniqueDef' from an 'EntityDef'. This does not include
 -- a @Primary@ key, if one is defined. A future version of @persistent@ will
