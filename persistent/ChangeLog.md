@@ -8,6 +8,14 @@
       record, with the name `#{entityName}PrimaryKey`. This also affects the
       generation of `AtLeastOneUniqueKey` and `OnlyOneUniqueKey` instances, so
       you may need to change behavior on these classes.
+* [#1381](https://github.com/yesodweb/persistent/pull/1381)
+    * `Entity` is given a `HasField` instance that uses the database field
+      names. This is primarily done to support `OverloadedRecordDot` in GHC 9.2
+      and above.
+    * A consequence of this is that the `Entity` constructor has been renamed to
+      `Entity'`. A pattern synonym is provided that should work in almost all
+      cases. You may incur a `MonadFail m` constraint if you are pattern
+      matching directly on the constructor in a `do` result.
 * [#1364](https://github.com/yesodweb/persistent/pull/1346)
     * The type `SomePersistField` was removed in favor of using `PersistValue`
       directly.
