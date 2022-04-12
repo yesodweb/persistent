@@ -82,6 +82,10 @@ spec = describe "Quasi" $ do
             subject ["asdf"]
                 `shouldBe`
                     Nothing
+        it "errors on invalid input" $ do
+            evaluate (subject ["name", "int"])
+                `shouldThrow`
+                    errorCall "Invalid field type \"int\" PSFail ('i',\"nt\")"
         it "works if it has a name and a type" $ do
             subject ["asdf", "Int"]
                 `shouldBe`
@@ -153,6 +157,11 @@ spec = describe "Quasi" $ do
                         , Token "baz"
                         ]
                     )
+
+        it "should error if quotes are unterminated" $ do
+            evaluate (parseLine "    \"foo bar")
+                `shouldThrow`
+                    errorCall "Unterminated quoted string starting with foo bar"
 
         it "handles quotes mid-token" $
             parseLine "  x=\"foo bar\"  \"baz\"" `shouldBe`
@@ -349,6 +358,37 @@ Notification
             entityComments (unboundEntityDef car) `shouldBe` Just "This is a Car\n"
             entityComments (unboundEntityDef vehicle) `shouldBe` Nothing
 
+        it "should error on malformed input, unterminated parens" $ do
+            let definitions = [st|
+User
+    name Text
+    age  (Maybe Int
+|]
+            let [user] = parse lowerCaseSettings definitions
+            evaluate (unboundEntityDef user)
+                `shouldThrow`
+                    errorCall "Unterminated parens string starting with Maybe Int"
+
+        it "errors on duplicate cascade update declarations" $ do
+            let definitions = [st|
+User
+    age  Int OnUpdateCascade OnUpdateCascade
+|]
+            let [user] = parse lowerCaseSettings definitions
+            mapM (evaluate . unboundFieldCascade) (unboundEntityFields user)
+                `shouldThrow`
+                    errorCall "found more than one OnUpdate action, tokens: [\"OnUpdateCascade\",\"OnUpdateCascade\"]"
+
+        it "errors on duplicate cascade delete declarations" $ do
+            let definitions = [st|
+User
+    age  Int OnDeleteCascade OnDeleteCascade
+|]
+            let [user] = parse lowerCaseSettings definitions
+            mapM (evaluate . unboundFieldCascade) (unboundEntityFields user)
+                `shouldThrow`
+                    errorCall "found more than one OnDelete action, tokens: [\"OnDeleteCascade\",\"OnDeleteCascade\"]"
+
         describe "custom Id column" $ do
             it "parses custom Id column" $ do
                 let definitions = [st|
@@ -432,8 +472,51 @@ User
                 evaluate (unboundEntityDef user) `shouldThrow`
                     errorCall (T.unpack errMsg)
 
+            it "triggers error on invalid declaration" $ do
+                let definitions = [st|
+User
+    age Text
+    Primary ref
+|]
+                let [user] = parse lowerCaseSettings definitions
+                case unboundPrimarySpec user of
+                    NaturalKey ucd -> do
+                        evaluate (head $ unboundCompositeCols ucd) `shouldThrow`
+                            errorCall "Unknown column in primary key constraint: \"ref\""
+                    _ ->
+                        error "Expected NaturalKey, failing"
+
+        describe "entity unique constraints" $ do
+            it "triggers error if declared field does not exist" $ do
+                let definitions = [st|
+User
+    name            Text
+    emailFirst      Text
+
+    UniqueEmail emailFirst emailSecond
+|]
+                let [user] = parse lowerCaseSettings definitions
+                    uniques = entityUniques (unboundEntityDef user)
+                    [dbNames] = fmap snd . uniqueFields <$> uniques
+                    errMsg = unwords
+                        [ "Unknown column in \"UniqueEmail\" constraint: \"emailSecond\""
+                        , "possible fields: [\"name\",\"emailFirst\"]"
+                        ]
+                evaluate (head (NEL.tail dbNames)) `shouldThrow`
+                    errorCall errMsg
+
+            it "triggers error if no valid constraint name provided" $ do
+                let definitions = [st|
+User
+    age Text
+    Unique some
+|]
+                let [user] = parse lowerCaseSettings definitions
+                evaluate (unboundPrimarySpec user) `shouldThrow`
+                    errorCall "invalid unique constraint on table[\"User\"] expecting an uppercase constraint name xs=[\"some\"]"
+
         describe "foreign keys" $ do
-            let definitions = [st|
+            let validDefinitions = [st|
 User
     name            Text
     emailFirst      Text
@@ -454,17 +537,116 @@ Notification
                     flippedFK (EntityNameHS entName) (ConstraintNameHS conName) =
                         conName <> entName
                     [_user, notification] =
-                        parse (setPsToFKName flippedFK lowerCaseSettings) definitions
+                        parse (setPsToFKName flippedFK lowerCaseSettings) validDefinitions
                     [notificationForeignDef] =
                         unboundForeignDef <$> unboundForeignDefs notification
                 foreignConstraintNameDBName notificationForeignDef
                     `shouldBe`
                         ConstraintNameDB "fk_noti_user_notification"
 
+            it "should error when insufficient params provided" $ do
+                let definitions = [st|
+User
+    name            Text
+    emailFirst      Text
+    emailSecond     Text
+
+    UniqueEmail emailFirst emailSecond
+
+Notification
+    content         Text
+    sentToFirst     Text
+    sentToSecond    Text
+    Foreign User
+|]
+                let [_user, notification] = parse (setPsUseSnakeCaseForiegnKeys lowerCaseSettings) definitions
+                mapM (evaluate . unboundForeignFields) (unboundForeignDefs notification)
+                    `shouldThrow`
+                        errorCall "invalid foreign key constraint on table[\"Notification\"] expecting a lower case constraint name or a cascading action xs=[]"
+
+            it "should error when foreign fields not provided" $ do
+                let definitions = [st|
+User
+    name            Text
+    emailFirst      Text
+    emailSecond     Text
+
+    UniqueEmail emailFirst emailSecond
+
+Notification
+    content         Text
+    sentToFirst     Text
+    sentToSecond    Text
+    Foreign User fk_noti_user
+|]
+                let [_user, notification] = parse (setPsUseSnakeCaseForiegnKeys lowerCaseSettings) definitions
+                mapM (evaluate . unboundForeignFields) (unboundForeignDefs notification)
+                    `shouldThrow`
+                        errorCall "No fields on foreign reference."
+
+            it "should error when number of parent and foreign fields differ" $ do
+                let definitions = [st|
+User
+    name            Text
+    emailFirst      Text
+    emailSecond     Text
+
+    UniqueEmail emailFirst emailSecond
+
+Notification
+    content         Text
+    sentToFirst     Text
+    sentToSecond    Text
+    Foreign User fk_noti_user sentToFirst sentToSecond References emailFirst
+|]
+                let [_user, notification] = parse (setPsUseSnakeCaseForiegnKeys lowerCaseSettings) definitions
+                mapM (evaluate . unboundForeignFields) (unboundForeignDefs notification)
+                    `shouldThrow`
+                        errorCall "invalid foreign key constraint on table[\"Notification\"] Found 2 foreign fields but 1 parent fields"
+
+            it "should throw error when there is more than one delete cascade on the declaration" $ do
+                let definitions = [st|
+User
+    name            Text
+    emailFirst      Text
+    emailSecond     Text
+
+    UniqueEmail emailFirst emailSecond
+
+Notification
+    content         Text
+    sentToFirst     Text
+    sentToSecond    Text
+    Foreign User OnDeleteCascade OnDeleteCascade
+|]
+                let [_user, notification] = parse (setPsUseSnakeCaseForiegnKeys lowerCaseSettings) definitions
+                mapM (evaluate . unboundForeignFields) (unboundForeignDefs notification)
+                    `shouldThrow`
+                        errorCall "invalid foreign key constraint on table[\"Notification\"] found more than one OnDelete actions"
+
+            it "should throw error when there is more than one update cascade on the declaration" $ do
+                let definitions = [st|
+User
+    name            Text
+    emailFirst      Text
+    emailSecond     Text
+
+    UniqueEmail emailFirst emailSecond
+
+Notification
+    content         Text
+    sentToFirst     Text
+    sentToSecond    Text
+    Foreign User OnUpdateCascade OnUpdateCascade
+|]
+                let [_user, notification] = parse (setPsUseSnakeCaseForiegnKeys lowerCaseSettings) definitions
+                mapM (evaluate . unboundForeignFields) (unboundForeignDefs notification)
+                    `shouldThrow`
+                        errorCall  "invalid foreign key constraint on table[\"Notification\"] found more than one OnUpdate actions"
+
             it "should allow you to enable snake cased foriegn keys via a preset configuration function" $ do
-                let
-                    [_user, notification] =
-                        parse (setPsUseSnakeCaseForiegnKeys lowerCaseSettings) definitions
+                let [_user, notification] =
+                        parse (setPsUseSnakeCaseForiegnKeys lowerCaseSettings) validDefinitions
                     [notificationForeignDef] =
                         unboundForeignDef <$> unboundForeignDefs notification
                 foreignConstraintNameDBName notificationForeignDef

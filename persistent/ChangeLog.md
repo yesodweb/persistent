@@ -1,12 +1,16 @@
 # Changelog for persistent
 
-## (Unreleased)
+## 2.14.0.0
 
 * [#1343](https://github.com/yesodweb/persistent/pull/1343)
     * Implement Type Literal based field definitions
 
-# 2.13.3.4
+## 2.13.3.5
 
+* [#1374](https://github.com/yesodweb/persistent/pull/1374)
+    * Increasing test coverage for errors thrown when parsing entity definitions
+
+## 2.13.3.4
 * [#1379](https://github.com/yesodweb/persistent/pull/1379)
     * `mkPersist` now generates code that compiles under `NoFieldSelectors` and `DuplicateRecordFields` even if field labels are not prefixed
 * [#1376](https://github.com/yesodweb/persistent/pull/1376)
