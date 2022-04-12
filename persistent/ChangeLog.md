@@ -1,5 +1,12 @@
 # Changelog for persistent
 
+## 2.14.0.0 (unreleased)
+
+* [#1387](https://github.com/yesodweb/persistent/pull/1387)
+    * Better UX with `insert`. We now report a type error when you try to
+      `insert` an `Entity` or a function, and we also forbid `insert`ing if the
+      database would throw an error missing a primary key.
+
 ## 2.13.3.5
 
 * [#1374](https://github.com/yesodweb/persistent/pull/1374)

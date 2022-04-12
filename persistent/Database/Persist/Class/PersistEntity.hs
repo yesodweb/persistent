@@ -487,3 +487,10 @@ type FunctionErrorMessage a b =
     ':$$: 'Text "Argument: " ':<>: 'ShowType a
     ':$$: 'Text "Result:   " ':<>: 'ShowType b
     ':$$: 'Text "You probably need to add more arguments to an Entity construction."
+
+type EntityErrorMessage a =
+    'Text "It looks like you're trying to `insert` an `Entity " ':<>: 'ShowType a ':<>: 'Text "` directly."
+    ':$$: 'Text "You want `insertKey` instead. As an example:"
+    ':$$: 'Text "    insertKey (entityKey ent) (entityVal ent)"
+
+instance TypeError (EntityErrorMessage a) => SafeToInsert (Entity a)
