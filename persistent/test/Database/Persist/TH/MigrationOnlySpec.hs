@@ -55,7 +55,7 @@ spec = describe "MigrationOnlySpec" $ do
             it "should have one field" $ do
                 map toPersistValue (toPersistFields (HasMigrationOnly "asdf"))
                     `shouldBe`
-                        map toPersistValue [SomePersistField ("asdf" :: Text)]
+                        [PersistText ("asdf" :: Text)]
         describe "fromPersistValues" $ do
             it "should work with only item in list" $ do
                 fromPersistValues [PersistText "Hello"]

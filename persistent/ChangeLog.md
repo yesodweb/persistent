@@ -6,6 +6,9 @@
     * Better UX with `insert`. We now report a type error when you try to
       `insert` an `Entity` or a function, and we also forbid `insert`ing if the
       database would throw an error missing a primary key.
+* [#1364](https://github.com/yesodweb/persistent/pull/1346)
+    * The type `SomePersistField` was removed in favor of using `PersistValue`
+      directly.
 * [#1386](https://github.com/yesodweb/persistent/pull/1386)
     * The module `Database.Persist.Class.DeleteCascade` was deleted since you
       can put cascade behavior directly on your database models.

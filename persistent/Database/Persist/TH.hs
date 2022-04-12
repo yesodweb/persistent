@@ -1343,7 +1343,7 @@ mkToPersistFields mps ed = do
         xs <- sequence $ replicate fieldCount $ newName "x"
         let name = mkEntityDefName ed
             pat = conp name $ fmap VarP xs
-        sp <- [|SomePersistField|]
+        sp <- [|toPersistValue|]
         let bod = ListE $ fmap (AppE sp . VarE) xs
         return $ normalClause [pat] bod
 
@@ -1352,13 +1352,13 @@ mkToPersistFields mps ed = do
     goSum :: UnboundFieldDef -> Int -> Q Clause
     goSum fieldDef idx = do
         let name = sumConstrName mps ed fieldDef
-        enull <- [|SomePersistField PersistNull|]
+        enull <- [|PersistNull|]
         let beforeCount = idx - 1
             afterCount = fieldCount - idx
             before = replicate beforeCount enull
             after = replicate afterCount enull
         x <- newName "x"
-        sp <- [|SomePersistField|]
+        sp <- [|toPersistValue|]
         let body = ListE $ mconcat
                 [ before
                 , [sp `AppE` VarE x]
