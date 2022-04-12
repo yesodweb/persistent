@@ -115,7 +115,7 @@ class ( PersistField (Key record), ToJSON (Key record), FromJSON (Key record)
     -- | Return meta-data for a given 'EntityField'.
     persistFieldDef :: EntityField record typ -> FieldDef
     -- | A meta-operation to get the database fields of a record.
-    toPersistFields :: record -> [SomePersistField]
+    toPersistFields :: record -> [PersistValue]
     -- | A lower-level operation to convert from database values to a Haskell record.
     fromPersistValues :: [PersistValue] -> Either Text record
 
