@@ -57,6 +57,7 @@ import qualified Database.Persist.TH.NestedSymbolsInTypeSpec as NestedSymbolsInT
 import qualified Database.Persist.TH.MaybeFieldDefsSpec as MaybeFieldDefsSpec
 import qualified Database.Persist.TH.MigrationOnlySpec as MigrationOnlySpec
 import qualified Database.Persist.TH.MultiBlockSpec as MultiBlockSpec
+import qualified Database.Persist.TH.NoFieldSelectorsSpec as NoFieldSelectorsSpec
 import qualified Database.Persist.TH.OverloadedLabelSpec as OverloadedLabelSpec
 import qualified Database.Persist.TH.PersistWithSpec as PersistWithSpec
 import qualified Database.Persist.TH.RequireOnlyPersistImportSpec as RequireOnlyPersistImportSpec
@@ -184,6 +185,7 @@ spec = describe "THSpec" $ do
     MaybeFieldDefsSpec.spec
     TypeLitFieldDefsSpec.spec
     MigrationOnlySpec.spec
+    NoFieldSelectorsSpec.spec
     EmbedSpec.spec
     DiscoverEntitiesSpec.spec
     MultiBlockSpec.spec
