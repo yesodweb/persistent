@@ -1,5 +1,6 @@
 # Changelog for persistent
 
+
 ## 2.14.0.0 (unreleased)
 
 * [#1381](https://github.com/yesodweb/persistent/pull/1381)
@@ -10,6 +11,17 @@
       `Entity'`. A pattern synonym is provided that should work in almost all
       cases. You may incur a `MonadFail m` constraint if you are pattern
       matching directly on the constructor in a `do` result.
+* [#1386](https://github.com/yesodweb/persistent/pull/1386)
+    * The module `Database.Persist.Class.DeleteCascade` was deleted since you
+      can put cascade behavior directly on your database models.
+    * Removed `mkSave` from `Database.Persist.TH`. Use `mkEntityDefList`
+      instead.
+    * Remove the `CompositeDef` constructor from `ReferenceDef` which was not
+      used internally anymore.
+* [#1385](https://github.com/yesodweb/persistent/pull/1385)
+    * The support for entity-level sum types is deprecated. It adds a
+      considerable amount of complexity to the code, and the pattern is not
+      particularly good for actually supporting sum types in most databases.
 * [#1384](https://github.com/yesodweb/persistent/pull/1384)
     * Add `tabulateEntityA` to the `PersistEntity` class, allowing you to
       construct an `Entity a` by providing a function `EntityField a t -> f t`.
@@ -21,7 +33,6 @@
 
 * [#1374](https://github.com/yesodweb/persistent/pull/1374)
     * Increasing test coverage for errors thrown when parsing entity definitions
-
 
 ## 2.13.3.4
 

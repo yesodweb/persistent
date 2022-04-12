@@ -84,7 +84,6 @@ library
         Database.Persist.SqlBackend.Internal.MkSqlBackend
 
         Database.Persist.Class
-        Database.Persist.Class.DeleteCascade
         Database.Persist.Class.PersistEntity
         Database.Persist.Class.PersistQuery
         Database.Persist.Class.PersistUnique
