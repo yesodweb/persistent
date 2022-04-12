@@ -135,6 +135,7 @@ module Database.Persist.Class
 
     -- * PersistEntity
     , PersistEntity (..)
+    , tabulateEntity
     , SymbolToField (..)
     -- * PersistField
     , PersistField (..)

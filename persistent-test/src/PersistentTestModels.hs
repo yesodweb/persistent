@@ -2,6 +2,9 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE UndecidableInstances #-} -- FIXME
+
+{-# OPTIONS_GHC -ddump-splices #-}
+
 module PersistentTestModels where
 
 import Data.Aeson hiding (Key)
