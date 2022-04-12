@@ -1,5 +1,9 @@
 # Changelog for persistent-qq
 
+## 2.12.0.3
+
+* Require `persistent-2.14` in tests
+
 ## 2.12.0.2
 
 * Support aeson-2 in the test suite [#1351](https://github.com/yesodweb/persistent/pull/1351/)

@@ -132,7 +132,7 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     --
     -- Linus's record was inserted to <#dataset-persist-unique-1 dataset-1>, while SPJ wasn't because SPJ already exists in <#dataset-persist-unique-1 dataset-1>.
     insertUnique
-        :: forall record m. (MonadIO m, PersistRecordBackend record backend)
+        :: forall record m. (MonadIO m, PersistRecordBackend record backend, SafeToInsert record)
         => record -> ReaderT backend m (Maybe (Key record))
     insertUnique datum = do
         conflict <- checkUnique datum
@@ -190,7 +190,7 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     -- that this record has multiple unique keys, and suggests that we look for
     -- 'upsertBy' to select the unique key we want.
     upsert
-        :: forall record m. (MonadIO m, PersistRecordBackend record backend, OnlyOneUniqueKey record)
+        :: forall record m. (MonadIO m, PersistRecordBackend record backend, OnlyOneUniqueKey record, SafeToInsert record)
         => record
         -- ^ new record to insert
         -> [Update record]
@@ -257,7 +257,7 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     -- > |3    |X    |999  |
     -- > +-----+-----+-----+
     upsertBy
-        :: forall record m. (MonadIO m, PersistRecordBackend record backend)
+        :: forall record m. (MonadIO m, PersistRecordBackend record backend, SafeToInsert record)
         => Unique record
         -- ^ uniqueness constraint to find by
         -> record
@@ -278,6 +278,7 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
         :: forall record m.
         ( MonadIO m
         , PersistRecordBackend record backend
+        , SafeToInsert record
         )
         => [record]
         -- ^ A list of the records you want to insert or replace.
@@ -376,6 +377,7 @@ insertBy
     , PersistUniqueWrite backend
     , PersistRecordBackend record backend
     , AtLeastOneUniqueKey record
+    , SafeToInsert record
     )
     => record -> ReaderT backend m (Either (Entity record) (Key record))
 insertBy val = do
@@ -422,6 +424,7 @@ insertUniqueEntity
      . ( MonadIO m
        , PersistRecordBackend record backend
        , PersistUniqueWrite backend
+       , SafeToInsert record
        )
     => record
     -> ReaderT backend m (Maybe (Entity record))
@@ -632,6 +635,7 @@ defaultUpsertBy
        , MonadIO m
        , PersistStoreWrite backend
        , PersistUniqueRead backend
+       , SafeToInsert record
        )
     => Unique record   -- ^ uniqueness constraint to find by
     -> record          -- ^ new record to insert
@@ -654,6 +658,7 @@ defaultPutMany
       , MonadIO m
       , PersistStoreWrite backend
       , PersistUniqueRead backend
+      , SafeToInsert record
       )
     => [record]
     -> ReaderT backend m ()
