@@ -7,6 +7,8 @@
       can put cascade behavior directly on your database models.
     * Removed `mkSave` from `Database.Persist.TH`. Use `mkEntityDefList`
       instead.
+    * Remove the `CompositeDef` constructor from `ReferenceDef` which was not
+      used internally anymore.
 
 ## 2.13.3.5
 
