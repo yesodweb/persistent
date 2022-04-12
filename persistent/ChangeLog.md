@@ -1,5 +1,13 @@
 # Changelog for persistent
 
+## 2.14.0.0
+
+* []()
+    * The module `Database.Persist.Class.DeleteCascade` was deleted since you
+      can put cascade behavior directly on your database models.
+    * Removed `mkSave` from `Database.Persist.TH`. Use `mkEntityDefList`
+      instead.
+
 ## 2.13.3.5
 
 * [#1374](https://github.com/yesodweb/persistent/pull/1374)

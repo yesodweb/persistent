@@ -129,10 +129,6 @@ module Database.Persist.Class
     , selectSource
     , selectKeysList
 
-    -- * DeleteCascade
-    , DeleteCascade (..)
-    , deleteCascadeWhere
-
     -- * PersistEntity
     , PersistEntity (..)
     , SymbolToField (..)
@@ -163,7 +159,6 @@ module Database.Persist.Class
     , toPersistValueJSON, fromPersistValueJSON
     ) where
 
-import Database.Persist.Class.DeleteCascade
 import Database.Persist.Class.PersistConfig
 import Database.Persist.Class.PersistEntity
 import Database.Persist.Class.PersistField
