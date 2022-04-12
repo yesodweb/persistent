@@ -12,6 +12,8 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
+{-# OPTIONS_GHC -ddump-splices #-}
+
 module PersistentTestModels where
 
 import Control.Monad.Reader

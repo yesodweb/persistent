@@ -49,8 +49,6 @@ module Database.Persist.TH
     , mkMigrate
     , migrateModels
     , discoverEntities
-    , mkSave
-    , mkDeleteCascade
     , mkEntityDefList
     , share
     , derivePersistField
@@ -1812,6 +1810,15 @@ fieldError tableName fieldName err = mconcat
 
 mkEntity :: M.Map EntityNameHS a -> EntityMap -> MkPersistSettings -> UnboundEntityDef -> Q [Dec]
 mkEntity embedEntityMap entityMap mps preDef = do
+    when (isEntitySum (unboundEntityDef preDef)) $ do
+        reportWarning $ unlines
+            [ "persistent has deprecated sum type entities as of 2.14.0.0."
+            , "We will delete support for these entities in 2.15.0.0."
+            , "If you need these, please add a comment on this GitHub issue:"
+            , ""
+            , "    https://github.com/yesodweb/persistent/issues/987"
+            ]
+
     entityDefExp <- liftAndFixKeys mps embedEntityMap entityMap preDef
     let
         entDef =
@@ -1876,6 +1883,50 @@ mkEntity embedEntityMap entityMap mps preDef = do
             entityFieldTHCon <$> efthAllFields fields
         allEntDefClauses =
             entityFieldTHClause <$> efthAllFields fields
+
+    mkTabulateA <- do
+        fromFieldName <- newName "fromField"
+        let names'types =
+                filter (\(n, _) -> n /= mkName "Id") $ map (getConNameAndType . entityFieldTHCon) $ entityFieldsTHFields fields
+            getConNameAndType = \case
+                ForallC [] [EqualityT `AppT` _ `AppT` fieldTy] (NormalC name []) ->
+                    (name, fieldTy)
+                other ->
+                    error $ mconcat
+                        [ "persistent internal error: field constructor did not have xpected shape. \n"
+                        , "Expected: \n"
+                        , "    ForallC [] [EqualityT `AppT` _ `AppT` fieldTy] (NormalC name [])\n"
+                        , "Got: \n"
+                        , "    " <> show other
+                        ]
+            mkEntityVal =
+                List.foldl'
+                    (\acc (n, _) ->
+                        InfixE
+                            (Just acc)
+                            (VarE '(<*>))
+                            (Just (VarE fromFieldName `AppE` ConE n))
+                    )
+                    (VarE 'pure `AppE` ConE (mkEntityNameHSName entName))
+                    names'types
+            primaryKeyField =
+                fst $ getConNameAndType $ entityFieldTHCon $ entityFieldsTHPrimary fields
+        body <-
+            if isEntitySum $ unboundEntityDef entDef
+            then [| error "tabulateEntityA does not make sense for sum type" |]
+            else
+                [|
+                    Entity
+                        <$> $(varE fromFieldName) $(conE primaryKeyField)
+                        <*> $(pure mkEntityVal)
+                |]
+
+
+        pure $
+          FunD 'tabulateEntityA
+            [ Clause [VarP fromFieldName] (NormalB body) []
+            ]
+
     return $ addSyn $
        dtd : mconcat fkc `mappend`
       ( [ TySynD (keyIdName entDef) [] $
@@ -1886,6 +1937,7 @@ mkEntity embedEntityMap entityMap mps preDef = do
         , keyToValues'
         , keyFromValues'
         , keyFromRecordM'
+        , mkTabulateA
         , FunD 'entityDef [normalClause [WildP] entityDefExp]
         , tpf
         , FunD 'fromPersistValues fpv
@@ -2306,23 +2358,9 @@ persistFieldFromEntity mps entDef = do
 --
 -- This function is useful for cases such as:
 --
--- >>> share [mkSave "myDefs", mkPersist sqlSettings] [persistLowerCase|...|]
+-- >>> share [mkEntityDefList "myDefs", mkPersist sqlSettings] [persistLowerCase|...|]
 share :: [[a] -> Q [Dec]] -> [a] -> Q [Dec]
 share fs x = mconcat <$> mapM ($ x) fs
-
--- | Save the @EntityDef@s passed in under the given name.
---
--- This function was deprecated in @persistent-2.13.0.0@. It doesn't properly
--- fix foreign keys. Please refer to 'mkEntityDefList' for a replacement.
-mkSave :: String -> [EntityDef] -> Q [Dec]
-mkSave name' defs' = do
-    let name = mkName name'
-    defs <- lift defs'
-    return [ SigD name $ ListT `AppT` ConT ''EntityDef
-           , FunD name [normalClause [] defs]
-           ]
-
-{-# DEPRECATED mkSave "This function is broken. mkEntityDefList is a drop-in replacement that will properly handle foreign keys correctly." #-}
 
 data Dep = Dep
     { depTarget :: EntityNameHS
@@ -2330,73 +2368,6 @@ data Dep = Dep
     , depSourceField :: FieldNameHS
     , depSourceNull  :: IsNullable
     }
-
-{-# DEPRECATED mkDeleteCascade "You can now set update and delete cascade behavior directly on the entity in the quasiquoter. This function and class are deprecated and will be removed in the next major ersion." #-}
-
--- | Generate a 'DeleteCascade' instance for the given @EntityDef@s.
---
--- This function is deprecated as of 2.13.0.0. You can now set cascade
--- behavior directly in the quasiquoter.
-mkDeleteCascade :: MkPersistSettings -> [UnboundEntityDef] -> Q [Dec]
-mkDeleteCascade mps defs = do
-    let deps = concatMap getDeps defs
-    mapM (go deps) defs
-  where
-    getDeps :: UnboundEntityDef -> [Dep]
-    getDeps def =
-        concatMap getDeps' $ getUnboundFieldDefs $ fixEntityDef def
-      where
-        getDeps' :: UnboundFieldDef -> [Dep]
-        getDeps' field =
-            case guessFieldReference field of
-                Just name ->
-                    return Dep
-                        { depTarget = name
-                        , depSourceTable = entityHaskell (unboundEntityDef def)
-                        , depSourceField = unboundFieldNameHS field
-                        , depSourceNull  = isUnboundFieldNullable field
-                        }
-                Nothing ->
-                    []
-    go :: [Dep] -> UnboundEntityDef -> Q Dec
-    go allDeps ued = do
-        let name = entityHaskell (unboundEntityDef ued)
-        let deps = filter (\x -> depTarget x == name) allDeps
-        key <- newName "key"
-        let del = VarE 'delete
-        let dcw = VarE 'deleteCascadeWhere
-        just <- [|Just|]
-        filt <- [|Filter|]
-        eq <- [|Eq|]
-        value <- [|FilterValue|]
-        let mkStmt :: Dep -> Stmt
-            mkStmt dep = NoBindS
-                $ dcw `AppE`
-                  ListE
-                    [ filt `AppE` ConE filtName
-                           `AppE` (value `AppE` val (depSourceNull dep))
-                           `AppE` eq
-                    ]
-              where
-                filtName = filterConName' mps (depSourceTable dep) (depSourceField dep)
-                val (Nullable ByMaybeAttr) = just `AppE` VarE key
-                val _                      =             VarE key
-
-        let stmts :: [Stmt]
-            stmts = fmap mkStmt deps `mappend`
-                    [NoBindS $ del `AppE` VarE key]
-
-        let entityT = genericDataType mps name backendT
-
-        return $
-            instanceD
-            [ mkClassP ''PersistQuery [backendT]
-            , mkEqualP (ConT ''PersistEntityBackend `AppT` entityT) (ConT ''BaseBackend `AppT` backendT)
-            ]
-            (ConT ''DeleteCascade `AppT` entityT `AppT` backendT)
-            [ FunD 'deleteCascade
-                [normalClause [VarP key] (mkDoE stmts)]
-            ]
 
 -- | Creates a declaration for the @['EntityDef']@ from the @persistent@
 -- schema. This is necessary because the Persistent QuasiQuoter is unable

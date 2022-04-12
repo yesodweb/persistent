@@ -667,6 +667,8 @@ import Employment as Import
 
 === Entity-level
 
+NOTE: This feature is deprecated as of version 2.14 and will be removed in 2.15 (unless there are many complaints).
+
 The
 <https://github.com/yesodweb/persistent/blob/master/persistent-test/src/SumTypeTest.hs#L35 tests for this feature>
 demonstrate their usage. Note the use of the sign @+@ in front of the entity
