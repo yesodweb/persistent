@@ -34,7 +34,7 @@ specsWith runConn mmigrate = describe "html" $ do
 
         sequence_ $ replicate 1000 $ do
             x <- liftIO randomValue
-            key <- insertKey $ HtmlTable x
+            key <- insert $ HtmlTable x
             Just htmlTableY <- get key
             liftIO $ do
                 renderHtml x @?= renderHtml (htmlTableHtml htmlTableY)
