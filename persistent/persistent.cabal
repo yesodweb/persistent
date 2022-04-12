@@ -1,5 +1,5 @@
 name:            persistent
-version:         2.13.3.3
+version:         2.13.3.4
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -183,6 +183,7 @@ test-suite test
         Database.Persist.TH.MultiBlockSpec.Model
         Database.Persist.TH.NestedSymbolsInTypeSpec
         Database.Persist.TH.NestedSymbolsInTypeSpecImports
+        Database.Persist.TH.NoFieldSelectorsSpec
         Database.Persist.TH.OverloadedLabelSpec
         Database.Persist.TH.RequireOnlyPersistImportSpec
         Database.Persist.TH.SharedPrimaryKeyImportedSpec
