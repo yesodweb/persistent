@@ -189,6 +189,7 @@ test-suite test
         Database.Persist.TH.SharedPrimaryKeySpec
         Database.Persist.THSpec
         Database.Persist.TH.ToFromPersistValuesSpec
+        Database.Persist.TH.TypeLitFieldDefsSpec
         TemplateTestImports
     default-language: Haskell2010
 
