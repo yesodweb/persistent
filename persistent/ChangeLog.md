@@ -1,6 +1,8 @@
 # Changelog for persistent
 
-* []()
+## 2.14.0.0 (unreleased)
+
+* [#1381](https://github.com/yesodweb/persistent/pull/1381)
     * `Entity` is given a `HasField` instance that uses the database field
       names. This is primarily done to support `OverloadedRecordDot` in GHC 9.2
       and above.
@@ -9,7 +11,12 @@
       cases. You may incur a `MonadFail m` constraint if you are pattern
       matching directly on the constructor in a `do` result.
 
-# 2.13.3.4
+## 2.13.3.5
+
+* [#1374](https://github.com/yesodweb/persistent/pull/1374)
+    * Increasing test coverage for errors thrown when parsing entity definitions
+
+## 2.13.3.4
 
 * [#1379](https://github.com/yesodweb/persistent/pull/1379)
     * `mkPersist` now generates code that compiles under `NoFieldSelectors` and `DuplicateRecordFields` even if field labels are not prefixed
