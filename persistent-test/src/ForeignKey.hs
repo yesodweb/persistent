@@ -103,6 +103,9 @@ Chain3
 
 specsWith :: (MonadIO m, MonadFail m) => RunDb SqlBackend m -> Spec
 specsWith runDb = describe "foreign keys options" $ do
+    it "testing error message" $ do
+        runDb $ do
+            insert $ Chain3
     it "delete cascades" $ runDb $ do
         kf <- insert $ Parent 1
         insert_ $ Child 1

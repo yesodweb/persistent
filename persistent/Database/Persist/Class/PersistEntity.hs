@@ -472,10 +472,18 @@ instance SymbolToField sym rec typ => IsLabel sym (EntityField rec typ) where
 -- 'insertKey'.
 --
 -- @since 2.14.0.0
-class PersistEntity a => SafeToInsert a where
+class SafeToInsert a where
 
 type SafeToInsertErrorMessage a
     = 'Text "The PersistEntity " ':<>: ShowType a ':<>: 'Text " does not have a default primary key."
     ':$$: 'Text "This means that 'insert' will fail with a database error."
     ':$$: 'Text "Please  provide a default= clause inthe entity definition,"
     ':$$: 'Text "or use 'insertKey' instead to provide one."
+
+instance (TypeError (FunctionErrorMessage a b)) => SafeToInsert (a -> b)
+
+type FunctionErrorMessage a b =
+    'Text "Uh oh! It looks like you are trying to insert a function into the database."
+    ':$$: 'Text "Argument: " ':<>: 'ShowType a
+    ':$$: 'Text "Result:   " ':<>: 'ShowType b
+    ':$$: 'Text "You probably need to add more arguments to an Entity construction."
