@@ -1,6 +1,11 @@
 # Changelog for persistent
 
-## 2.14.0.0 (unreleased)
+## (unreleased)
+
+* [#1391](https://github.com/yesodweb/persistent/pull/1391)
+    * Increasing quasi module test coverage, improve error assertions
+
+## 2.14.0.0
 
 * [#1343](https://github.com/yesodweb/persistent/pull/1343)
     * Implement Type Literal based field definitions
