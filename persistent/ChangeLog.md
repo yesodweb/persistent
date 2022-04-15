@@ -2,6 +2,9 @@
 
 ## (unreleased)
 
+* [#1392](https://github.com/yesodweb/persistent/pull/1392)
+    * Enhance `selectList` documentation with TypeApplications examples.
+    * Clarify `selectSource` documentation wording.
 * [#1391](https://github.com/yesodweb/persistent/pull/1391)
     * Increasing quasi module test coverage, improve error assertions
 
