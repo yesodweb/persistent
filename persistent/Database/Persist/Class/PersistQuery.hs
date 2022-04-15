@@ -150,7 +150,7 @@ selectKeys filts opts = do
 -- you might find type application useful, illustrated below.
 --
 -- @
--- {-# LANGUAGE TypeApplication #-}
+-- {-# LANGUAGE TypeApplications #-}
 -- ...
 --
 -- firstTenUsers =
