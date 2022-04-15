@@ -144,10 +144,10 @@ selectKeys filts opts = do
 -- <https://use-the-index-luke.com/sql/partial-results/fetch-next-page Warning that LIMIT/OFFSET is bad for pagination!>
 --
 -- The type of record can usually be infered from the types of the provided filters
--- and select options. In the above examples, though, you'll notice that the options
--- are polymorphic, applying to any record type. In order to help-along type
--- inference in such situations, or simply as an enhancement to readability, you
--- might find type application useful, illustrated below.
+-- and select options. In the previous two examples, though, you'll notice that the
+-- select options are polymorphic, applying to any record type. In order to help
+-- type inference in such situations, or simply as an enhancement to readability,
+-- you might find type application useful, illustrated below.
 --
 -- @
 -- {-# LANGUAGE TypeApplication #-}
