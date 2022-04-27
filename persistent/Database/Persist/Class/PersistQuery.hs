@@ -73,7 +73,7 @@ class (PersistQueryRead backend, PersistStoreWrite backend) => PersistQueryWrite
 -- | Get all records matching the given criterion in the specified order.
 -- Returns also the identifiers.
 --
--- WARNING: This function returns a 'ConduitM', which implies that it streams
+-- WARNING: This function returns a 'ConduitM', which suggests that it streams
 -- the results. It does not stream results on most backends. If you need
 -- streaming, see @persistent-pagination@ for a means of chunking results based
 -- on indexed ranges.
@@ -142,6 +142,23 @@ selectKeys filts opts = do
 -- @
 --
 -- <https://use-the-index-luke.com/sql/partial-results/fetch-next-page Warning that LIMIT/OFFSET is bad for pagination!>
+--
+-- The type of record can usually be infered from the types of the provided filters
+-- and select options. In the previous two examples, though, you'll notice that the
+-- select options are polymorphic, applying to any record type. In order to help
+-- type inference in such situations, or simply as an enhancement to readability,
+-- you might find type application useful, illustrated below.
+--
+-- @
+-- {-# LANGUAGE TypeApplications #-}
+-- ...
+--
+-- firstTenUsers =
+--     'selectList' @User [] ['LimitTo' 10]
+--
+-- secondTenUsers =
+--     'selectList' @User [] ['LimitTo' 10, 'OffsetBy' 10]
+-- @
 --
 -- With 'Asc' and 'Desc', we can provide the field we want to sort on. We can
 -- provide multiple sort orders - later ones are used to sort records that are
