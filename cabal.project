@@ -7,3 +7,38 @@ packages:
   persistent-postgresql
   persistent-redis
   persistent-qq
+
+-- GHC 9.4 shims
+
+source-repository-package
+    type: git
+    location: https://github.com/parsonsmatt/primitive
+    tag: 99ebd4b81ab320b71dcffd0c20082c5b2ccbcfee
+
+source-repository-package
+    type: git
+    location: https://github.com/parsonsmatt/inspection-testing
+    tag: 46321298c681e91fb8037cc3cedfaaaae8c9cb42
+
+source-repository-package
+    type: git
+    location: https://github.com/parsonsmatt/vector
+    tag: 532ba91ee81f6af2acc579c54058f5117b2e4326
+    subdir: vector
+    subdir: vector-stream
+
+source-repository-package
+    type: git
+    location: https://github.com/parsonsmatt/vector-algorithms
+    tag: cc3a69ab64734228a1cf12fcd78d94ddda0409b4
+
+source-repository-package
+    type: git
+    location: https://github.com/parsonsmatt/bitvec
+    tag: 63ca5c514142dd0a4f2b27f153b4a72893ad049b
+
+source-repository-package
+    type: git
+    location: https://github.com/yesodweb/shakespeare
+    tag: e24c732a7d24d1f3ffb18fb46a52e9b2dc65b226
+
