@@ -7,7 +7,7 @@
     * Clarify `selectSource` documentation wording.
 * [#1391](https://github.com/yesodweb/persistent/pull/1391)
     * Increasing quasi module test coverage, improve error assertions
-* [#]()
+* [#1401](https://github.com/yesodweb/persistent/pull/1401)
     * Change `Entity` back into a regular record and drop the `HasField`
       instance. This is technically a breaking change, but [the bug in GHC's
       `COMPLETE` annotations](https://gitlab.haskell.org/ghc/ghc/-/issues/15681)
