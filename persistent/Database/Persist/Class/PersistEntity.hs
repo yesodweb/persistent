@@ -311,28 +311,16 @@ data FilterValue typ where
 -- Entity backend b)@), then you must you use @SELECT ??, ??
 -- WHERE ...@, and so on.
 data Entity record =
-    Entity' (Key record) record
-
-pattern Entity :: Key rec -> rec -> Entity rec
-pattern Entity { entityKey,  entityVal } = Entity' entityKey entityVal
-
-{-# COMPLETE Entity #-}
+    Entity
+        { entityKey :: Key record
+        , entityVal :: record
+        }
 
 deriving instance (Generic (Key record), Generic record) => Generic (Entity record)
 deriving instance (Eq (Key record), Eq record) => Eq (Entity record)
 deriving instance (Ord (Key record), Ord record) => Ord (Entity record)
 deriving instance (Show (Key record), Show record) => Show (Entity record)
 deriving instance (Read (Key record), Read record) => Read (Entity record)
-
-instance
-    ( SymbolToField sym ent typ
-    , PersistEntity ent
-    )
-  =>
-    HasField sym (Entity ent) typ
-  where
-    getField ent =
-        getConstant ((fieldLens (symbolToField @sym @ent @typ)) Constant ent)
 
 -- | Get list of values corresponding to given entity.
 entityValues :: PersistEntity record => Entity record -> [PersistValue]

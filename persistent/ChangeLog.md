@@ -1,12 +1,21 @@
 # Changelog for persistent
 
-## (unreleased)
+## 2.14.0.1
 
 * [#1392](https://github.com/yesodweb/persistent/pull/1392)
     * Enhance `selectList` documentation with TypeApplications examples.
     * Clarify `selectSource` documentation wording.
 * [#1391](https://github.com/yesodweb/persistent/pull/1391)
     * Increasing quasi module test coverage, improve error assertions
+* [#]()
+    * Change `Entity` back into a regular record and drop the `HasField`
+      instance. This is technically a breaking change, but [the bug in GHC's
+      `COMPLETE` annotations](https://gitlab.haskell.org/ghc/ghc/-/issues/15681)
+      rendered a super common pattern a much more invasive breaking change than
+      anticipated. As a result, upgrading to `persistent-2.14` was untenable.
+
+      If you *did* upgrade and this broke your codebase *again*, please let me
+      know and I can release another patch to shim it.
 
 ## 2.14.0.0
 
