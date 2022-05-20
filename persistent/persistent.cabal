@@ -28,7 +28,7 @@ library
       , http-api-data            >= 0.3
       , lift-type                >= 0.1.0.0 && < 0.2.0.0
       , monad-logger             >= 0.3.28
-      , mtl
+      , mtl                                    < 2.3
       , path-pieces              >= 0.2
       , resource-pool            >= 0.2.3
       , resourcet                >= 1.1.10
