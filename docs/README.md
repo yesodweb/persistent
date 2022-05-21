@@ -2,7 +2,7 @@ Get started with Persistent at: http://www.yesodweb.com/book/persistent
 
 ## Wiki
 
-* [Entity Syntax](./Persistent-entity-syntax.md)
+* [Entity Syntax](http://hackage.haskell.org/package/persistent/docs/Database-Persist-Quasi.html) is documented in the `Database.Persist.Quasi` module
 * [Database Configuration](./Database-Configuration.md)
 
 ## External Documentation
