@@ -10,10 +10,10 @@ packages:
 
 -- GHC 9.4 shims for persistent
 
-source-repository-package
-    type: git
-    location: https://github.com/parsonsmatt/primitive
-    tag: 99ebd4b81ab320b71dcffd0c20082c5b2ccbcfee
+-- source-repository-package
+--     type: git
+--     location: https://github.com/parsonsmatt/primitive
+--     tag: 99ebd4b81ab320b71dcffd0c20082c5b2ccbcfee
 
 -- source-repository-package
 --     type: git
