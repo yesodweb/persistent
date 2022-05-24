@@ -10,6 +10,41 @@ packages:
 
 -- GHC 9.4 shims for persistent
 
+-- These need hackage revisions but otherwise test fine in the repo
+allow-newer:
+      cryptohash-md5:base
+    , vault:base
+    , hashable:base
+    , hashable:bytestring
+    , hashable:ghc-bignum
+    , async:base
+    , integer-logarithms:base
+    , integer-logarithms:ghc-bignum
+    , integer-logarithms:ghc-prim
+    , scientific:base
+    , http-api-data:base
+    , split:base
+    , blaze-markup:base
+    , attoparsec:ghc-prim
+    , aeson:ghc-prim
+    , time-compat:base
+    , indexed-traversable-instances:base
+    , these:base
+    , assoc:base
+    , text-short:base
+    , text-short:ghc-prim
+    , semialign:base
+    , indexed-traversable:base
+    , data-fix:base
+    , splitmix:base
+    , OneTuple:base
+    , postgresql-simple:base
+    , bytestring-lexing:base
+    , HTTP:base
+    , quickcheck-instances:base
+    , postgresql-libpq:base
+    , hsc2hs:base
+
 -- https://github.com/yesodweb/shakespeare/pull/267
 source-repository-package
     type: git
