@@ -1,4 +1,4 @@
-resolver: nightly-2022-01-14
+resolver: nightly-2022-06-10
 
 packages:
   - ./persistent
@@ -14,7 +14,7 @@ extra-deps:
   - lift-type-0.1.0.0
   - mysql-0.2.1
   - mysql-simple-0.4.7
-  - aeson-2.0.2.0
+    # - aeson-2.0.2.0
   # https://github.com/yesodweb/shakespeare/pull/260
   # https://github.com/commercialhaskell/stackage/issues/6294
-  - happy-1.20.0
+  # - happy-1.20.0

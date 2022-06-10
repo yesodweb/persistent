@@ -32,9 +32,9 @@ spec = it "compiles" True
 
 #else
 
-spec :: Spec 
+spec :: Spec
 spec = do
     it "only works with GHC 9.2 or greater" $ do
-        pendingWith "only works with GHC 9.2 or greater"    
+        pendingWith "only works with GHC 9.2 or greater"
 
 #endif
