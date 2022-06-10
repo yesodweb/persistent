@@ -119,8 +119,8 @@ import Language.Haskell.TH.Syntax
 import Web.HttpApiData (FromHttpApiData(..), ToHttpApiData(..))
 import Web.PathPieces (PathPiece(..))
 
-import Database.Persist.Class.PersistEntity
 import Database.Persist
+import Database.Persist.Class.PersistEntity
 import Database.Persist.Quasi
 import Database.Persist.Quasi.Internal
 import Database.Persist.Sql
