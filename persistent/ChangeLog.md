@@ -2,7 +2,7 @@
 
 ## 2.14.0.2
 
-* []()
+* [#1407](https://github.com/yesodweb/persistent/pull/1407)
     * Fix a name shadowing warning.
 
 ## 2.14.0.1
