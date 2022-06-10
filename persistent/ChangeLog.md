@@ -1,5 +1,10 @@
 # Changelog for persistent
 
+## 2.14.0.2
+
+* []()
+    * Fix a name shadowing warning.
+
 ## 2.14.0.1
 
 * [#1392](https://github.com/yesodweb/persistent/pull/1392)

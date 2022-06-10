@@ -1462,9 +1462,15 @@ fieldUpd :: Name -- ^ constructor name
     -> Exp -- ^ record value
     -> Name -- ^ field name to update
     -> Exp -- ^ new value
-    -> Exp
-fieldUpd con names record name new = CaseE record
-    [ Match (RecP con pats) (NormalB body) []]
+    -> Q Exp
+fieldUpd con names record name new = do
+    pats <-
+        fmap mconcat $ forM names $ \k -> do
+            varName <- VarP <$> newName (nameBase k)
+            pure [(k, varName) | k /= name]
+
+    pure $ CaseE record
+        [ Match (RecP con pats) (NormalB body) []]
     where
         body = RecConE con
             [ if k == name then (name, new) else (k, VarE k)
@@ -1486,23 +1492,26 @@ mkLensClauses mps entDef genDataType = do
     let idClause = normalClause
             [conp (keyIdName entDef) []]
             (lens' `AppE` getId `AppE` setId)
-    return $ idClause : if unboundEntitySum entDef
-        then fmap (toSumClause lens' keyVar valName xName) (getUnboundFieldDefs entDef)
-        else zipWith (toClause lens' getVal dot keyVar valName xName) (getUnboundFieldDefs entDef) fieldNames
+    (idClause :) <$> if unboundEntitySum entDef
+        then pure $ fmap (toSumClause lens' keyVar valName xName) (getUnboundFieldDefs entDef)
+        else zipWithM (toClause lens' getVal dot keyVar valName xName) (getUnboundFieldDefs entDef) fieldNames
   where
     fieldNames = fieldDefToRecordName mps entDef <$> getUnboundFieldDefs entDef
-    toClause lens' getVal dot keyVar valName xName fieldDef fieldName = normalClause
-        [conp (filterConName mps entDef fieldDef) []]
-        (lens' `AppE` getter `AppE` setter)
+    toClause lens' getVal dot keyVar valName xName fieldDef fieldName = do
+        setter <- mkSetter
+        pure $ normalClause
+            [conp (filterConName mps entDef fieldDef) []]
+            (lens' `AppE` getter `AppE` setter)
       where
         defName = mkEntityDefName entDef
         getter = InfixE (Just $ fieldSel defName fieldName) dot (Just getVal)
-        setter = LamE
-            [ conp 'Entity [VarP keyVar, VarP valName]
-            , VarP xName
-            ]
-            $ ConE 'Entity `AppE` VarE keyVar
-                `AppE` fieldUpd defName fieldNames (VarE valName) fieldName (VarE xName)
+        mkSetter = do
+            updExpr <- fieldUpd defName fieldNames (VarE valName) fieldName (VarE xName)
+            pure $ LamE
+                [ conp 'Entity [VarP keyVar, VarP valName]
+                , VarP xName
+                ]
+                $ ConE 'Entity `AppE` VarE keyVar `AppE` updExpr
 
     toSumClause lens' keyVar valName xName fieldDef = normalClause
         [conp (filterConName mps entDef fieldDef) []]
@@ -2167,6 +2176,7 @@ mkLenses mps entityMap ent = fmap mconcat $ forM (getUnboundFieldDefs ent `zip` 
         t1 `arrow` t2 = ArrowT `AppT` t1 `AppT` t2
         vars = mkForallTV fT
              : (if mpsGeneric mps then [mkForallTV backend1{-, PlainTV backend2-}] else [])
+    fieldUpdClause <- fieldUpd (mkEntityDefName ent) fieldNames a fieldName y
     return
         [ SigD lensName $ ForallT vars [mkClassP ''Functor [VarT fT]] $
             (aT `arrow` (VarT fT `AppT` bT)) `arrow`
@@ -2179,7 +2189,7 @@ mkLenses mps entityMap ent = fmap mconcat $ forM (getUnboundFieldDefs ent `zip` 
             [ FunD needleN [normalClause [] (fieldSel (mkEntityDefName ent) fieldName `AppE` a)]
             , FunD setterN $ return $ normalClause
                 [VarP yN]
-                (fieldUpd (mkEntityDefName ent) fieldNames a fieldName y)
+                fieldUpdClause
             ]
         ]
     where

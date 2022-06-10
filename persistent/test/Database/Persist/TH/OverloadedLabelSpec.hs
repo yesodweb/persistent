@@ -13,6 +13,8 @@
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE UndecidableInstances       #-}
 
+{-# OPTIONS_GHC -Wname-shadowing -Werror=name-shadowing #-}
+
 module Database.Persist.TH.OverloadedLabelSpec where
 
 import           TemplateTestImports
