@@ -18,8 +18,8 @@ import Instances.TH.Lift ()
 class DatabaseName a where
     escapeWith :: (Text -> str) -> (a -> str)
 
--- | An 'EntityNameDB' represents the datastore-side name that @persistent@
--- will use for an entity.
+-- | A 'FieldNameDB' represents the datastore-side name that @persistent@
+-- will use for a field.
 --
 -- @since 2.12.0.0
 newtype FieldNameDB = FieldNameDB { unFieldNameDB :: Text }

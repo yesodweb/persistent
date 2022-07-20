@@ -681,8 +681,7 @@ data FieldDef = FieldDef
     --
     -- @since 2.11.0
     , fieldComments  :: !(Maybe Text)
-    -- ^ Optional comments for a 'Field'. There is not currently a way to
-    -- attach comments to a field in the quasiquoter.
+    -- ^ Optional comments for a 'Field'.
     --
     -- @since 2.10.0
     , fieldGenerated :: !(Maybe Text)
