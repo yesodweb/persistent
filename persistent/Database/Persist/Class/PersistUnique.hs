@@ -150,7 +150,7 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     -- First, we try to explain 'upsert' using <#schema-persist-unique-1 schema-1> and <#dataset-persist-unique-1 dataset-1>.
     --
     -- > upsertSpj :: MonadIO m => [Update User] -> ReaderT SqlBackend m (Maybe (Entity User))
-    -- > upsertSpj updates = upsert (User "SPJ" 999) upadtes
+    -- > upsertSpj updates = upsert (User "SPJ" 999) updates
     --
     -- > mSpjEnt <- upsertSpj [UserAge +=. 15]
     --
