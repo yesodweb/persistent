@@ -1,7 +1,12 @@
 # Changelog for persistent
 
-## Unreleased
-Fix incorrect reference to rawSql in documentation, [#1409](https://github.com/yesodweb/persistent/pull/1409).
+## 2.14.1.0
+
+* [#1418](https://github.com/yesodweb/persistent/pull/1418/)
+    * Re-export `SafeToInsert` from `Database.Persist.Class`, which should
+      re-export it through `Database.Persist`, `Database.Persist.Sql`, etc.
+* [#1409](https://github.com/yesodweb/persistent/pull/1409)
+    * Fix incorrect reference to rawSql in documentation.
 
 ## 2.14.0.3
 
