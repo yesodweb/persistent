@@ -1,5 +1,8 @@
 # Changelog for persistent
 
+## Unreleased
+Fix incorrect reference to rawSql in documentation, [#1409](https://github.com/yesodweb/persistent/pull/1409).
+
 ## 2.14.0.3
 
 * [#1411](https://github.com/yesodweb/persistent/pull/1411)

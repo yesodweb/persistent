@@ -301,8 +301,8 @@ data FilterValue typ where
 -- migration code -- @persistent@ will expect the column to be in
 -- the middle, but your DBMS will put it as the last column).
 -- So, instead of using a query like the one above, you may use
--- 'Database.Persist.GenericSql.rawSql' (from the
--- "Database.Persist.GenericSql" module) with its /entity
+-- 'Database.Persist.Sql.rawSql' (from the
+-- "Database.Persist.Sql" module) with its /entity
 -- selection placeholder/ (a double question mark @??@).  Using
 -- @rawSql@ the query above must be written as @SELECT ??  WHERE
 -- ..@.  Then @rawSql@ will replace @??@ with the list of all
