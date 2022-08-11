@@ -1,5 +1,11 @@
 # Changelog for persistent
 
+## 2.14.1.0
+
+* [#]()
+    * Re-export `SafeToInsert` from `Database.Persist.Class`, which should
+      re-export it through `Database.Persist`, `Database.Persist.Sql`, etc.
+
 ## 2.14.0.3
 
 * [#1411](https://github.com/yesodweb/persistent/pull/1411)
