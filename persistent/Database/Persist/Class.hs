@@ -52,6 +52,7 @@ module Database.Persist.Class
     , getEntity
     , belongsTo
     , belongsToJust
+    , SafeToInsert
     , insertEntity
     , insertRecord
 
