@@ -17,7 +17,7 @@ extra-source-files: ChangeLog.md README.md
 library
     build-depends:   
         base                     >= 4.11.1.0     && < 5
-      , aeson                    >= 1.0 && < 2.1
+      , aeson                    >= 1.0 && < 2.2
       , attoparsec
       , base64-bytestring
       , blaze-html               >= 0.9
@@ -34,7 +34,7 @@ library
       , resourcet                >= 1.1.10
       , scientific
       , silently
-      , template-haskell         >= 2.13 && < 2.19
+      , template-haskell         >= 2.13 && < 2.20
       , text                     >= 1.2
       , th-lift-instances        >= 0.1.14    && < 0.2
       , time                     >= 1.6
