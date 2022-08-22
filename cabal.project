@@ -7,3 +7,6 @@ packages:
   persistent-postgresql
   persistent-redis
   persistent-qq
+
+constraints:
+  entropy <= 0.4.1.7
