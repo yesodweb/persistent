@@ -1,10 +1,10 @@
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
@@ -24,8 +24,6 @@
 
 module Database.Persist.THSpec where
 
-import System.Environment
-import Data.Time
 import Control.Applicative (Const(..))
 import Data.Aeson (decode, encode)
 import Data.ByteString.Lazy.Char8 ()
@@ -35,7 +33,9 @@ import Data.Int
 import qualified Data.List as List
 import Data.Proxy
 import Data.Text (Text, pack)
+import Data.Time
 import GHC.Generics (Generic)
+import System.Environment
 import Test.Hspec
 import Test.Hspec.QuickCheck
 import Test.QuickCheck.Arbitrary
@@ -57,19 +57,19 @@ import qualified Database.Persist.TH.ForeignRefSpec as ForeignRefSpec
 import qualified Database.Persist.TH.ImplicitIdColSpec as ImplicitIdColSpec
 import qualified Database.Persist.TH.JsonEncodingSpec as JsonEncodingSpec
 import qualified Database.Persist.TH.KindEntitiesSpec as KindEntitiesSpec
-import qualified Database.Persist.TH.NestedSymbolsInTypeSpec as NestedSymbolsInTypeSpec
 import qualified Database.Persist.TH.MaybeFieldDefsSpec as MaybeFieldDefsSpec
 import qualified Database.Persist.TH.MigrationOnlySpec as MigrationOnlySpec
 import qualified Database.Persist.TH.MultiBlockSpec as MultiBlockSpec
+import qualified Database.Persist.TH.NestedSymbolsInTypeSpec as NestedSymbolsInTypeSpec
 import qualified Database.Persist.TH.NoFieldSelectorsSpec as NoFieldSelectorsSpec
 import qualified Database.Persist.TH.OverloadedLabelSpec as OverloadedLabelSpec
 import qualified Database.Persist.TH.PersistWithSpec as PersistWithSpec
 import qualified Database.Persist.TH.RequireOnlyPersistImportSpec as RequireOnlyPersistImportSpec
 import qualified Database.Persist.TH.SharedPrimaryKeyImportedSpec as SharedPrimaryKeyImportedSpec
 import qualified Database.Persist.TH.SharedPrimaryKeySpec as SharedPrimaryKeySpec
+import qualified Database.Persist.TH.SumSpec as SumSpec
 import qualified Database.Persist.TH.ToFromPersistValuesSpec as ToFromPersistValuesSpec
 import qualified Database.Persist.TH.TypeLitFieldDefsSpec as TypeLitFieldDefsSpec
-import qualified Database.Persist.TH.SumSpec as SumSpec
 
 -- test to ensure we can have types ending in Id that don't trash the TH
 -- machinery

@@ -994,8 +994,8 @@ data MkPersistSettings = MkPersistSettings
     -- @since 2.13.0.0
     , mpsCamelCaseCompositeKeySelector :: Bool
     -- ^ Should we generate composite key accessors in the correct CamelCase style.
-    -- 
-    -- If the 'mpsCamelCaseCompositeKeySelector' value is set to 'False', 
+    --
+    -- If the 'mpsCamelCaseCompositeKeySelector' value is set to 'False',
     -- then the field part of the accessor starts with the lowercase.
     -- This is a legacy style.
     --
@@ -1006,7 +1006,7 @@ data MkPersistSettings = MkPersistSettings
     --   }
     -- @
     --
-    -- If the 'mpsCamelCaseCompositeKeySelector' value is set to 'True', 
+    -- If the 'mpsCamelCaseCompositeKeySelector' value is set to 'True',
     -- then field accessors are generated in CamelCase style.
     --
     -- @
