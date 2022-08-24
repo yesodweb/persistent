@@ -3117,7 +3117,11 @@ keyFieldName mps entDef fieldDef
     | pkNewtype mps entDef =
         unKeyName entDef
     | otherwise =
-        mkName $ T.unpack $ lowerFirst (keyText entDef) `mappend` unFieldNameHS fieldDef
+        mkName $ T.unpack $ lowerFirst (keyText entDef) `mappend` fieldName
+    where
+      fieldName = modifyFieldName (unFieldNameHS fieldDef)
+      modifyFieldName =
+        if mpsCamelCaseCompositeKeySelector mps then upperFirst else id
 
 filterConName
     :: MkPersistSettings
