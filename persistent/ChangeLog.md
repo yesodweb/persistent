@@ -1,10 +1,11 @@
 # Changelog for persistent
 
-## 2.14.1.1
+## 2.14.2.0
 
 * [#1421](https://github.com/yesodweb/persistent/pull/1421)
     * Add `mpsCamelCaseCompositeKeySelector` field to `MkPersistSettings`,
       which define the style of the entity's composite key.
+      
 ## 2.14.1.0
 
 * [#1418](https://github.com/yesodweb/persistent/pull/1418/)
