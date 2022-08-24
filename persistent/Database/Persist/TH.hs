@@ -39,6 +39,7 @@ module Database.Persist.TH
     , mpsEntityJSON
     , mpsGenerateLenses
     , mpsDeriveInstances
+    , mpsCamelCaseCompositeKeySelector
     , EntityJSON(..)
     , mkPersistSettings
     , sqlSettings
@@ -991,6 +992,33 @@ data MkPersistSettings = MkPersistSettings
     -- ^ TODO: document
     --
     -- @since 2.13.0.0
+    , mpsCamelCaseCompositeKeySelector :: Bool
+    -- ^ Should we generate composite key accessors in the correct CamelCase style.
+    -- 
+    -- If the 'mpsCamelCaseCompositeKeySelector' value is set to 'False', 
+    -- then the field part of the accessor starts with the lowercase.
+    -- This is a legacy style.
+    --
+    -- @
+    -- data Key CompanyUser = CompanyUserKey
+    --   { companyUserKeycompanyId :: CompanyId
+    --   , companyUserKeyuserId :: UserId
+    --   }
+    -- @
+    --
+    -- If the 'mpsCamelCaseCompositeKeySelector' value is set to 'True', 
+    -- then field accessors are generated in CamelCase style.
+    --
+    -- @
+    -- data Key CompanyUser = CompanyUserKey
+    --   { companyUserKeyCompanyId :: CompanyId
+    --   , companyUserKeyUserId :: UserId
+    --   }
+    -- @
+
+    -- Default: False
+    --
+    -- @since 2.14.1.1
     }
 
 {-# DEPRECATED mpsGeneric "The mpsGeneric function adds a considerable amount of overhead and complexity to the library without bringing significant benefit. We would like to remove it. If you require this feature, please comment on the linked GitHub issue, and we'll either keep it around, or we can figure out a nicer way to solve your problem.\n\n Github: https://github.com/yesodweb/persistent/issues/1204" #-}
@@ -1035,6 +1063,7 @@ mkPersistSettings backend = MkPersistSettings
     , mpsDeriveInstances = []
     , mpsImplicitIdDef =
         autoIncrementingInteger
+    , mpsCamelCaseCompositeKeySelector = False
     }
 
 -- | Use the 'SqlPersist' backend.
