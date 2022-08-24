@@ -1,5 +1,5 @@
 name:            persistent
-version:         2.14.1.0
+version:         2.14.2.0
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -166,6 +166,7 @@ test-suite test
         Database.Persist.PersistValueSpec
         Database.Persist.QuasiSpec
         Database.Persist.TH.CommentSpec
+        Database.Persist.TH.CompositeKeyStyleSpec
         Database.Persist.TH.DiscoverEntitiesSpec
         Database.Persist.TH.EmbedSpec
         Database.Persist.TH.ForeignRefSpec
