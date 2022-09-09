@@ -942,8 +942,12 @@ setPsToFKName setter ps = ps { psToFKName = setter }
 -- creating a foreign key constraint name
 --
 -- @since 2.13.0.0
+setPsUseSnakeCaseForeignKeys :: PersistSettings -> PersistSettings
+setPsUseSnakeCaseForeignKeys = setPsToFKName (toFKNameInfixed "_")
+
 setPsUseSnakeCaseForiegnKeys :: PersistSettings -> PersistSettings
-setPsUseSnakeCaseForiegnKeys = setPsToFKName (toFKNameInfixed "_")
+setPsUseSnakeCaseForiegnKeys = setPsUseSnakeCaseForeignKeys
+{-# DEPRECATED setPsUseSnakeCaseForiegnKeys "use the correctly spelled, equivalent, setPsUseSnakeCaseForeignKeys instead" #-}
 
 -- | Retrieve whether or not the 'PersistSettings' will generate code with
 -- strict fields.
