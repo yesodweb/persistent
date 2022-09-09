@@ -1,11 +1,18 @@
 # Changelog for persistent
 
+## 2.14.3.0
+
+* [#1425](https://github.com/yesodweb/persistent/pull/1425)
+    * Introduce an alias `setPsUseSnakeCaseForeignKeys` for
+      `setPsUseSnakeCaseForiegnKeys` due to a typo in the latter;
+      deprecate `setPsUseSnakeCaseForiegnKeys`
+
 ## 2.14.2.0
 
 * [#1421](https://github.com/yesodweb/persistent/pull/1421)
     * Add `mpsCamelCaseCompositeKeySelector` field to `MkPersistSettings`,
       which define the style of the entity's composite key.
-      
+
 ## 2.14.1.0
 
 * [#1418](https://github.com/yesodweb/persistent/pull/1418/)
