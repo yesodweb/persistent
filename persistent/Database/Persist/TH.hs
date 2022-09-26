@@ -3147,60 +3147,62 @@ filterConName' mps entity field = mkName $ T.unpack name
         entityName = unEntityNameHS entity
         fieldName = upperFirst $ unFieldNameHS field
 
--- | Splice in a list of all 'EntityDef' in scope. This is useful when running
--- 'mkPersist' to ensure that all entity definitions are available for setting
--- foreign keys, and for performing migrations with all entities available.
---
--- 'mkPersist' has the type @MkPersistSettings -> [EntityDef] -> DecsQ@. So, to
--- account for entities defined elsewhere, you'll @mappend $(discoverEntities)@.
---
--- For example,
---
--- @
--- share
---   [ mkPersistWith sqlSettings $(discoverEntities)
---   ]
---   [persistLowerCase| ... |]
--- @
---
--- Likewise, to run migrations with all entity instances in scope, you'd write:
---
--- @
--- migrateAll = migrateModels $(discoverEntities)
--- @
---
--- Note that there is some odd behavior with Template Haskell and splicing
--- groups. If you call 'discoverEntities' in the same module that defines
--- 'PersistEntity' instances, you need to ensure they are in different top-level
--- binding groups. You can write @$(pure [])@ at the top level to do this.
---
--- @
--- -- Foo and Bar both export an instance of PersistEntity
--- import Foo
--- import Bar
---
--- -- Since Foo and Bar are both imported, discoverEntities can find them here.
--- mkPersistWith sqlSettings $(discoverEntities) [persistLowerCase|
---   User
---     name Text
---     age  Int
---   |]
---
--- -- onlyFooBar is defined in the same 'top level group' as the above generated
--- -- instance for User, so it isn't present in this list.
--- onlyFooBar :: [EntityDef]
--- onlyFooBar = $(discoverEntities)
---
--- -- We can manually create a new binding group with this, which splices an
--- -- empty list of declarations in.
--- $(pure [])
---
--- -- fooBarUser is able to see the 'User' instance.
--- fooBarUser :: [EntityDef]
--- fooBarUser = $(discoverEntities)
--- @
---
--- @since 2.13.0.0
+{-|
+Splice in a list of all 'EntityDef' in scope. This is useful when running
+'mkPersist' to ensure that all entity definitions are available for setting
+foreign keys, and for performing migrations with all entities available.
+
+'mkPersist' has the type @MkPersistSettings -> [EntityDef] -> DecsQ@. So, to
+account for entities defined elsewhere, you'll @mappend $(discoverEntities)@.
+
+For example,
+
+@
+share
+  [ mkPersistWith sqlSettings $(discoverEntities)
+  ]
+  [persistLowerCase| ... |]
+@
+
+Likewise, to run migrations with all entity instances in scope, you'd write:
+
+@
+migrateAll = migrateModels $(discoverEntities)
+@
+
+Note that there is some odd behavior with Template Haskell and splicing
+groups. If you call 'discoverEntities' in the same module that defines
+'PersistEntity' instances, you need to ensure they are in different top-level
+binding groups. You can write @$(pure [])@ at the top level to do this.
+
+@
+-- Foo and Bar both export an instance of PersistEntity
+import Foo
+import Bar
+
+-- Since Foo and Bar are both imported, discoverEntities can find them here.
+mkPersistWith sqlSettings $(discoverEntities) [persistLowerCase|
+  User
+    name Text
+    age  Int
+  |]
+
+-- onlyFooBar is defined in the same 'top level group' as the above generated
+-- instance for User, so it isn't present in this list.
+onlyFooBar :: [EntityDef]
+onlyFooBar = $(discoverEntities)
+
+-- We can manually create a new binding group with this, which splices an
+-- empty list of declarations in.
+$(pure [])
+
+-- fooBarUser is able to see the 'User' instance.
+fooBarUser :: [EntityDef]
+fooBarUser = $(discoverEntities)
+@
+
+@since 2.13.0.0
+-}
 discoverEntities :: Q Exp
 discoverEntities = do
     instances <- reifyInstances ''PersistEntity [VarT (mkName "a")]
