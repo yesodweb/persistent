@@ -1,5 +1,10 @@
 # Changelog for persistent
 
+## 2.14.3.1
+
+* [#1428](https://github.com/yesodweb/persistent/pull/1428)
+    * Fix that the documentation for `discoverEntities` was not being generated.
+
 ## 2.14.3.0
 
 * [#1425](https://github.com/yesodweb/persistent/pull/1425)
