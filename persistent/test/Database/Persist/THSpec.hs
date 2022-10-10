@@ -221,7 +221,10 @@ spec = describe "THSpec" $ do
         it "should have usual haskell name" $ do
             fieldHaskell `shouldBe` FieldNameHS "Id"
         it "should have correct underlying sql type" $ do
-            fieldSqlType `shouldBe` SqlInt64
+            fieldSqlType `shouldBe`
+                if bitSizeMaybe (0 :: Int) <= Just 32
+                    then SqlInt32
+                    else SqlInt64
         it "persistfieldsql should be right" $ do
             sqlType (Proxy @HasDefaultIdId) `shouldBe` SqlInt64
         it "should have correct haskell type" $ do
