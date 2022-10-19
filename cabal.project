@@ -8,40 +8,12 @@ packages:
   persistent-redis
   persistent-qq
 
-constraints:
-    -- https://github.com/TomMD/entropy/pull/76
-    entropy <= 0.4.1.7
-
 -- GHC 9.4 shims for persistent
 
 -- These need hackage revisions but otherwise test fine in the repo
 allow-newer:
     -- https://github.com/fizruk/http-api-data/pull/121
     , http-api-data:base
-    -- https://github.com/jaspervdj/blaze-markup/pull/59
-    , blaze-markup:base
     -- https://github.com/haskellari/postgresql-simple/pull/95
    , postgresql-simple:base
    , postgresql-simple:template-haskell
-   -- https://github.com/wrengr/bytestring-lexing/pull/28
-   , bytestring-lexing:base
-   -- https://github.com/haskell/HTTP/pull/148
-   , HTTP:base
-   -- https://github.com/haskellari/postgresql-libpq/issues/25
-   , postgresql-libpq:base
-   -- https://github.com/haskell-party/haskell-src-meta/pull/38
-   , haskell-src-meta:template-haskell
-
--- https://github.com/bennofs/th-lift-instances/pull/33
-source-repository-package
-    type: git
-    location: https://github.com/TeofilC/th-lift-instances
-    tag: bd768ec924d7c812bcc86e6f24fd31ba7e310f5a
-
--- The following packages are required for MongoDB and Redis.
-
--- https://github.com/vincenthz/hs-memory/pull/93
-source-repository-package
-    type: git
-    location: https://github.com/parsonsmatt/hs-memory
-    tag: 296b79424854eae293f6ba09b5308a0bf4dfd6d5
