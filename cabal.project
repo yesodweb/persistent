@@ -7,3 +7,13 @@ packages:
   persistent-postgresql
   persistent-redis
   persistent-qq
+
+-- GHC 9.4 shims for persistent
+
+-- These need hackage revisions but otherwise test fine in the repo
+allow-newer:
+    -- https://github.com/fizruk/http-api-data/pull/121
+    , http-api-data:base
+    -- https://github.com/haskellari/postgresql-simple/pull/95
+   , postgresql-simple:base
+   , postgresql-simple:template-haskell
