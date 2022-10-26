@@ -34,7 +34,9 @@ import Control.Monad.Reader (ask)
 import           Data.List.NonEmpty (NonEmpty(..), (<|))
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.List as List
-import Data.Text (Text, pack, unpack, intercalate)
+import Data.Text (Text)
+import qualified Data.Text as Text
+import Data.List (replicate, intercalate)
 import Data.Maybe (fromMaybe, Maybe(..))
 import Data.Monoid (mempty, (<>))
 import qualified Language.Haskell.TH as TH
@@ -94,14 +96,14 @@ parseStr a (' ':' ': xs)= parseStr a (' ' : xs)
 parseStr a ('\n' : xs)  = parseStr a xs
 parseStr a (x:xs)       = parseStr (x:a) xs
 
-interpolateValues :: PersistField a => NonEmpty a -> (Text, [[PersistValue]]) -> (Text, [[PersistValue]])
+interpolateValues :: PersistField a => NonEmpty a -> (String, [[PersistValue]]) -> (String, [[PersistValue]])
 interpolateValues xs =
     first (mkPlaceholders values <>) .
     second (NonEmpty.toList values :)
   where
     values = NonEmpty.map toPersistValue xs
 
-interpolateRows :: ToRow a => NonEmpty a -> (Text, [[PersistValue]]) -> (Text, [[PersistValue]])
+interpolateRows :: ToRow a => NonEmpty a -> (String, [[PersistValue]]) -> (String, [[PersistValue]])
 interpolateRows xs (sql, vals) =
     (placeholders <> sql, values : vals)
   where
@@ -112,19 +114,19 @@ interpolateRows xs (sql, vals) =
     placeholders = n `timesCommaSeparated` mkPlaceholders (NonEmpty.head rows)
     values = List.concatMap NonEmpty.toList $ NonEmpty.toList rows
 
-mkPlaceholders :: NonEmpty a -> Text
+mkPlaceholders :: NonEmpty a -> String
 mkPlaceholders values = "(" <> n `timesCommaSeparated` "?" <> ")"
   where
     n = NonEmpty.length values
 
-timesCommaSeparated :: Int -> Text -> Text
+timesCommaSeparated :: Int -> String -> String
 timesCommaSeparated n = intercalate "," . replicate n
 
 makeExpr :: TH.ExpQ -> [Token] -> TH.ExpQ
 makeExpr fun toks = do
     [| do
         (sql, vals) <- $(go toks)
-        $(fun) (pack sql) (concat vals) |]
+        $(fun) (Text.pack sql) (concat vals) |]
   where
     go :: [Token] -> TH.ExpQ
     go [] =
@@ -139,10 +141,10 @@ makeExpr fun toks = do
         [| interpolateRows $(reifyExp a) <$> $(go xs) |]
     go (ColumnName a:xs) =
         [| getFieldName $(reifyExp a) >>= \field ->
-            first (unpack field <>) <$> $(go xs) |]
+            first (Text.unpack field <>) <$> $(go xs) |]
     go (TableName a:xs) = do
         [| getTableName (error "record" :: $(TH.conT (TH.mkName a))) >>= \table ->
-            first (unpack table <>) <$> $(go xs) |]
+            first (Text.unpack table <>) <$> $(go xs) |]
 
 reifyExp :: String -> TH.Q TH.Exp
 reifyExp s =
