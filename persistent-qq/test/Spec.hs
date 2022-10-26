@@ -38,7 +38,7 @@ db actions = do
   runResourceT $ runConn $ do
       _ <- runMigrationSilent testMigrate
       actions <* transactionUndo
---
+
 spec :: Spec
 spec = describe "persistent-qq" $ do
     CodeGenTest.spec db
