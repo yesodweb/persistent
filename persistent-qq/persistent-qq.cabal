@@ -43,6 +43,7 @@ test-suite specs
       PersistentTestModels
       PersistTestPetCollarType
       PersistTestPetType
+      CodeGenTest
   hs-source-dirs:
       test
   ghc-options: -Wall
