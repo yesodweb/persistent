@@ -19,6 +19,7 @@ import Database.Persist.Sql.Raw.QQ
 import Database.Persist.Sqlite
 import PersistTestPetType
 import PersistentTestModels
+import qualified CodeGenTest
 
 main :: IO ()
 main = hspec spec
@@ -40,6 +41,7 @@ db actions = do
 
 spec :: Spec
 spec = describe "persistent-qq" $ do
+    CodeGenTest.spec db
     it "sqlQQ/?-?" $ db $ do
         ret <- [sqlQQ| SELECT #{2 :: Int}+#{2 :: Int} |]
         liftIO $ ret @?= [Single (4::Int)]

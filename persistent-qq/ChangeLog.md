@@ -1,5 +1,11 @@
 # Changelog for persistent-qq
 
+## 2.12.0.4
+
+* Improve compile-time performance of generated code, especially when building with -O2.
+  Previously, the test suite took 1:16 to build with -O2, and after this patch,
+  it only takes 5s. [#1434](https://github.com/yesodweb/persistent/pull/1434)
+
 ## 2.12.0.3
 
 * Require `persistent-2.14` in tests
