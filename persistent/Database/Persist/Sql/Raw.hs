@@ -202,7 +202,6 @@ getStmtConn conn sql = do
 -- >          xs <- getPerson
 -- >          liftIO (print xs)
 -- >
-{-# NOINLINE rawSql #-}
 
 rawSql :: (RawSql a, MonadIO m, BackendCompatible SqlBackend backend)
        => Text             -- ^ SQL statement, possibly with placeholders.

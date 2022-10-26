@@ -15,7 +15,6 @@ that allows value substitutions, table name substitutions as well as column name
 substitutions.
 -}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -fno-warn-unused-imports #-}
@@ -27,10 +26,10 @@ module Database.Persist.Sql.Raw.QQ (
     , executeQQ
     , executeCountQQ
     , ToRow(..)
-    , first, second
     ) where
 
 import Prelude
+import Control.Arrow (first, second)
 import Control.Monad.Reader (ask)
 import           Data.List.NonEmpty (NonEmpty(..), (<|))
 import qualified Data.List.NonEmpty as NonEmpty
@@ -45,12 +44,6 @@ import Language.Haskell.Meta.Parse
 import Database.Persist.Class (toPersistValue)
 import Database.Persist
 import Database.Persist.Sql
-
-first :: (a -> b) -> (a, c) -> (b, c)
-first f (a, c) = (f a, c)
-
-second :: (a -> b) -> (c, a) -> (c, b)
-second f (c, a) = (c, f a)
 
 class ToRow a where
     toRow :: a -> NonEmpty PersistValue
@@ -85,24 +78,21 @@ parseHaskell cons = go
     go a []          = [Literal (reverse a)]
     go a ('\\':x:xs) = go (x:a) xs
     go a ['\\']      = go ('\\':a) []
-    go a ('}':xs)    = cons (reverse a) : parseStr xs
+    go a ('}':xs)    = cons (reverse a) : parseStr [] xs
     go a (x:xs)      = go (x:a) xs
 
-parseStr :: String -> [Token]
-parseStr = go []
-  where
-    go :: String -> String -> [Token]
-    go a []           = [Literal (reverse a)]
-    go a ('\\':x:xs)  = go (x:a) xs
-    go a ['\\']       = go ('\\':a) []
-    go a ('#':'{':xs) = Literal (reverse a) : parseHaskell Value      [] xs
-    go a ('%':'{':xs) = Literal (reverse a) : parseHaskell Values     [] xs
-    go a ('*':'{':xs) = Literal (reverse a) : parseHaskell Rows       [] xs
-    go a ('^':'{':xs) = Literal (reverse a) : parseHaskell TableName  [] xs
-    go a ('@':'{':xs) = Literal (reverse a) : parseHaskell ColumnName [] xs
-    go a (' ' : ' ' : xs) = go a (' ' : xs)
-    go a ('\n' : xs) = go a xs
-    go a (x:xs)       = go (x:a) xs
+parseStr :: String -> String -> [Token]
+parseStr a []           = [Literal (reverse a)]
+parseStr a ('\\':x:xs)  = parseStr (x:a) xs
+parseStr a ['\\']       = parseStr ('\\':a) []
+parseStr a ('#':'{':xs) = Literal (reverse a) : parseHaskell Value      [] xs
+parseStr a ('%':'{':xs) = Literal (reverse a) : parseHaskell Values     [] xs
+parseStr a ('*':'{':xs) = Literal (reverse a) : parseHaskell Rows       [] xs
+parseStr a ('^':'{':xs) = Literal (reverse a) : parseHaskell TableName  [] xs
+parseStr a ('@':'{':xs) = Literal (reverse a) : parseHaskell ColumnName [] xs
+parseStr a (' ':' ': xs)= parseStr a (' ' : xs)
+parseStr a ('\n' : xs)  = parseStr a xs
+parseStr a (x:xs)       = parseStr (x:a) xs
 
 interpolateValues :: PersistField a => NonEmpty a -> (Text, [[PersistValue]]) -> (Text, [[PersistValue]])
 interpolateValues xs =
@@ -162,7 +152,7 @@ reifyExp s =
 
 makeQQ :: TH.Q TH.Exp -> QuasiQuoter
 makeQQ x = QuasiQuoter
-    (makeExpr x . parseStr)
+    (makeExpr x . parseStr [])
     (error "Cannot use qc as a pattern")
     (error "Cannot use qc as a type")
     (error "Cannot use qc as a dec")

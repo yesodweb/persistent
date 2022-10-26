@@ -25,7 +25,7 @@ spec db = describe "CodeGenTest" $ do
         pure ()
 
 query0 :: SqlPersistT IO [(Single Text, Single Int, Single (Maybe Text))]
-query0 =
+query0 = --
    --  pure []
 
    -- [sqlQQ|
