@@ -92,8 +92,6 @@ parseStr a ('%':'{':xs) = Literal (reverse a) : parseHaskell Values     [] xs
 parseStr a ('*':'{':xs) = Literal (reverse a) : parseHaskell Rows       [] xs
 parseStr a ('^':'{':xs) = Literal (reverse a) : parseHaskell TableName  [] xs
 parseStr a ('@':'{':xs) = Literal (reverse a) : parseHaskell ColumnName [] xs
-parseStr a (' ':' ': xs)= parseStr a (' ' : xs)
-parseStr a ('\n' : xs)  = parseStr a xs
 parseStr a (x:xs)       = parseStr (x:a) xs
 
 interpolateValues :: PersistField a => NonEmpty a -> (String, [[PersistValue]]) -> (String, [[PersistValue]])
