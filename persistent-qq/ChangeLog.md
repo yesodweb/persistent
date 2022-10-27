@@ -1,5 +1,9 @@
 # Changelog for persistent-qq
 
+## 2.12.0.5
+
+* Fix a bug where comments would break the quasiquoter. [#1436](https://github.com/yesodweb/persistent/pull/1436)
+
 ## 2.12.0.4
 
 * Improve compile-time performance of generated code, especially when building with -O2.

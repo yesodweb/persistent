@@ -31,7 +31,7 @@ query0 = --
             #{int} +
             #{int} +
             #{int} +
-            #{int} +
+            #{int} + -- comments work ok
             #{int} +
             #{int} +
                 0
