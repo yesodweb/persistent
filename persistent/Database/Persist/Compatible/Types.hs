@@ -12,10 +12,10 @@ module Database.Persist.Compatible.Types
     ( Compatible(..)
     ) where
 
+import Control.Monad.Trans.Reader (withReaderT)
 import Data.Aeson
 import Database.Persist.Class
 import Database.Persist.Sql.Class
-import Control.Monad.Trans.Reader (withReaderT)
 
 
 -- | A newtype wrapper for compatible backends, mainly useful for @DerivingVia@.

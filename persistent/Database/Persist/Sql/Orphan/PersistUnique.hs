@@ -1,4 +1,4 @@
-{-# LANGUAGE ExplicitForAll  #-}
+{-# LANGUAGE ExplicitForAll #-}
 {-# OPTIONS_GHC -fno-warn-orphans  #-}
 module Database.Persist.Sql.Orphan.PersistUnique
   ()
@@ -8,18 +8,25 @@ import Control.Exception (throwIO)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Reader (ask)
 import qualified Data.Conduit.List as CL
+import Data.Foldable (toList)
 import Data.Function (on)
 import Data.List (nubBy)
 import qualified Data.Text as T
-import Data.Foldable (toList)
 
 import Database.Persist
-import Database.Persist.Class.PersistUnique (defaultUpsertBy, defaultPutMany, persistUniqueKeyValues)
+import Database.Persist.Class.PersistUnique
+       (defaultPutMany, defaultUpsertBy, persistUniqueKeyValues)
 
-import Database.Persist.Sql.Types.Internal
-import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Orphan.PersistStore (withRawQuery)
-import Database.Persist.Sql.Util (dbColumns, parseEntityValues, parseExistsResult, updatePersistValue, mkUpdateText')
+import Database.Persist.Sql.Raw
+import Database.Persist.Sql.Types.Internal
+import Database.Persist.Sql.Util
+       ( dbColumns
+       , mkUpdateText'
+       , parseEntityValues
+       , parseExistsResult
+       , updatePersistValue
+       )
 
 instance PersistUniqueWrite SqlBackend where
     upsertBy uniqueKey record updates = do
