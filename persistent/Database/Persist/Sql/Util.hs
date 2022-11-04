@@ -18,8 +18,11 @@ module Database.Persist.Sql.Util
     , parenWrapped
     , mkInsertValues
     , mkInsertPlaceholders
+    , parseExistsResult
     ) where
 
+import Data.ByteString.Char8 (readInteger)
+import Data.Int (Int64)
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.Maybe as Maybe
 import Data.Text (Text, pack)
@@ -34,7 +37,7 @@ import Database.Persist
        , FieldNameHS(FieldNameHS)
        , PersistEntity(..)
        , PersistUpdate(..)
-       , PersistValue
+       , PersistValue(..)
        , Update(..)
        , compositeFields
        , entityPrimary
@@ -271,3 +274,15 @@ mkInsertPlaceholders ed escape =
             Just (escape (fieldDB fd), "?")
         Just _ ->
             Nothing
+
+parseExistsResult :: Maybe [PersistValue] -> Text -> String -> Bool
+parseExistsResult mm sql errloc =
+    case mm of
+        Just [PersistBool b]  -> b -- Postgres
+        Just [PersistInt64 i] -> i > 0 -- MySQL, SQLite
+        Just [PersistDouble i] -> (truncate i :: Int64) > 0 -- gb oracle
+        Just [PersistByteString i] -> case readInteger i of -- gb mssql
+                                        Just (ret,"") -> ret > 0
+                                        xs -> error $ "invalid number i["++show i++"] xs[" ++ show xs ++ "]"
+        Just xs -> error $ errloc ++ ": Expected a boolean, int, double, or bytestring; got: " ++ show xs ++ " for query: " ++ show sql
+        Nothing -> error $ errloc ++ ": Expected a boolean, int, double, or bytestring; got: Nothing for query: " ++ show sql

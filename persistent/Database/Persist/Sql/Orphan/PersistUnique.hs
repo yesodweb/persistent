@@ -19,7 +19,7 @@ import Database.Persist.Class.PersistUnique (defaultUpsertBy, defaultPutMany, pe
 import Database.Persist.Sql.Types.Internal
 import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Orphan.PersistStore (withRawQuery)
-import Database.Persist.Sql.Util (dbColumns, parseEntityValues, updatePersistValue, mkUpdateText')
+import Database.Persist.Sql.Util (dbColumns, parseEntityValues, parseExistsResult, updatePersistValue, mkUpdateText')
 
 instance PersistUniqueWrite SqlBackend where
     upsertBy uniqueKey record updates = do
@@ -110,11 +110,34 @@ instance PersistUniqueRead SqlBackend where
         t = entityDef $ dummyFromUnique uniq
         toFieldNames' = toList . fmap snd . persistUniqueToFieldNames
 
+    existsBy uniq = do
+        conn <- ask
+        let sql =
+                T.concat
+                    [ "SELECT EXISTS(SELECT 1 FROM "
+                    , connEscapeTableName conn t
+                    , " WHERE "
+                    , sqlClause conn
+                    , ")"
+                    ]
+            uvals = persistUniqueToValues uniq
+        withRawQuery sql uvals $ do
+            mm <- CL.head
+            return $ parseExistsResult mm sql "PersistUnique.existsBy"
+      where
+        sqlClause conn =
+            T.intercalate " AND " $ map (go conn) $ toFieldNames' uniq
+        go conn x = connEscapeFieldName conn x `mappend` "=?"
+        t = entityDef $ dummyFromUnique uniq
+        toFieldNames' = toList . fmap snd . persistUniqueToFieldNames
+
 instance PersistUniqueRead SqlReadBackend where
     getBy uniq = withBaseBackend $ getBy uniq
+    existsBy uniq = withBaseBackend $ existsBy uniq
 
 instance PersistUniqueRead SqlWriteBackend where
     getBy uniq = withBaseBackend $ getBy uniq
+    existsBy uniq = withBaseBackend $ existsBy uniq
 
 dummyFromUnique :: Unique v -> Maybe v
 dummyFromUnique _ = Nothing
