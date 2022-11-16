@@ -1191,7 +1191,7 @@ mkUnique mps entityMap entDef (UniqueDef constr _ fields attrs) =
               , "values to be equal for the purposes of an uniqueness constraint, "
               , "allowing insertion of more than one row with a NULL value for the "
               , "column in question.  If you understand this feature of SQL and still "
-              , "intend to add a uniqueness constraint here,    *** Use a "!force" "
+              , "intend to add a uniqueness constraint here,    *** Use a \"!force\" "
               , "attribute on the end of the line that defines your uniqueness "
               , "constraint in order to disable this check. ***" ]
 
