@@ -71,6 +71,8 @@ data PersistValue
     -- @since 2.12.0.0
     deriving (Show, Read, Eq, Ord)
 
+-- |
+-- @since 2.14.4.0
 instance NFData PersistValue where
   rnf val = case val of
     PersistText txt -> rnf txt
