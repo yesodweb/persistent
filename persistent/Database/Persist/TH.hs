@@ -1185,13 +1185,14 @@ mkUnique mps entityMap entDef (UniqueDef constr _ fields attrs) =
             lookup3 x rest
 
     nullErrMsg =
-      mconcat [ "Error:  By default we disallow NULLables in an uniqueness "
-              , "constraint.  The semantics of how NULL interacts with those "
-              , "constraints is non-trivial:  two NULL values are not "
-              , "considered equal for the purposes of an uniqueness "
-              , "constraint.  If you understand this feature, it is possible "
-              , "to use it your advantage.    *** Use a \"!force\" attribute "
-              , "on the end of the line that defines your uniqueness "
+      mconcat [ "Error:  By default Persistent disallows NULLables in an uniqueness "
+              , "constraint.  The semantics of how NULL interacts with those constraints "
+              , "is non-trivial:  most SQL implementations will not consider two NULL "
+              , "values to be equal for the purposes of an uniqueness constraint, "
+              , "allowing insertion of more than one row with a NULL value for the "
+              , "column in question.  If you understand this feature of SQL and still "
+              , "intend to add a uniqueness constraint here,    *** Use a \"!force\" "
+              , "attribute on the end of the line that defines your uniqueness "
               , "constraint in order to disable this check. ***" ]
 
 -- | This function renders a Template Haskell 'Type' for an 'UnboundFieldDef'.
