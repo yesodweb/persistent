@@ -111,7 +111,7 @@ import GHC.TypeLits
 import Instances.TH.Lift ()
     -- Bring `Lift (fmap k v)` instance into scope, as well as `Lift Text`
     -- instance on pre-1.2.4 versions of `text`
-import Data.Foldable (toList)
+import Data.Foldable (toList, asum)
 import qualified Data.Set as Set
 import Language.Haskell.TH.Lib
        (appT, conE, conK, conT, litT, strTyLit, varE, varP, varT)
@@ -283,7 +283,7 @@ preprocessUnboundDefs preexistingEntities unboundDefs =
         embedEntityDefsMap preexistingEntities unboundDefs
 
 stripId :: FieldType -> Maybe Text
-stripId (FTTypeCon Nothing t) = stripSuffix "Id" t
+stripId (FTTypeCon _ t) = stripSuffix "Id" t
 stripId _ = Nothing
 
 liftAndFixKeys
@@ -691,7 +691,9 @@ constructEmbedEntityMap =
 
 lookupEmbedEntity :: M.Map EntityNameHS a -> FieldDef -> Maybe EntityNameHS
 lookupEmbedEntity allEntities field = do
-    entName <- EntityNameHS <$> stripId (fieldType field)
+    entName <- EntityNameHS <$> asum
+        [ stripId (fieldType field)
+        ]
     guard (M.member entName allEntities) -- check entity name exists in embed fmap
     pure entName
 
