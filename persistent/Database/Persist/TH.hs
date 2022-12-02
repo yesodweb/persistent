@@ -193,8 +193,7 @@ persistFileWith ps fp = persistManyFileWith ps [fp]
 --
 -- @
 -- -- Migrate.hs
--- 'share'
---     ['mkMigrate' "migrateAll"]
+-- 'mkMigrate' "migrateAll"
 --     $('persistManyFileWith' 'lowerCaseSettings' ["models1.persistentmodels","models2.persistentmodels"])
 -- @
 --
@@ -773,14 +772,89 @@ setFieldReference :: ReferenceDef -> FieldDef -> FieldDef
 setFieldReference ref field = field { fieldReference = ref }
 
 -- | Create data types and appropriate 'PersistEntity' instances for the given
--- 'EntityDef's. Works well with the persist quasi-quoter.
+-- 'UnboundEntityDef's.
+--
+-- This function should be used if you are only defining a single block of
+-- Persistent models for the entire application. If you intend on defining
+-- multiple blocks in different fiels, see 'mkPersistWith' which allows you
+-- to provide existing entity definitions so foreign key references work.
+--
+-- Example:
+--
+-- @
+-- mkPersist 'sqlSettings' ['persistLowerCase'|
+--      User
+--          name    Text
+--          age     Int
+--
+--      Dog
+--          name    Text
+--          owner   UserId
+--
+-- |]
+-- @
+--
+-- Example from a file:
+--
+-- @
+-- mkPersist 'sqlSettings' $('persistFileWith' 'lowerCaseSettings' "models.persistentmodels")
+-- @
+--
+-- For full information on the 'QuasiQuoter' syntax, see
+-- "Database.Persist.Quasi" documentation.
 mkPersist
     :: MkPersistSettings
     -> [UnboundEntityDef]
     -> Q [Dec]
 mkPersist mps = mkPersistWith mps []
 
--- | Like '
+-- | Like 'mkPersist', but allows you to provide a @['EntityDef']@
+-- representing the predefined entities. This function will include those
+-- 'EntityDef' when looking for foreign key references.
+--
+-- You should use this if you intend on defining Persistent models in
+-- multiple files.
+--
+-- Suppose we define a table @Foo@ which has no dependencies.
+--
+-- @
+-- module DB.Foo where
+--
+--     'mkPersistWith' 'sqlSettings' [] ['persistLowerCase'|
+--         Foo
+--            name    Text
+--        |]
+-- @
+--
+-- Then, we define a table @Bar@ which depends on @Foo@:
+--
+-- @
+-- module DB.Bar where
+--
+--     import DB.Foo
+--
+--     'mkPersistWith' 'sqlSettings' [entityDef (Proxy :: Proxy Foo)] ['persistLowerCase'|
+--         Bar
+--             fooId  FooId
+--      |]
+-- @
+--
+-- Writing out the list of 'EntityDef' can be annoying. The
+-- @$('discoverEntities')@ shortcut will work to reduce this boilerplate.
+--
+-- @
+-- module DB.Quux where
+--
+--     import DB.Foo
+--     import DB.Bar
+--
+--     'mkPersistWith' 'sqlSettings' $('discoverEntities') ['persistLowerCase'|
+--         Quux
+--             name     Text
+--             fooId    FooId
+--             barId    BarId
+--      |]
+-- @
 --
 -- @since 2.13.0.0
 mkPersistWith
@@ -2408,7 +2482,24 @@ persistFieldFromEntity mps entDef = do
 --
 -- This function is useful for cases such as:
 --
--- >>> share [mkEntityDefList "myDefs", mkPersist sqlSettings] [persistLowerCase|...|]
+-- @
+-- share ['mkEntityDefList' "myDefs", 'mkPersist' sqlSettings] ['persistLowerCase'|
+--     -- ...
+-- |]
+-- @
+--
+-- If you only have a single function, though, you don't need this. The
+-- following is redundant:
+--
+-- @
+-- 'share' ['mkPersist' 'sqlSettings'] ['persistLowerCase'|
+--      -- ...
+-- |]
+-- @
+--
+-- Most functions require a full @['EntityDef']@, which can be provided
+-- using @$('discoverEntities')@ for all entites in scope, or defining
+-- 'mkEntityDefList' to define a list of entities from the given block.
 share :: [[a] -> Q [Dec]] -> [a] -> Q [Dec]
 share fs x = mconcat <$> mapM ($ x) fs
 
