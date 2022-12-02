@@ -282,10 +282,6 @@ preprocessUnboundDefs preexistingEntities unboundDefs =
     (embedEntityMap, noCycleEnts) =
         embedEntityDefsMap preexistingEntities unboundDefs
 
-stripId :: FieldType -> Maybe Text
-stripId (FTTypeCon _ t) = stripSuffix "Id" t
-stripId _ = Nothing
-
 liftAndFixKeys
     :: MkPersistSettings
     -> M.Map EntityNameHS a
@@ -513,13 +509,22 @@ guessFieldReference = guessReference . unboundFieldType
 
 guessReference :: FieldType -> Maybe EntityNameHS
 guessReference ft =
-    case ft of
-        FTTypeCon Nothing (T.stripSuffix "Id" -> Just tableName) ->
-            Just (EntityNameHS tableName)
-        FTApp (FTTypeCon Nothing "Key") (FTTypeCon Nothing tableName) ->
-            Just (EntityNameHS tableName)
-        _ ->
-            Nothing
+    EntityNameHS <$> guessReferenceText (Just ft)
+  where
+    checkIdSuffix =
+        T.stripSuffix "Id"
+    guessReferenceText mft =
+        asum
+            [ do
+                FTTypeCon _ (checkIdSuffix -> Just tableName) <- mft
+                pure tableName
+            , do
+                FTApp (FTTypeCon _ "Key") (FTTypeCon _ tableName) <- mft
+                pure tableName
+            , do
+                FTApp (FTTypeCon _ "Maybe") next <- mft
+                guessReferenceText (Just next)
+            ]
 
 mkDefaultKey
     :: MkPersistSettings
@@ -691,8 +696,17 @@ constructEmbedEntityMap =
 
 lookupEmbedEntity :: M.Map EntityNameHS a -> FieldDef -> Maybe EntityNameHS
 lookupEmbedEntity allEntities field = do
+    let mfieldTy = Just $ fieldType field
     entName <- EntityNameHS <$> asum
-        [ stripId (fieldType field)
+        [ do
+            FTTypeCon _ t <- mfieldTy
+            stripSuffix "Id" t
+        , do
+            FTApp (FTTypeCon _ "Key") (FTTypeCon _ entName) <- mfieldTy
+            pure entName
+        , do
+            FTApp (FTTypeCon _ "Maybe") (FTTypeCon _ t) <- mfieldTy
+            stripSuffix "Id" t
         ]
     guard (M.member entName allEntities) -- check entity name exists in embed fmap
     pure entName
@@ -2233,15 +2247,9 @@ mkPlainTV
     -> TyVarBndr ()
 mkPlainTV n = PlainTV n ()
 
-mkDoE :: [Stmt] -> Exp
-mkDoE stmts = DoE Nothing stmts
-
 mkForallTV :: Name -> TyVarBndr Specificity
 mkForallTV n = PlainTV n SpecifiedSpec
 #else
-
-mkDoE :: [Stmt] -> Exp
-mkDoE = DoE
 
 mkPlainTV
     :: Name
