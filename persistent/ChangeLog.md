@@ -1,5 +1,11 @@
 # Changelog for persistent
 
+## 2.14.3.2
+
+* [#1446](https://github.com/yesodweb/persistent/pull/1446)
+    * Foreign key discovery was fixed for qualified names, `Key Model`, and
+      `Maybe` references.
+
 ## 2.14.3.1
 
 * [#1428](https://github.com/yesodweb/persistent/pull/1428)
