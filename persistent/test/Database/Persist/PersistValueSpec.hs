@@ -2,14 +2,11 @@ module Database.Persist.PersistValueSpec where
 
 import Test.Hspec
 import Database.Persist.PersistValue
-import Data.List.NonEmpty (NonEmpty(..), (<|))
 import qualified Data.Text as T
-import Test.Hspec
 import Test.Hspec.QuickCheck
 import Test.QuickCheck
 import Data.Aeson
 import qualified Data.ByteString.Char8 as BS8
-
 
 spec :: Spec
 spec = describe "PersistValueSpec" $ do

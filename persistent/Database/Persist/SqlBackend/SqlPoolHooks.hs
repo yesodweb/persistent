@@ -11,6 +11,8 @@ module Database.Persist.SqlBackend.SqlPoolHooks
   , modifyRunAfter
   , setRunAfter
   , getRunOnException
+  , modifyRunOnException
+  , setRunOnException
   )
   where
 
@@ -83,9 +85,15 @@ setRunAfter hooks f = hooks { runAfter = f }
 getRunOnException :: SqlPoolHooks m backend -> (backend -> Maybe IsolationLevel -> SomeException -> m ())
 getRunOnException = runOnException
 
+-- |
+--
+-- @since 2.14.5.0
 modifyRunOnException :: SqlPoolHooks m backend -> ((backend -> Maybe IsolationLevel -> SomeException -> m ()) -> (backend -> Maybe IsolationLevel -> SomeException -> m ())) -> SqlPoolHooks m backend
 modifyRunOnException hooks f = hooks { runOnException = f $ runOnException hooks }
 
+-- |
+--
+-- @since 2.14.5.0
 setRunOnException :: SqlPoolHooks m backend -> (backend -> Maybe IsolationLevel -> SomeException -> m ()) -> SqlPoolHooks m backend
 setRunOnException hooks f = hooks { runOnException = f }
 
