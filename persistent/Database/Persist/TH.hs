@@ -72,9 +72,8 @@ import Prelude hiding (concat, exp, splitAt, take, (++))
 
 import Control.Monad
 import Data.Aeson
-       ( FromJSON(parseJSON)
-       , ToJSON(toJSON)
-       , Value(Object)
+       ( FromJSON(..)
+       , ToJSON(..)
        , eitherDecodeStrict'
        , object
        , withObject
@@ -745,6 +744,8 @@ mEmbedded _ (FTApp (FTTypeCon Nothing "Key") (FTTypeCon _ a)) =
     Left $ Just $ FTKeyCon $ a <> "Id"
 mEmbedded _ (FTApp _ _) =
     Left Nothing
+mEmbedded _ (FTLit _) =
+    Left Nothing
 
 setEmbedField :: EntityNameHS -> M.Map EntityNameHS a -> FieldDef -> FieldDef
 setEmbedField entName allEntities field =
@@ -912,11 +913,15 @@ mkSafeToInsertInstance mps ued =
                         True
                     _ ->
                         False
-            case List.find isDefaultFieldAttr attrs of
+            case unboundIdType uidDef of
                 Nothing ->
-                    badInstance
-                Just _ ->
                     instanceOkay
+                Just _ ->
+                    case List.find isDefaultFieldAttr attrs of
+                        Nothing ->
+                            badInstance
+                        Just _ -> do
+                            instanceOkay
 
         DefaultKey _ ->
             instanceOkay
@@ -1219,7 +1224,7 @@ dataTypeDec mps entityMap entDef = do
     cols = do
         fieldDef <- getUnboundFieldDefs entDef
         let
-            recordName =
+            recordNameE =
                 fieldDefToRecordName mps entDef fieldDef
             strictness =
                 if unboundFieldStrict fieldDef
@@ -1227,7 +1232,7 @@ dataTypeDec mps entityMap entDef = do
                 else notStrict
             fieldIdType =
                 maybeIdType mps entityMap fieldDef Nothing Nothing
-        pure (recordName, strictness, fieldIdType)
+        pure (recordNameE, strictness, fieldIdType)
 
     constrs
         | unboundEntitySum entDef = fmap sumCon $ getUnboundFieldDefs entDef
@@ -1596,11 +1601,9 @@ fieldUpd con names record name new = do
             [ if k == name then (name, new) else (k, VarE k)
             | k <- names
             ]
-        pats = [ (k, VarP k) | k <- names, k /= name]
-
 
 mkLensClauses :: MkPersistSettings -> UnboundEntityDef -> Type -> Q [Clause]
-mkLensClauses mps entDef genDataType = do
+mkLensClauses mps entDef _genDataType = do
     lens' <- [|lensPTH|]
     getId <- [|entityKey|]
     setId <- [|\(Entity _ value) key -> Entity key value|]
@@ -1823,12 +1826,12 @@ findField fieldName =
 
 mkKeyToValues :: MkPersistSettings -> UnboundEntityDef -> Q Dec
 mkKeyToValues mps entDef = do
-    recordName <- newName "record"
+    recordN <- newName "record"
     FunD 'keyToValues . pure <$>
         case unboundPrimarySpec entDef of
             NaturalKey ucd -> do
-                normalClause [VarP recordName] <$>
-                    toValuesPrimary recordName ucd
+                normalClause [VarP recordN] <$>
+                    toValuesPrimary recordN ucd
             _ -> do
                 normalClause [] <$>
                     [|(:[]) . toPersistValue . $(pure $ unKeyExp entDef)|]
@@ -1982,7 +1985,7 @@ mkEntity embedEntityMap entityMap mps preDef = do
     [keyFromRecordM'] <-
         case unboundPrimarySpec entDef of
             NaturalKey ucd -> do
-                recordName <- newName "record"
+                recordVarName <- newName "record"
                 let
                     keyCon =
                         keyConName entDef
@@ -1994,13 +1997,13 @@ mkEntity embedEntityMap entityMap mps preDef = do
                             (ConE keyCon)
                             (toList $ fmap
                                 (\n ->
-                                    VarE n `AppE` VarE recordName
+                                    VarE n `AppE` VarE recordVarName
                                 )
                                 keyFields'
                             )
                     keyFromRec = varP 'keyFromRecordM
                 [d|
-                    $(keyFromRec) = Just ( \ $(varP recordName) -> $(pure constr))
+                    $(keyFromRec) = Just ( \ $(varP recordVarName) -> $(pure constr))
                     |]
 
             _ ->
@@ -2018,8 +2021,8 @@ mkEntity embedEntityMap entityMap mps preDef = do
         let names'types =
                 filter (\(n, _) -> n /= mkName "Id") $ map (getConNameAndType . entityFieldTHCon) $ entityFieldsTHFields fields
             getConNameAndType = \case
-                ForallC [] [EqualityT `AppT` _ `AppT` fieldTy] (NormalC name []) ->
-                    (name, fieldTy)
+                ForallC [] [EqualityT `AppT` _ `AppT` fieldTy] (NormalC conName []) ->
+                    (conName, fieldTy)
                 other ->
                     error $ mconcat
                         [ "persistent internal error: field constructor did not have xpected shape. \n"
@@ -2357,13 +2360,13 @@ mkForeignKeysComposite mps entDef foreignDef
             fieldStore =
                 mkFieldStore entDef
 
-        recordName <- newName "record_mkForeignKeysComposite"
+        recordVarName <- newName "record_mkForeignKeysComposite"
 
         let
             mkFldE foreignName  =
                 -- using coerce here to convince SqlBackendKey to go away
                 VarE 'coerce `AppE`
-                (VarE (fieldName foreignName) `AppE` VarE recordName)
+                (VarE (fieldName foreignName) `AppE` VarE recordVarName)
             mkFldR ffr =
                 let
                     e =
@@ -2400,7 +2403,7 @@ mkForeignKeysComposite mps entDef foreignDef
             mkKeyE =
                 foldl' AppE (maybeExp fNullable $ ConE reftableKeyName) fldsE
             fn =
-                FunD fname [normalClause [VarP recordName] mkKeyE]
+                FunD fname [normalClause [VarP recordVarName] mkKeyE]
 
             keyTargetTable =
                 maybeTyp fNullable $ ConT ''Key `AppT` ConT (mkName reftableString)
@@ -2557,7 +2560,8 @@ mkUniqueKeys def = do
 
     go' :: [(FieldNameHS, Name)] -> Exp -> FieldNameHS -> Exp
     go' xs front col =
-        let Just col' = lookup col xs
+        let col' =
+                fromMaybe (error $ "failed in go' while looking up col=" <> show col) (lookup col xs)
          in front `AppE` VarE col'
 
 sqlTypeFunD :: Exp -> Dec
