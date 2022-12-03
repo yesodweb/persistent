@@ -160,6 +160,7 @@ test-suite test
                       , MultiParamTypeClasses
                       , OverloadedStrings
                       , TypeFamilies
+                      , TypeOperators
 
     other-modules:   
         Database.Persist.ClassSpec
