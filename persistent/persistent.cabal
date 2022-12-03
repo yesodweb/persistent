@@ -111,7 +111,7 @@ library
             Database.Persist.Compatible.Types
             Database.Persist.Compatible.TH
 
-    ghc-options:     -Wall
+    ghc-options:     -Wall -Werror=incomplete-patterns
     default-language: Haskell2010
 
 test-suite test
@@ -160,6 +160,7 @@ test-suite test
                       , MultiParamTypeClasses
                       , OverloadedStrings
                       , TypeFamilies
+                      , TypeOperators
 
     other-modules:   
         Database.Persist.ClassSpec

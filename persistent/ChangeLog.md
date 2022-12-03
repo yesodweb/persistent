@@ -7,6 +7,8 @@
       `Maybe` references.
 * [#1438](https://github.com/yesodweb/persistent/pull/1438)
     * Clarify wording on the error message for null in unique constraint
+* [#1447](https://github.com/yesodweb/persistent/pull/1447)
+    * Fix `SafeToInsert` not being generated correctly for some `Id` columns
 
 ## 2.14.3.1
 
