@@ -288,11 +288,11 @@ data FieldAttr
     --     newName Text
     -- @
     | FieldAttrNoreference
-    -- ^ This attribute indicates that we should create a foreign key reference
-    -- from a column. By default, @persistent@ will try and create a foreign key
-    -- reference for a column if it can determine that the type of the column is
-    -- a @'Key' entity@ or an @EntityId@  and the @Entity@'s name was present in
-    -- 'mkPersist'.
+    -- ^ This attribute indicates that we should not create a foreign key
+    -- reference from a column. By default, @persistent@ will try and create a
+    -- foreign key reference for a column if it can determine that the type of
+    -- the column is a @'Key' entity@ or an @EntityId@  and the @Entity@'s name
+    -- was present in 'mkPersist'.
     --
     -- This is useful if you want to use the explicit foreign key syntax.
     --

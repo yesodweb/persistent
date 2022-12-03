@@ -1,5 +1,5 @@
 name:            persistent
-version:         2.14.3.1
+version:         2.14.3.2
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -112,7 +112,7 @@ library
             Database.Persist.Compatible.Types
             Database.Persist.Compatible.TH
 
-    ghc-options:     -Wall
+    ghc-options:     -Wall -Werror=incomplete-patterns
     default-language: Haskell2010
 
 test-suite test
@@ -162,6 +162,7 @@ test-suite test
                       , MultiParamTypeClasses
                       , OverloadedStrings
                       , TypeFamilies
+                      , TypeOperators
 
     other-modules:   
         Database.Persist.ClassSpec

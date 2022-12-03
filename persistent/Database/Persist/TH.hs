@@ -72,9 +72,8 @@ import Prelude hiding (concat, exp, splitAt, take, (++))
 
 import Control.Monad
 import Data.Aeson
-       ( FromJSON(parseJSON)
-       , ToJSON(toJSON)
-       , Value(Object)
+       ( FromJSON(..)
+       , ToJSON(..)
        , eitherDecodeStrict'
        , object
        , withObject
@@ -111,7 +110,7 @@ import GHC.TypeLits
 import Instances.TH.Lift ()
     -- Bring `Lift (fmap k v)` instance into scope, as well as `Lift Text`
     -- instance on pre-1.2.4 versions of `text`
-import Data.Foldable (toList)
+import Data.Foldable (asum, toList)
 import qualified Data.Set as Set
 import Language.Haskell.TH.Lib
        (appT, conE, conK, conT, litT, strTyLit, varE, varP, varT)
@@ -193,8 +192,7 @@ persistFileWith ps fp = persistManyFileWith ps [fp]
 --
 -- @
 -- -- Migrate.hs
--- 'share'
---     ['mkMigrate' "migrateAll"]
+-- 'mkMigrate' "migrateAll"
 --     $('persistManyFileWith' 'lowerCaseSettings' ["models1.persistentmodels","models2.persistentmodels"])
 -- @
 --
@@ -281,10 +279,6 @@ preprocessUnboundDefs preexistingEntities unboundDefs =
   where
     (embedEntityMap, noCycleEnts) =
         embedEntityDefsMap preexistingEntities unboundDefs
-
-stripId :: FieldType -> Maybe Text
-stripId (FTTypeCon Nothing t) = stripSuffix "Id" t
-stripId _ = Nothing
 
 liftAndFixKeys
     :: MkPersistSettings
@@ -513,13 +507,22 @@ guessFieldReference = guessReference . unboundFieldType
 
 guessReference :: FieldType -> Maybe EntityNameHS
 guessReference ft =
-    case ft of
-        FTTypeCon Nothing (T.stripSuffix "Id" -> Just tableName) ->
-            Just (EntityNameHS tableName)
-        FTApp (FTTypeCon Nothing "Key") (FTTypeCon Nothing tableName) ->
-            Just (EntityNameHS tableName)
-        _ ->
-            Nothing
+    EntityNameHS <$> guessReferenceText (Just ft)
+  where
+    checkIdSuffix =
+        T.stripSuffix "Id"
+    guessReferenceText mft =
+        asum
+            [ do
+                FTTypeCon _ (checkIdSuffix -> Just tableName) <- mft
+                pure tableName
+            , do
+                FTApp (FTTypeCon _ "Key") (FTTypeCon _ tableName) <- mft
+                pure tableName
+            , do
+                FTApp (FTTypeCon _ "Maybe") next <- mft
+                guessReferenceText (Just next)
+            ]
 
 mkDefaultKey
     :: MkPersistSettings
@@ -691,7 +694,18 @@ constructEmbedEntityMap =
 
 lookupEmbedEntity :: M.Map EntityNameHS a -> FieldDef -> Maybe EntityNameHS
 lookupEmbedEntity allEntities field = do
-    entName <- EntityNameHS <$> stripId (fieldType field)
+    let mfieldTy = Just $ fieldType field
+    entName <- EntityNameHS <$> asum
+        [ do
+            FTTypeCon _ t <- mfieldTy
+            stripSuffix "Id" t
+        , do
+            FTApp (FTTypeCon _ "Key") (FTTypeCon _ entName) <- mfieldTy
+            pure entName
+        , do
+            FTApp (FTTypeCon _ "Maybe") (FTTypeCon _ t) <- mfieldTy
+            stripSuffix "Id" t
+        ]
     guard (M.member entName allEntities) -- check entity name exists in embed fmap
     pure entName
 
@@ -730,6 +744,8 @@ mEmbedded _ (FTApp (FTTypeCon Nothing "Key") (FTTypeCon _ a)) =
     Left $ Just $ FTKeyCon $ a <> "Id"
 mEmbedded _ (FTApp _ _) =
     Left Nothing
+mEmbedded _ (FTLit _) =
+    Left Nothing
 
 setEmbedField :: EntityNameHS -> M.Map EntityNameHS a -> FieldDef -> FieldDef
 setEmbedField entName allEntities field =
@@ -757,14 +773,89 @@ setFieldReference :: ReferenceDef -> FieldDef -> FieldDef
 setFieldReference ref field = field { fieldReference = ref }
 
 -- | Create data types and appropriate 'PersistEntity' instances for the given
--- 'EntityDef's. Works well with the persist quasi-quoter.
+-- 'UnboundEntityDef's.
+--
+-- This function should be used if you are only defining a single block of
+-- Persistent models for the entire application. If you intend on defining
+-- multiple blocks in different fiels, see 'mkPersistWith' which allows you
+-- to provide existing entity definitions so foreign key references work.
+--
+-- Example:
+--
+-- @
+-- mkPersist 'sqlSettings' ['persistLowerCase'|
+--      User
+--          name    Text
+--          age     Int
+--
+--      Dog
+--          name    Text
+--          owner   UserId
+--
+-- |]
+-- @
+--
+-- Example from a file:
+--
+-- @
+-- mkPersist 'sqlSettings' $('persistFileWith' 'lowerCaseSettings' "models.persistentmodels")
+-- @
+--
+-- For full information on the 'QuasiQuoter' syntax, see
+-- "Database.Persist.Quasi" documentation.
 mkPersist
     :: MkPersistSettings
     -> [UnboundEntityDef]
     -> Q [Dec]
 mkPersist mps = mkPersistWith mps []
 
--- | Like '
+-- | Like 'mkPersist', but allows you to provide a @['EntityDef']@
+-- representing the predefined entities. This function will include those
+-- 'EntityDef' when looking for foreign key references.
+--
+-- You should use this if you intend on defining Persistent models in
+-- multiple files.
+--
+-- Suppose we define a table @Foo@ which has no dependencies.
+--
+-- @
+-- module DB.Foo where
+--
+--     'mkPersistWith' 'sqlSettings' [] ['persistLowerCase'|
+--         Foo
+--            name    Text
+--        |]
+-- @
+--
+-- Then, we define a table @Bar@ which depends on @Foo@:
+--
+-- @
+-- module DB.Bar where
+--
+--     import DB.Foo
+--
+--     'mkPersistWith' 'sqlSettings' [entityDef (Proxy :: Proxy Foo)] ['persistLowerCase'|
+--         Bar
+--             fooId  FooId
+--      |]
+-- @
+--
+-- Writing out the list of 'EntityDef' can be annoying. The
+-- @$('discoverEntities')@ shortcut will work to reduce this boilerplate.
+--
+-- @
+-- module DB.Quux where
+--
+--     import DB.Foo
+--     import DB.Bar
+--
+--     'mkPersistWith' 'sqlSettings' $('discoverEntities') ['persistLowerCase'|
+--         Quux
+--             name     Text
+--             fooId    FooId
+--             barId    BarId
+--      |]
+-- @
 --
 -- @since 2.13.0.0
 mkPersistWith
@@ -822,11 +913,15 @@ mkSafeToInsertInstance mps ued =
                         True
                     _ ->
                         False
-            case List.find isDefaultFieldAttr attrs of
+            case unboundIdType uidDef of
                 Nothing ->
-                    badInstance
-                Just _ ->
                     instanceOkay
+                Just _ ->
+                    case List.find isDefaultFieldAttr attrs of
+                        Nothing ->
+                            badInstance
+                        Just _ -> do
+                            instanceOkay
 
         DefaultKey _ ->
             instanceOkay
@@ -1129,7 +1224,7 @@ dataTypeDec mps entityMap entDef = do
     cols = do
         fieldDef <- getUnboundFieldDefs entDef
         let
-            recordName =
+            recordNameE =
                 fieldDefToRecordName mps entDef fieldDef
             strictness =
                 if unboundFieldStrict fieldDef
@@ -1137,7 +1232,7 @@ dataTypeDec mps entityMap entDef = do
                 else notStrict
             fieldIdType =
                 maybeIdType mps entityMap fieldDef Nothing Nothing
-        pure (recordName, strictness, fieldIdType)
+        pure (recordNameE, strictness, fieldIdType)
 
     constrs
         | unboundEntitySum entDef = fmap sumCon $ getUnboundFieldDefs entDef
@@ -1185,13 +1280,14 @@ mkUnique mps entityMap entDef (UniqueDef constr _ fields attrs) =
             lookup3 x rest
 
     nullErrMsg =
-      mconcat [ "Error:  By default we disallow NULLables in an uniqueness "
-              , "constraint.  The semantics of how NULL interacts with those "
-              , "constraints is non-trivial:  two NULL values are not "
-              , "considered equal for the purposes of an uniqueness "
-              , "constraint.  If you understand this feature, it is possible "
-              , "to use it your advantage.    *** Use a \"!force\" attribute "
-              , "on the end of the line that defines your uniqueness "
+      mconcat [ "Error:  By default Persistent disallows NULLables in an uniqueness "
+              , "constraint.  The semantics of how NULL interacts with those constraints "
+              , "is non-trivial:  most SQL implementations will not consider two NULL "
+              , "values to be equal for the purposes of an uniqueness constraint, "
+              , "allowing insertion of more than one row with a NULL value for the "
+              , "column in question.  If you understand this feature of SQL and still "
+              , "intend to add a uniqueness constraint here,    *** Use a \"!force\" "
+              , "attribute on the end of the line that defines your uniqueness "
               , "constraint in order to disable this check. ***" ]
 
 -- | This function renders a Template Haskell 'Type' for an 'UnboundFieldDef'.
@@ -1505,11 +1601,9 @@ fieldUpd con names record name new = do
             [ if k == name then (name, new) else (k, VarE k)
             | k <- names
             ]
-        pats = [ (k, VarP k) | k <- names, k /= name]
-
 
 mkLensClauses :: MkPersistSettings -> UnboundEntityDef -> Type -> Q [Clause]
-mkLensClauses mps entDef genDataType = do
+mkLensClauses mps entDef _genDataType = do
     lens' <- [|lensPTH|]
     getId <- [|entityKey|]
     setId <- [|\(Entity _ value) key -> Entity key value|]
@@ -1732,12 +1826,12 @@ findField fieldName =
 
 mkKeyToValues :: MkPersistSettings -> UnboundEntityDef -> Q Dec
 mkKeyToValues mps entDef = do
-    recordName <- newName "record"
+    recordN <- newName "record"
     FunD 'keyToValues . pure <$>
         case unboundPrimarySpec entDef of
             NaturalKey ucd -> do
-                normalClause [VarP recordName] <$>
-                    toValuesPrimary recordName ucd
+                normalClause [VarP recordN] <$>
+                    toValuesPrimary recordN ucd
             _ -> do
                 normalClause [] <$>
                     [|(:[]) . toPersistValue . $(pure $ unKeyExp entDef)|]
@@ -1891,7 +1985,7 @@ mkEntity embedEntityMap entityMap mps preDef = do
     [keyFromRecordM'] <-
         case unboundPrimarySpec entDef of
             NaturalKey ucd -> do
-                recordName <- newName "record"
+                recordVarName <- newName "record"
                 let
                     keyCon =
                         keyConName entDef
@@ -1903,13 +1997,13 @@ mkEntity embedEntityMap entityMap mps preDef = do
                             (ConE keyCon)
                             (toList $ fmap
                                 (\n ->
-                                    VarE n `AppE` VarE recordName
+                                    VarE n `AppE` VarE recordVarName
                                 )
                                 keyFields'
                             )
                     keyFromRec = varP 'keyFromRecordM
                 [d|
-                    $(keyFromRec) = Just ( \ $(varP recordName) -> $(pure constr))
+                    $(keyFromRec) = Just ( \ $(varP recordVarName) -> $(pure constr))
                     |]
 
             _ ->
@@ -1927,8 +2021,8 @@ mkEntity embedEntityMap entityMap mps preDef = do
         let names'types =
                 filter (\(n, _) -> n /= mkName "Id") $ map (getConNameAndType . entityFieldTHCon) $ entityFieldsTHFields fields
             getConNameAndType = \case
-                ForallC [] [EqualityT `AppT` _ `AppT` fieldTy] (NormalC name []) ->
-                    (name, fieldTy)
+                ForallC [] [EqualityT `AppT` _ `AppT` fieldTy] (NormalC conName []) ->
+                    (conName, fieldTy)
                 other ->
                     error $ mconcat
                         [ "persistent internal error: field constructor did not have xpected shape. \n"
@@ -2230,15 +2324,9 @@ mkPlainTV
     -> TyVarBndr ()
 mkPlainTV n = PlainTV n ()
 
-mkDoE :: [Stmt] -> Exp
-mkDoE stmts = DoE Nothing stmts
-
 mkForallTV :: Name -> TyVarBndr Specificity
 mkForallTV n = PlainTV n SpecifiedSpec
 #else
-
-mkDoE :: [Stmt] -> Exp
-mkDoE = DoE
 
 mkPlainTV
     :: Name
@@ -2272,13 +2360,13 @@ mkForeignKeysComposite mps entDef foreignDef
             fieldStore =
                 mkFieldStore entDef
 
-        recordName <- newName "record_mkForeignKeysComposite"
+        recordVarName <- newName "record_mkForeignKeysComposite"
 
         let
             mkFldE foreignName  =
                 -- using coerce here to convince SqlBackendKey to go away
                 VarE 'coerce `AppE`
-                (VarE (fieldName foreignName) `AppE` VarE recordName)
+                (VarE (fieldName foreignName) `AppE` VarE recordVarName)
             mkFldR ffr =
                 let
                     e =
@@ -2315,7 +2403,7 @@ mkForeignKeysComposite mps entDef foreignDef
             mkKeyE =
                 foldl' AppE (maybeExp fNullable $ ConE reftableKeyName) fldsE
             fn =
-                FunD fname [normalClause [VarP recordName] mkKeyE]
+                FunD fname [normalClause [VarP recordVarName] mkKeyE]
 
             keyTargetTable =
                 maybeTyp fNullable $ ConT ''Key `AppT` ConT (mkName reftableString)
@@ -2397,7 +2485,24 @@ persistFieldFromEntity mps entDef = do
 --
 -- This function is useful for cases such as:
 --
--- >>> share [mkEntityDefList "myDefs", mkPersist sqlSettings] [persistLowerCase|...|]
+-- @
+-- share ['mkEntityDefList' "myDefs", 'mkPersist' sqlSettings] ['persistLowerCase'|
+--     -- ...
+-- |]
+-- @
+--
+-- If you only have a single function, though, you don't need this. The
+-- following is redundant:
+--
+-- @
+-- 'share' ['mkPersist' 'sqlSettings'] ['persistLowerCase'|
+--      -- ...
+-- |]
+-- @
+--
+-- Most functions require a full @['EntityDef']@, which can be provided
+-- using @$('discoverEntities')@ for all entites in scope, or defining
+-- 'mkEntityDefList' to define a list of entities from the given block.
 share :: [[a] -> Q [Dec]] -> [a] -> Q [Dec]
 share fs x = mconcat <$> mapM ($ x) fs
 
@@ -2455,7 +2560,8 @@ mkUniqueKeys def = do
 
     go' :: [(FieldNameHS, Name)] -> Exp -> FieldNameHS -> Exp
     go' xs front col =
-        let Just col' = lookup col xs
+        let col' =
+                fromMaybe (error $ "failed in go' while looking up col=" <> show col) (lookup col xs)
          in front `AppE` VarE col'
 
 sqlTypeFunD :: Exp -> Dec
