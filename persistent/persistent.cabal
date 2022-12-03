@@ -24,6 +24,7 @@ library
       , bytestring               >= 0.10
       , conduit                  >= 1.2.12
       , containers               >= 0.5
+      , deepseq
       , fast-logger              >= 2.4
       , http-api-data            >= 0.3
       , lift-type                >= 0.1.0.0 && < 0.2.0.0
@@ -127,6 +128,7 @@ test-suite test
       , bytestring
       , conduit
       , containers
+      , deepseq
       , fast-logger
       , hspec         >= 2.4
       , http-api-data

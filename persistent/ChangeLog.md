@@ -1,5 +1,10 @@
 # Changelog for persistent
 
+## 2.14.4.0
+
+* [#1440](https://github.com/yesodweb/persistent/pull/1440)
+    * Defined NFData PersistValue
+
 ## 2.14.3.2
 
 * [#1446](https://github.com/yesodweb/persistent/pull/1446)
