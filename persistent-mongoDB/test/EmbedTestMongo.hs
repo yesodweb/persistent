@@ -428,6 +428,7 @@ specs = describe "embedded entities" $ do
 
 
   it "re-orders json inserted from another source" $ db $ do
+    liftIO $ pendingWith "mongoimport fails on GitHub CI"
     let cname = T.unpack $ collectionName (error "ListEmbed" :: ListEmbed)
     liftIO $ putStrLn =<< readProcess "mongoimport" ["-d", T.unpack dbName, "-c", cname] "{ \"nested\": [{ \"one\": 1, \"two\": 2 }, { \"two\": 2, \"one\": 1}], \"two\": 2, \"one\": 1, \"_id\" : { \"$oid\" : \"50184f5a92d7ae0000001e89\" } }"
 
