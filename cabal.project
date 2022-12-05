@@ -8,9 +8,6 @@ packages:
   persistent-redis
   persistent-qq
 
-constraints:
-    mtl == 2.3.1
-
 -- GHC 9.4 shims for persistent
 
 -- These need hackage revisions but otherwise test fine in the repo
@@ -19,6 +16,8 @@ allow-newer:
    , postgresql-simple:base
    , postgresql-simple:template-haskell
 
+-- Needed to test that `persistent-redis` works with mtl-2.3
+-- https://github.com/informatikr/hedis/pull/190
 source-repository-package
     type: git
     location: https://github.com/ysangkok/hedis
