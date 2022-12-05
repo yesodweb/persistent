@@ -1,5 +1,5 @@
 name:            persistent
-version:         2.14.4.1
+version:         2.14.4.2
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -29,7 +29,7 @@ library
       , http-api-data            >= 0.3
       , lift-type                >= 0.1.0.0 && < 0.2.0.0
       , monad-logger             >= 0.3.28
-      , mtl                                    < 2.3
+      , mtl                                   
       , path-pieces              >= 0.2
       , resource-pool            >= 0.2.3
       , resourcet                >= 1.1.10
