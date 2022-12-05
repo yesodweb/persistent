@@ -159,6 +159,18 @@ instance PersistStoreWrite SqlBackend where
         rawExecute sql $
             map updatePersistValue upds `mappend` keyToValues k
 
+    insert_ val = do
+        conn <- ask
+        let vals = mkInsertValues val
+        case connInsertSql conn (entityDef (Just val)) vals  of
+            ISRSingle sql -> do
+                withRawQuery sql vals $ do
+                    pure ()
+            ISRInsertGet sql1 _sql2 -> do
+                rawExecute sql1 vals
+            ISRManyKeys sql _fs -> do
+                rawExecute sql vals
+
     insert val = do
         conn <- ask
         let esql = connInsertSql conn t vals

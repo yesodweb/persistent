@@ -1,5 +1,11 @@
 # Changelog for persistent
 
+## 2.14.4.1
+
+* [#1449](https://github.com/yesodweb/persistent/pull/1449)
+    * Default implementation for `insert_` which doesn't perform any unnecessary
+      queries.
+
 ## 2.14.4.0
 
 * [#1440](https://github.com/yesodweb/persistent/pull/1440)
