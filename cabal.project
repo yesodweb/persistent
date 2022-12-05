@@ -8,6 +8,10 @@ packages:
   persistent-redis
   persistent-qq
 
+constraints:
+    mtl == 2.3.1
+    , exceptions == 0.10.7
+
 -- GHC 9.4 shims for persistent
 
 -- These need hackage revisions but otherwise test fine in the repo

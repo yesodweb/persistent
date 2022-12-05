@@ -5,7 +5,8 @@ module Database.Persist.Sql.Run where
 
 import Control.Monad.IO.Unlift
 import Control.Monad.Logger.CallStack
-import Control.Monad.Reader (MonadReader, void)
+import Control.Monad (void)
+import Control.Monad.Reader (MonadReader)
 import qualified Control.Monad.Reader as MonadReader
 import Control.Monad.Trans.Reader hiding (local)
 import Control.Monad.Trans.Resource
