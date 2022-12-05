@@ -1,5 +1,10 @@
 # Changelog for persistent
 
+## 2.14.4.2
+
+* [#1451](https://github.com/yesodweb/persistent/pull/1451)
+    * Support `mtl >= 2.3`
+
 ## 2.14.4.1
 
 * [#1449](https://github.com/yesodweb/persistent/pull/1449)
