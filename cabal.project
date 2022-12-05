@@ -18,7 +18,7 @@ allow-newer:
 
 -- Needed to test that `persistent-redis` works with mtl-2.3
 -- https://github.com/informatikr/hedis/pull/190
-source-repository-package
-    type: git
-    location: https://github.com/ysangkok/hedis
-    tag: 6f36989836b49974f51a6ee8edaf156490590980
+-- source-repository-package
+--     type: git
+--     location: https://github.com/ysangkok/hedis
+--     tag: 6f36989836b49974f51a6ee8edaf156490590980
