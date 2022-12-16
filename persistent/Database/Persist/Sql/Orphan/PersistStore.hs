@@ -288,11 +288,7 @@ instance PersistStoreWrite SqlBackend where
       where
         go = insrepHelper "INSERT"
 
-    repsert key value = do
-        mExisting <- get key
-        case mExisting of
-          Nothing -> insertKey key value
-          Just _ -> replace key value
+    repsert key value = repsertMany [(key, value)]
 
     repsertMany [] = return ()
     repsertMany krsDups = do
@@ -307,7 +303,13 @@ instance PersistStoreWrite SqlBackend where
                     Just _  -> mkInsertValues r
         case connRepsertManySql conn of
             (Just mkSql) -> rawExecute (mkSql ent nr) (concatMap toVals krs)
-            Nothing -> mapM_ (uncurry repsert) krs
+            Nothing -> mapM_ (uncurry repsert') krs
+              where
+                repsert' = do
+                  mExisting <- get key
+                  case mExisting of
+                    Nothing -> insertKey key value
+                    Just _ -> replace key value
 
     delete k = do
         conn <- ask
