@@ -1,5 +1,11 @@
 # Changelog for persistent
 
+## 2.14.4.3
+
+* [#1452](https://github.com/yesodweb/persistent/pull/1452)
+    * Implement `repsert` as a special case of `respertMany`.  Allows backend
+      specific behavior.
+
 ## 2.14.4.2
 
 * [#1451](https://github.com/yesodweb/persistent/pull/1451)
