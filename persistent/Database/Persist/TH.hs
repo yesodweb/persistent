@@ -20,6 +20,11 @@
 
 -- | This module provides the tools for defining your database schema and using
 -- it to generate Haskell data types and migrations.
+--
+-- For documentation on the domain specific language used for defining database
+-- models, see "Database.Persist.Quasi".
+--
+--
 module Database.Persist.TH
     ( -- * Parse entity defs
       persistWith
@@ -30,7 +35,11 @@ module Database.Persist.TH
       -- * Turn @EntityDef@s into types
     , mkPersist
     , mkPersistWith
+      -- ** Configuring Entity Definition
     , MkPersistSettings
+    , mkPersistSettings
+    , sqlSettings
+    -- *** Record Fields (for update/viewing settings)
     , mpsBackend
     , mpsGeneric
     , mpsPrefixFields
@@ -41,8 +50,6 @@ module Database.Persist.TH
     , mpsDeriveInstances
     , mpsCamelCaseCompositeKeySelector
     , EntityJSON(..)
-    , mkPersistSettings
-    , sqlSettings
     -- ** Implicit ID Columns
     , ImplicitIdDef
     , setImplicitIdDef
