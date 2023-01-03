@@ -355,7 +355,7 @@ migrate' :: MySQL.ConnectInfo
          -> [EntityDef]
          -> (Text -> IO Statement)
          -> EntityDef
-         -> IO (Either [Text] [(Bool, Text)])
+         -> IO (Either [Text] CautiousMigration)
 migrate' connectInfo allDefs getter val = do
     let name = getEntityDBName val
     let (newcols, udefs, fdefs) = mysqlMkColumns allDefs val
