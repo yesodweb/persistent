@@ -1847,8 +1847,10 @@ mkKeyToValues mps entDef = do
         ListE <$> mapM (f recName) (toList $ unboundCompositeCols ucd)
     f recName fieldNameHS =
         [|
-        toPersistValue ($(varE $ keyFieldName mps entDef fieldNameHS) $(varE recName))
+        toPersistValue ($(pure $ keyFieldSel fieldNameHS) $(varE recName))
         |]
+    keyFieldSel name
+        = fieldSel (keyConName entDef) (keyFieldName mps entDef name)
 
 normalClause :: [Pat] -> Exp -> Clause
 normalClause p e = Clause p (NormalB e) []
@@ -1992,7 +1994,6 @@ mkEntity embedEntityMap entityMap mps preDef = do
     [keyFromRecordM'] <-
         case unboundPrimarySpec entDef of
             NaturalKey ucd -> do
-                recordVarName <- newName "record"
                 let
                     keyCon =
                         keyConName entDef
@@ -2002,15 +2003,11 @@ mkEntity embedEntityMap entityMap mps preDef = do
                         foldl'
                             AppE
                             (ConE keyCon)
-                            (toList $ fmap
-                                (\n ->
-                                    VarE n `AppE` VarE recordVarName
-                                )
-                                keyFields'
-                            )
+                            (VarE <$> keyFields')
                     keyFromRec = varP 'keyFromRecordM
+                    lam = LamE [RecP name [(n, VarP n) | n <- toList keyFields']] constr
                 [d|
-                    $(keyFromRec) = Just ( \ $(varP recordVarName) -> $(pure constr))
+                    $(keyFromRec) = Just $(pure lam)
                     |]
 
             _ ->

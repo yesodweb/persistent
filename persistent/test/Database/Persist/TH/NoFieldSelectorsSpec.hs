@@ -21,7 +21,10 @@ import TemplateTestImports
 
 mkPersist sqlSettings {mpsFieldLabelModifier = const id} [persistLowerCase|
 User
+    ident Text
     name Text
+    Primary ident
+    team TeamId
 
 Team
     name Text
