@@ -1,5 +1,43 @@
 # Changelog for persistent
 
+## 2.14.4.4
+
+* [#1460] https://github.com/yesodweb/persistent/pull/1460
+    * Fix a problem where a `Primary` key causes `mkPersist` to generate code
+      that doesn't compile under `NoFieldSelectors`
+
+## 2.14.4.3
+
+* [#1452](https://github.com/yesodweb/persistent/pull/1452)
+    * Implement `repsert` as a special case of `respertMany`.  Allows backend
+      specific behavior.
+
+## 2.14.4.2
+
+* [#1451](https://github.com/yesodweb/persistent/pull/1451)
+    * Support `mtl >= 2.3`
+
+## 2.14.4.1
+
+* [#1449](https://github.com/yesodweb/persistent/pull/1449)
+    * Default implementation for `insert_` which doesn't perform any unnecessary
+      queries.
+
+## 2.14.4.0
+
+* [#1440](https://github.com/yesodweb/persistent/pull/1440)
+    * Defined NFData PersistValue
+
+## 2.14.3.2
+
+* [#1446](https://github.com/yesodweb/persistent/pull/1446)
+    * Foreign key discovery was fixed for qualified names, `Key Model`, and
+      `Maybe` references.
+* [#1438](https://github.com/yesodweb/persistent/pull/1438)
+    * Clarify wording on the error message for null in unique constraint
+* [#1447](https://github.com/yesodweb/persistent/pull/1447)
+    * Fix `SafeToInsert` not being generated correctly for some `Id` columns
+
 ## 2.14.3.1
 
 * [#1428](https://github.com/yesodweb/persistent/pull/1428)

@@ -15,3 +15,10 @@ allow-newer:
     -- https://github.com/haskellari/postgresql-simple/pull/95
    , postgresql-simple:base
    , postgresql-simple:template-haskell
+
+-- Needed to test that `persistent-redis` works with mtl-2.3
+-- https://github.com/informatikr/hedis/pull/190
+-- source-repository-package
+--     type: git
+--     location: https://github.com/ysangkok/hedis
+--     tag: 6f36989836b49974f51a6ee8edaf156490590980

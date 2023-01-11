@@ -96,6 +96,11 @@ Address json
 NoJson
     foo Text
     deriving Show Eq
+
+CustomIdName
+    Id      sql=id_col
+    name    Text
+    deriving Show Eq
 |]
 
 mkPersist sqlSettings [persistLowerCase|
@@ -483,6 +488,11 @@ spec = describe "THSpec" $ do
                     , addressCity = "Denver"
                     , addressZip = Nothing
                     }
+
+    describe "CustomIdName" $ do
+        it "has a good safe to insert class instance" $ do
+            let proxy = Proxy :: SafeToInsert CustomIdName => Proxy CustomIdName
+            proxy `shouldBe` Proxy
 
 (&) :: a -> (a -> b) -> b
 x & f = f x

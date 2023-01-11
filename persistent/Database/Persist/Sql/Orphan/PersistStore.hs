@@ -159,6 +159,18 @@ instance PersistStoreWrite SqlBackend where
         rawExecute sql $
             map updatePersistValue upds `mappend` keyToValues k
 
+    insert_ val = do
+        conn <- ask
+        let vals = mkInsertValues val
+        case connInsertSql conn (entityDef (Just val)) vals  of
+            ISRSingle sql -> do
+                withRawQuery sql vals $ do
+                    pure ()
+            ISRInsertGet sql1 _sql2 -> do
+                rawExecute sql1 vals
+            ISRManyKeys sql _fs -> do
+                rawExecute sql vals
+
     insert val = do
         conn <- ask
         let esql = connInsertSql conn t vals
@@ -276,11 +288,7 @@ instance PersistStoreWrite SqlBackend where
       where
         go = insrepHelper "INSERT"
 
-    repsert key value = do
-        mExisting <- get key
-        case mExisting of
-          Nothing -> insertKey key value
-          Just _ -> replace key value
+    repsert key value = repsertMany [(key, value)]
 
     repsertMany [] = return ()
     repsertMany krsDups = do
@@ -295,7 +303,13 @@ instance PersistStoreWrite SqlBackend where
                     Just _  -> mkInsertValues r
         case connRepsertManySql conn of
             (Just mkSql) -> rawExecute (mkSql ent nr) (concatMap toVals krs)
-            Nothing -> mapM_ (uncurry repsert) krs
+            Nothing -> mapM_ repsert' krs
+              where
+                repsert' (key, value) = do
+                  mExisting <- get key
+                  case mExisting of
+                    Nothing -> insertKey key value
+                    Just _ -> replace key value
 
     delete k = do
         conn <- ask

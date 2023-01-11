@@ -30,7 +30,7 @@ library
                    , mongoDB            >= 2.3       && < 2.8
                    , network            >= 2.6
                    , path-pieces        >= 0.2
-                   , resource-pool      >= 0.2       && < 0.3
+                   , resource-pool      >= 0.2       && < 0.4
                    , resourcet          >= 1.1
                    , text               >= 1.2
                    , time

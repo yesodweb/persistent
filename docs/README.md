@@ -15,6 +15,11 @@ Get started with Persistent at: http://www.yesodweb.com/book/persistent
 * [Triggers for SQL](https://github.com/jcristovao/migrationplus)
 * [ODBC](https://github.com/gbwey/persistent-odbc)
 * [Zookeeper](https://hackage.haskell.org/package/persistent-zookeeper)
+* [`persistent-typed-db`](https://hackage.haskell.org/package/persistent-typed-db)
+  allows type safe access to multiple databases with different schemas
+* [`esqueleto`](https://hackage.haskell.org/package/esqueleto) allows for more
+  complex SQL queries using the Persistent backend types
+
 
 ## Persistent with MongoDB
 

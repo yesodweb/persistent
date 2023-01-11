@@ -11,6 +11,7 @@ module Database.Persist.PersistValue
     , LiteralType(..)
     ) where
 
+import Control.DeepSeq
 import qualified Data.ByteString.Base64 as B64
 import qualified Data.Text.Encoding as TE
 import qualified Data.ByteString.Char8 as BS8
@@ -69,6 +70,27 @@ data PersistValue
     --
     -- @since 2.12.0.0
     deriving (Show, Read, Eq, Ord)
+
+-- |
+-- @since 2.14.4.0
+instance NFData PersistValue where
+  rnf val = case val of
+    PersistText txt -> rnf txt
+    PersistByteString bs -> rnf bs
+    PersistInt64 i -> rnf i
+    PersistDouble d -> rnf d
+    PersistRational q -> rnf q
+    PersistBool b -> rnf b
+    PersistDay d -> rnf d
+    PersistTimeOfDay t -> rnf t
+    PersistUTCTime t -> rnf t
+    PersistNull -> ()
+    PersistList vals -> rnf vals
+    PersistMap vals -> rnf vals
+    PersistObjectId bs -> rnf bs
+    PersistArray vals -> rnf vals
+    PersistLiteral_ ty bs -> ty `seq` rnf bs
+
 
 -- | A type that determines how a backend should handle the literal.
 --

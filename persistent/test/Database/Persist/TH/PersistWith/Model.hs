@@ -16,11 +16,12 @@ module Database.Persist.TH.PersistWith.Model where
 
 import TemplateTestImports
 
-import Database.Persist.TH.PersistWith.Model2
+import Database.Persist.TH.PersistWith.Model2 as Model2
 
 mkPersistWith sqlSettings $(discoverEntities) [persistLowerCase|
 
 IceCream
     flavor  FlavorId
+    otherFlavor Model2.FlavorId
 
 |]
