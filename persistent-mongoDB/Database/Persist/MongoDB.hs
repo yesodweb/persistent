@@ -136,7 +136,7 @@ import Data.Bits (shiftR)
 import Data.Bson (ObjectId(..))
 import qualified Data.ByteString as BS
 import Data.Conduit
-import Data.Maybe (fromJust, isJust, mapMaybe)
+import Data.Maybe (fromJust, mapMaybe)
 import Data.Monoid (mappend)
 import qualified Data.Pool as Pool
 import qualified Data.Serialize as Serialize

@@ -33,7 +33,7 @@ import Data.List (deleteFirstsBy, (\\))
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NEL
 import qualified Data.Map as Map
-import Data.Maybe (catMaybes)
+import Data.Maybe (catMaybes, isJust)
 import GHC.TypeLits (ErrorMessage(..))
 
 import Database.Persist.Class.PersistEntity
