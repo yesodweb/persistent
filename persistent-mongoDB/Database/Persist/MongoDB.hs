@@ -605,8 +605,6 @@ instance PersistUniqueRead DB.MongoContext where
         t = entityDef $ Just rec
         rec = dummyFromUnique uniq
 
-    existsBy uniq = isJust <$> getBy uniq
-
 instance PersistUniqueWrite DB.MongoContext where
     deleteBy uniq =
         DB.delete DB.Select {

@@ -92,10 +92,11 @@ class PersistStoreRead backend => PersistUniqueRead backend  where
     -- The above query when applied on <#dataset-persist-unique-1 dataset-1>, will return
     -- the value True.
     --
-    -- @since 2.14.4
+    -- @since 2.14.5
     existsBy
         :: forall record m. (MonadIO m, PersistRecordBackend record backend)
         => Unique record -> ReaderT backend m Bool
+    existsBy uniq = isJust <$> getBy uniq
 
 -- | Some functions in this module ('insertUnique', 'insertBy', and
 -- 'replaceUnique') first query the unique indexes to check for
