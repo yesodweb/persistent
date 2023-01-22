@@ -612,7 +612,7 @@ doesTableExist getter (EntityNameDB name) = do
 migrate' :: [EntityDef]
          -> (Text -> IO Statement)
          -> EntityDef
-         -> IO (Either [Text] [(Bool, Text)])
+         -> IO (Either [Text] CautiousMigration)
 migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
     old <- getColumns getter entity newcols'
     case partitionEithers old of

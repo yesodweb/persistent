@@ -1,5 +1,10 @@
 # Changelog for persistent-mysql
 
+##  2.13.1.4
+
+* [#1459](https://github.com/yesodweb/persistent/pull/1459)
+    * Make use of `CautiousMigration` type alias for clarity.
+
 ##  2.13.1.3
 
 * [#1372](https://github.com/yesodweb/persistent/pull/1372)
