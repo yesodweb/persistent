@@ -140,6 +140,35 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
             Nothing -> Just `liftM` insert datum
             Just _ -> return Nothing
 
+    -- | Same as 'insertUnique' but doesn't return a @Key@.
+    --
+    -- === __Example usage__
+    --
+    -- With <#schema-persist-unique-1 schema-1> and <#dataset-persist-unique-1 dataset-1>, we try to insert the following two records:
+    --
+    -- > linusId <- insertUnique_ $ User "Linus" 48
+    -- > spjId   <- insertUnique_ $ User "SPJ" 90
+    --
+    -- > +-----+------+-----+
+    -- > |id   |name  |age  |
+    -- > +-----+------+-----+
+    -- > |1    |SPJ   |40   |
+    -- > +-----+------+-----+
+    -- > |2    |Simon |41   |
+    -- > +-----+------+-----+
+    -- > |3    |Linus |48   |
+    -- > +-----+------+-----+
+    --
+    -- Linus's record was inserted to <#dataset-persist-unique-1 dataset-1>, while SPJ wasn't because SPJ already exists in <#dataset-persist-unique-1 dataset-1>.
+    insertUnique_
+        :: forall record m. (MonadIO m, PersistRecordBackend record backend, SafeToInsert record)
+        => record -> ReaderT backend m (Maybe ())
+    insertUnique_ datum = do
+        conflict <- checkUnique datum
+        case conflict of
+            Nothing -> Just `liftM` insert_ datum
+            Just _ -> return Nothing
+
     -- | Update based on a uniqueness constraint or insert:
     --
     -- * insert the new record if it does not exist;
