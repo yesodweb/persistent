@@ -55,6 +55,7 @@ import qualified RawSqlTest
 import qualified ReadWriteTest
 import qualified Recursive
 import qualified RenameTest
+import qualified SchemaTest
 import qualified SumTypeTest
 import qualified TransactionLevelTest
 import qualified TreeTest
@@ -139,6 +140,7 @@ main = do
       , PgIntervalTest.pgIntervalMigrate
       , UpsertWhere.upsertWhereMigrate
       , ImplicitUuidSpec.implicitUuidMigrate
+      , SchemaTest.migration
       ]
     PersistentTest.cleanDB
     ForeignKey.cleanDB
@@ -214,3 +216,4 @@ main = do
       PgIntervalTest.specs
       ArrayAggTest.specs
       GeneratedColumnTestSQL.specsWith runConnAssert
+      SchemaTest.specsWith runConnAssert
