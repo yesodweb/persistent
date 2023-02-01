@@ -15,7 +15,7 @@ bug-reports:     https://github.com/yesodweb/persistent/issues
 extra-source-files: ChangeLog.md
 
 library
-    exposed-modules: 
+    exposed-modules:
         CompositeTest
         CustomPersistField
         CustomPersistFieldTest
@@ -51,6 +51,7 @@ library
         RenameTest
         Recursive
         SumTypeTest
+        SchemaTest
         TransactionLevelTest
         TreeTest
         TypeLitFieldDefsTest
@@ -60,7 +61,7 @@ library
 
     hs-source-dirs: src
 
-    build-depends: 
+    build-depends:
         base                     >= 4.9       && < 5
       , aeson                    >= 1.0
       , blaze-html               >= 0.9
