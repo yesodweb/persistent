@@ -10,6 +10,8 @@ module Database.Persist.Sql.Internal
     , BackendSpecificOverrides(..)
     , getBackendSpecificForeignKeyName
     , setBackendSpecificForeignKeyName
+    , getBackendSpecificSchemaEntityName
+    , setBackendSpecificSchemaEntityName
     , emptyBackendSpecificOverrides
     ) where
 
@@ -35,6 +37,7 @@ import Database.Persist.Types
 -- @since 2.11
 data BackendSpecificOverrides = BackendSpecificOverrides
     { backendSpecificForeignKeyName :: Maybe (EntityNameDB -> FieldNameDB -> ConstraintNameDB)
+    , backendSpecificSchemaEntityName :: Maybe (Maybe Text -> EntityNameDB -> EntityNameDB)
     }
 
 -- | If the override is defined, then this returns a function that accepts an
@@ -60,6 +63,28 @@ setBackendSpecificForeignKeyName
 setBackendSpecificForeignKeyName func bso =
     bso { backendSpecificForeignKeyName = Just func }
 
+-- | If the override is defined, then this returns a function that accepts an
+-- entity name and its schema name and provides the fully qualified entity name.
+--
+-- An abstract accessor for the 'BackendSpecificOverrides'
+--
+-- @since XXX
+getBackendSpecificSchemaEntityName
+    :: BackendSpecificOverrides
+    -> Maybe (Maybe Text -> EntityNameDB -> EntityNameDB)
+getBackendSpecificSchemaEntityName =
+    backendSpecificSchemaEntityName
+
+-- | Set the backend's schema and entity combining function to this value.
+--
+-- @since XXX
+setBackendSpecificSchemaEntityName
+    :: (Maybe Text -> EntityNameDB -> EntityNameDB)
+    -> BackendSpecificOverrides
+    -> BackendSpecificOverrides
+setBackendSpecificSchemaEntityName func bso =
+    bso { backendSpecificSchemaEntityName = Just func }
+
 findMaybe :: (a -> Maybe b) -> [a] -> Maybe b
 findMaybe p = listToMaybe . mapMaybe p
 
@@ -67,7 +92,7 @@ findMaybe p = listToMaybe . mapMaybe p
 --
 -- @since 2.11
 emptyBackendSpecificOverrides :: BackendSpecificOverrides
-emptyBackendSpecificOverrides = BackendSpecificOverrides Nothing
+emptyBackendSpecificOverrides = BackendSpecificOverrides Nothing Nothing
 
 defaultAttribute :: [FieldAttr] -> Maybe Text
 defaultAttribute = findMaybe $ \case
@@ -133,7 +158,7 @@ mkColumns allDefs t overrides =
             }
 
     tableName :: EntityNameDB
-    tableName = getEntityDBName t
+    tableName = schemaEntityNameFn (getEntityDBSchema t) (getEntityDBName t)
 
     go :: FieldDef -> Column
     go fd =
@@ -156,6 +181,11 @@ mkColumns allDefs t overrides =
         FieldAttrMaxlen n -> Just n
         _ -> Nothing
 
+    schemaEntityNameFn = flip fromMaybe (backendSpecificSchemaEntityName overrides) $
+        \mbSchema entName -> case mbSchema of
+              Nothing -> entName
+              Just "" -> entName
+              Just schema -> EntityNameDB (schema <> "." <> unEntityNameDB entName)
     refNameFn = fromMaybe refName (backendSpecificForeignKeyName overrides)
 
     mkColumnReference :: FieldDef -> Maybe ColumnReference

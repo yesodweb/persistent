@@ -34,6 +34,7 @@ data Column = Column
 -- | This value specifies how a field references another table.
 --
 -- @since 2.11.0.0
+-- TODO: what about schema name there?
 data ColumnReference = ColumnReference
     { crTableName :: !EntityNameDB
     -- ^ The table name that the
