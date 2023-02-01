@@ -131,6 +131,8 @@ data EntityDef = EntityDef
     -- ^ The name of the entity as Haskell understands it.
     , entityDB      :: !EntityNameDB
     -- ^ The name of the database table corresponding to the entity.
+    , entitySchema  :: !(Maybe Text)
+    -- ^ The schema name of the database table.
     , entityId      :: !EntityIdDef
     -- ^ The entity's primary key or identifier.
     , entityAttrs   :: ![Attr]

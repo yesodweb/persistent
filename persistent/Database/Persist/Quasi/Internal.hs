@@ -693,6 +693,7 @@ mkUnboundEntityDef ps parsedEntDef =
             EntityDef
                 { entityHaskell = entNameHS
                 , entityDB = entNameDB
+                , entitySchema = Nothing
                 -- idField is the user-specified Id
                 -- otherwise useAutoIdField
                 -- but, adjust it if the user specified a Primary
