@@ -693,7 +693,7 @@ mkUnboundEntityDef ps parsedEntDef =
             EntityDef
                 { entityHaskell = entNameHS
                 , entityDB = entNameDB
-                , entitySchema = Nothing
+                , entitySchema = getSchemaName (parsedEntityDefEntityAttributes parsedEntDef)
                 -- idField is the user-specified Id
                 -- otherwise useAutoIdField
                 -- but, adjust it if the user specified a Primary
@@ -939,6 +939,9 @@ parseGenerated = foldl' (\acc x -> acc <|> T.stripPrefix "generated=" x) Nothing
 getDbName :: PersistSettings -> Text -> [Text] -> Text
 getDbName ps n =
     fromMaybe (psToDBName ps n) . listToMaybe . mapMaybe (T.stripPrefix "sql=")
+
+getSchemaName :: [Attr] -> Maybe Text
+getSchemaName = listToMaybe . mapMaybe (T.stripPrefix "schema=")
 
 getDbName' :: PersistSettings -> Text -> [FieldAttr] -> FieldNameDB
 getDbName' ps n =
