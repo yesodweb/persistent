@@ -1,5 +1,11 @@
 # Changelog for persistent
 
+## unreleased
+
+* [#1460](https://github.com/yesodweb/persistent/pull/1468)
+    * Remove extraneous `map toPersistValue` call in the `mkInsertValues`
+      function, as it evaluates to `id`.
+
 ## 2.14.5.0
 
 * [#1437](https://github.com/yesodweb/persistent/pull/1437)

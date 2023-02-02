@@ -112,7 +112,6 @@ import qualified Database.Persist.Sql.Util as Util
 import Database.Persist.SqlBackend
 import qualified Database.Sqlite as Sqlite
 
-
 -- | Create a pool of SQLite connections.
 --
 -- Note that this should not be used with the @:memory:@ connection string, as
@@ -442,7 +441,7 @@ migrate'
     :: [EntityDef]
     -> (Text -> IO Statement)
     -> EntityDef
-    -> IO (Either [Text] [(Bool, Text)])
+    -> IO (Either [Text] CautiousMigration)
 migrate' allDefs getter val = do
     let (cols, uniqs, fdefs) = sqliteMkColumns allDefs val
     let newSql = mkCreateTable False def (filter (not . safeToRemove val . cName) cols, uniqs, fdefs)

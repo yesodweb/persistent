@@ -246,7 +246,6 @@ mkInsertValues
 mkInsertValues entity =
     Maybe.catMaybes
         . zipWith redactGeneratedCol (getEntityFields . entityDef $ Just entity)
-        . map toPersistValue
         $ toPersistFields entity
   where
     redactGeneratedCol fd pv = case fieldGenerated fd of

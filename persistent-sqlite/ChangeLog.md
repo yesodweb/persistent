@@ -1,5 +1,10 @@
 # Changelog for persistent-sqlite
 
+## 2.13.1.1
+
+* [#1459](https://github.com/yesodweb/persistent/pull/1459)
+    * Make use of `CautiousMigration` type alias for clarity.
+
 ## 2.13.1.0
 
 * [#1341](https://github.com/yesodweb/persistent/pull/1341)
