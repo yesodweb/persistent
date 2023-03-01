@@ -521,8 +521,9 @@ guessReference ft =
     guessReferenceText mft =
         asum
             [ do
-                FTTypeCon _ (checkIdSuffix -> Just tableName) <- mft
-                pure tableName
+                FTTypeCon mmod (checkIdSuffix -> Just tableName) <- mft
+                -- handle qualified name.
+                pure $ maybe tableName (\qualName -> qualName <> "." <> tableName) mmod
             , do
                 FTApp (FTTypeCon _ "Key") (FTTypeCon _ tableName) <- mft
                 pure tableName
