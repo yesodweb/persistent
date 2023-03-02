@@ -83,6 +83,7 @@ import Control.Monad.Except
 import Control.Monad.IO.Unlift (MonadIO(..), MonadUnliftIO)
 import Control.Monad.Logger (MonadLoggerIO, runNoLoggingT)
 import Control.Monad.Trans.Reader (ReaderT(..), asks, runReaderT)
+import Control.Monad.Trans.Class (lift)
 #if !MIN_VERSION_base(4,12,0)
 import Control.Monad.Trans.Reader (withReaderT)
 #endif
