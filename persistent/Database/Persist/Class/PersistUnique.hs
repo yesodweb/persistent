@@ -161,7 +161,7 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     --
     -- Linus's record was inserted to <#dataset-persist-unique-1 dataset-1>, while SPJ wasn't because SPJ already exists in <#dataset-persist-unique-1 dataset-1>.
     --
-    -- @since 2.14.4.4
+    -- @since 2.14.5.0
     insertUnique_
         :: forall record m. (MonadIO m, PersistRecordBackend record backend, SafeToInsert record)
         => record -> ReaderT backend m (Maybe ())
