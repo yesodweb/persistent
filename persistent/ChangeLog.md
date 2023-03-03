@@ -8,6 +8,12 @@
 * [#1476](https://github.com/yesodweb/persistent/pull/1476)
     * Fix `mkRecordName` to suffix `_` if the field name matches any of Haskell keywords.
 
+## 2.14.5.0
+
+* [#1469] https://github.com/yesodweb/persistent/pull/1469
+    * Change default implementation for `insertUnique_` to not perform
+      unecessary queries (mirrors 1449)
+
 ## 2.14.4.4
 
 * [#1460] https://github.com/yesodweb/persistent/pull/1460
