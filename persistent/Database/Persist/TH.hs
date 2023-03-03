@@ -3116,10 +3116,10 @@ mkRecordName mps prefix entNameHS fieldNameHS =
         unFieldNameHS fieldNameHS
 
     avoidKeyword :: Text -> Text
-    avoidKeyword name = if name `elem` keywords then name ++ "_" else name
+    avoidKeyword name = if name `Set.member` haskellKeywords then name ++ "_" else name
 
-    keywords :: [Text]
-    keywords =
+haskellKeywords :: Set Text
+haskellKeywords = Set.fromList
       ["case","class","data","default","deriving","do","else"
       ,"if","import","in","infix","infixl","infixr","instance","let","module"
       ,"newtype","of","then","type","where","_"
