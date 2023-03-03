@@ -53,3 +53,14 @@ specsWith originalRunDb = describe "ReadWriteTest" $ do
                 mkey1 @== Nothing
                 mperson <- selectFirst [PersonName ==. name_] []
                 fmap entityVal mperson @== Just person
+
+                let nameLuke = "Luke Seale New"
+                    personLuke = Person nameLuke 31 Nothing
+                mkey2 <- insertUnique_ personLuke
+                mkey3 <- insertUnique_ personLuke
+                mkey3 @== Nothing
+                mpersonLuke <- selectFirst [PersonName ==. nameLuke] []
+                fmap entityVal mpersonLuke @== Just personLuke
+
+
+
