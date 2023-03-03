@@ -1,10 +1,12 @@
 # Changelog for persistent
 
-## unreleased
+## 2.14.4.5
 
 * [#1460] https://github.com/yesodweb/persistent/pull/1468
     * Remove extraneous `map toPersistValue` call in the `mkInsertValues`
       function, as it evaluates to `id`.
+* [#1476](https://github.com/yesodweb/persistent/pull/1476)
+    * Fix `mkRecordName` to suffix `_` if the field name matches any of Haskell keywords.
 
 ## 2.14.4.4
 

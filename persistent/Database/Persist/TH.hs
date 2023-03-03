@@ -3100,7 +3100,7 @@ mkEntityLensName mps entDef fieldDef =
 
 mkRecordName :: MkPersistSettings -> Maybe Text -> EntityNameHS -> FieldNameHS -> Name
 mkRecordName mps prefix entNameHS fieldNameHS =
-    mkName $ T.unpack $ fromMaybe "" prefix <> lowerFirst recName
+    mkName $ T.unpack . avoidKeyword $ fromMaybe "" prefix <> lowerFirst recName
   where
     recName :: Text
     recName
@@ -3114,6 +3114,17 @@ mkRecordName mps prefix entNameHS fieldNameHS =
     fieldNameText :: Text
     fieldNameText =
         unFieldNameHS fieldNameHS
+
+    avoidKeyword :: Text -> Text
+    avoidKeyword name = if name `Set.member` haskellKeywords then name ++ "_" else name
+
+haskellKeywords :: Set.Set Text
+haskellKeywords = Set.fromList
+    ["case","class","data","default","deriving","do","else"
+    ,"if","import","in","infix","infixl","infixr","instance","let","module"
+    ,"newtype","of","then","type","where","_"
+    ,"foreign"
+    ]
 
 -- | Construct a list of TH Names for the typeclasses of an EntityDef's `entityDerives`
 mkEntityDefDeriveNames :: MkPersistSettings -> UnboundEntityDef -> [Name]
