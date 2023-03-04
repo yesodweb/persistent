@@ -33,7 +33,7 @@ import Data.List (deleteFirstsBy, (\\))
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NEL
 import qualified Data.Map as Map
-import Data.Maybe (catMaybes)
+import Data.Maybe (catMaybes, isJust)
 import GHC.TypeLits (ErrorMessage(..))
 
 import Database.Persist.Class.PersistEntity
@@ -77,6 +77,26 @@ class PersistStoreRead backend => PersistUniqueRead backend  where
     getBy
         :: forall record m. (MonadIO m, PersistRecordBackend record backend)
         => Unique record -> ReaderT backend m (Maybe (Entity record))
+
+    -- | Returns True if a record with this unique key exists, otherwise False.
+    --
+    -- === __Example usage__
+    --
+    -- With <#schema-persist-unique-1 schema-1> and <#dataset-persist-unique-1 dataset-1>:
+    --
+    -- > existsBySpjName :: MonadIO m  => ReaderT SqlBackend m Bool
+    -- > existsBySpjName = existsBy $ UniqueUserName "SPJ"
+    --
+    -- > spjEntExists <- existsBySpjName
+    --
+    -- The above query when applied on <#dataset-persist-unique-1 dataset-1>, will return
+    -- the value True.
+    --
+    -- @since 2.14.5
+    existsBy
+        :: forall record m. (MonadIO m, PersistRecordBackend record backend)
+        => Unique record -> ReaderT backend m Bool
+    existsBy uniq = isJust <$> getBy uniq
 
 -- | Some functions in this module ('insertUnique', 'insertBy', and
 -- 'replaceUnique') first query the unique indexes to check for

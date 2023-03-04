@@ -2,7 +2,7 @@
 
 ## 2.14.4.5
 
-* [#1460] https://github.com/yesodweb/persistent/pull/1468
+* [#1460](https://github.com/yesodweb/persistent/pull/1468)
     * Remove extraneous `map toPersistValue` call in the `mkInsertValues`
       function, as it evaluates to `id`.
 * [#1476](https://github.com/yesodweb/persistent/pull/1476)
@@ -14,9 +14,14 @@
     * Change default implementation for `insertUnique_` to not perform
       unecessary queries (mirrors 1449)
 
+## 2.14.5.0
+
+* [#1437](https://github.com/yesodweb/persistent/pull/1437)
+    * Add `existsBy` to `PersistUniqueRead`
+
 ## 2.14.4.4
 
-* [#1460] https://github.com/yesodweb/persistent/pull/1460
+* [#1460](https://github.com/yesodweb/persistent/pull/1460)
     * Fix a problem where a `Primary` key causes `mkPersist` to generate code
       that doesn't compile under `NoFieldSelectors`
 
