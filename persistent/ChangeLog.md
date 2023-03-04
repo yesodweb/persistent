@@ -1,5 +1,13 @@
 # Changelog for persistent
 
+## 2.14.5.0
+
+* [#1469](https://github.com/yesodweb/persistent/pull/1469)
+    * Change default implementation for `insertUnique_` to not perform
+      unecessary queries (mirrors 1449)
+* [#1437](https://github.com/yesodweb/persistent/pull/1437)
+    * Add `existsBy` to `PersistUniqueRead`
+
 ## 2.14.4.5
 
 * [#1460](https://github.com/yesodweb/persistent/pull/1468)
@@ -7,17 +15,6 @@
       function, as it evaluates to `id`.
 * [#1476](https://github.com/yesodweb/persistent/pull/1476)
     * Fix `mkRecordName` to suffix `_` if the field name matches any of Haskell keywords.
-
-## 2.14.5.0
-
-* [#1469] https://github.com/yesodweb/persistent/pull/1469
-    * Change default implementation for `insertUnique_` to not perform
-      unecessary queries (mirrors 1449)
-
-## 2.14.5.0
-
-* [#1437](https://github.com/yesodweb/persistent/pull/1437)
-    * Add `existsBy` to `PersistUniqueRead`
 
 ## 2.14.4.4
 
