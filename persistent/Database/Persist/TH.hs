@@ -44,6 +44,7 @@ module Database.Persist.TH
     , mpsGeneric
     , mpsPrefixFields
     , mpsFieldLabelModifier
+    , mpsAvoidHsKeyword
     , mpsConstraintLabelModifier
     , mpsEntityJSON
     , mpsGenerateLenses
@@ -1057,6 +1058,12 @@ data MkPersistSettings = MkPersistSettings
     -- Note: this setting is ignored if mpsPrefixFields is set to False.
     --
     -- @since 2.11.0.0
+    , mpsAvoidHsKeyword :: Text -> Text
+    -- ^ Customise function for field accessors applied only when the field name matches any of Haskell keywords.
+    --
+    -- Default: suffix "_".
+    --
+    -- @since 2.14.6.0
     , mpsConstraintLabelModifier :: Text -> Text -> Text
     -- ^ Customise the Constraint names using the entity and field name. The
     -- result should be a valid haskell type (start with an upper cased letter).
@@ -1156,6 +1163,7 @@ mkPersistSettings backend = MkPersistSettings
     , mpsGeneric = False
     , mpsPrefixFields = True
     , mpsFieldLabelModifier = (++)
+    , mpsAvoidHsKeyword = (++ "_")
     , mpsConstraintLabelModifier = (++)
     , mpsEntityJSON = Just EntityJSON
         { entityToJSON = 'entityIdToJSON
@@ -3116,7 +3124,7 @@ mkRecordName mps prefix entNameHS fieldNameHS =
         unFieldNameHS fieldNameHS
 
     avoidKeyword :: Text -> Text
-    avoidKeyword name = if name `Set.member` haskellKeywords then name ++ "_" else name
+    avoidKeyword name = if name `Set.member` haskellKeywords then mpsAvoidHsKeyword mps name else name
 
 haskellKeywords :: Set.Set Text
 haskellKeywords = Set.fromList
