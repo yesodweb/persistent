@@ -163,6 +163,7 @@ data RunConnArgs m = RunConnArgs
   { connType :: RunConnType
   , sqlPoolHooks :: SqlPoolHooks (LoggingT m) SqlBackend
   , level :: Maybe IsolationLevel
+  , shouldRetry :: SomeException -> Bool
   }
 
 defaultRunConnArgs :: forall m . (MonadIO m) => RunConnArgs m
@@ -171,6 +172,7 @@ defaultRunConnArgs =
     { connType = RunConnBasic
     , sqlPoolHooks = defaultSqlPoolHooks
     , level = Nothing
+    , shouldRetry = const False
     }
 
 runConnUsing
@@ -178,7 +180,7 @@ runConnUsing
   => RunConnArgs m
   -> SqlPersistT (LoggingT m) t
   -> m t
-runConnUsing RunConnArgs { connType, sqlPoolHooks, level } action = do
+runConnUsing RunConnArgs { connType, sqlPoolHooks, level, shouldRetry } action = do
   travis <- liftIO isTravis
   let debugPrint = not travis && _debugOn
       printDebug = if debugPrint then print . fromLogStr else void . return
@@ -196,7 +198,12 @@ runConnUsing RunConnArgs { connType, sqlPoolHooks, level } action = do
             case connType of
                 RunConnBasic ->
                     withPostgresqlPool connString poolSize $ \pool -> do
-                        runSqlPoolWithExtensibleHooks action pool level sqlPoolHooks
+                        runSqlPoolWithExtensibleHooksRetry
+                          shouldRetry
+                          action
+                          pool
+                          level
+                          sqlPoolHooks
                 RunConnConf -> do
                     let conf = PostgresConf
                           { pgConnStr = connString
@@ -206,7 +213,12 @@ runConnUsing RunConnArgs { connType, sqlPoolHooks, level } action = do
                           }
                         pgConfHooks = defaultPostgresConfHooks
                     withPostgresqlPoolWithConf conf pgConfHooks $ \pool -> do
-                        runSqlPoolWithExtensibleHooks action pool level sqlPoolHooks
+                        runSqlPoolWithExtensibleHooksRetry
+                          shouldRetry
+                          action
+                          pool
+                          level
+                          sqlPoolHooks
     -- horrifying hack :( postgresql is having weird connection failures in
     -- CI, for no reason that i can determine. see this PR for notes:
                     -- https://github.com/yesodweb/persistent/pull/1197

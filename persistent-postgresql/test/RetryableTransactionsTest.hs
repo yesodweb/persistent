@@ -22,12 +22,13 @@ module RetryableTransactionsTest
 
 import Control.Concurrent (threadDelay)
 import Data.Foldable (find)
+import Database.Persist.Postgresql (isSerializationFailure)
 import Init (IsolationLevel(Serializable), aroundAll_, guard)
 import PgInit
-  ( MonadIO(..), PersistQueryWrite(deleteWhere), RunConnArgs(level), Single(unSingle), (+=.), (-=.)
-  , Filter, ReaderT, Spec, SqlBackend, Text, defaultRunConnArgs, describe, expectationFailure, get
-  , insert, it, mkMigrate, mkPersist, persistLowerCase, rawSql, runConnUsing, runConn_
-  , runMigrationSilent, share, shouldReturn, sqlSettings, update, void
+  ( MonadIO(..), PersistQueryWrite(deleteWhere), RunConnArgs(level, shouldRetry), Single(unSingle)
+  , (+=.), (-=.), Filter, ReaderT, Spec, SqlBackend, Text, defaultRunConnArgs, describe
+  , expectationFailure, get, insert, it, mkMigrate, mkPersist, persistLowerCase, rawSql
+  , runConnUsing, runConn_, runMigrationSilent, share, shouldReturn, sqlSettings, update, void
   )
 import UnliftIO.Async (Concurrently(Concurrently, runConcurrently))
 import UnliftIO.Exception (bracket_)
@@ -58,7 +59,11 @@ specs :: Spec
 specs = aroundAll_ (bracket_ setup teardown) $ do
   describe "Testing retryable transactions" $ do
     it "serializable isolation" $ do
-      let runConnArgs = defaultRunConnArgs { level = Just Serializable }
+      let runConnArgs =
+            defaultRunConnArgs
+              { level = Just Serializable
+              , shouldRetry = isSerializationFailure
+              }
 
       child1WithinTxRef <- newTVarIO False
       child1ShouldUpdateRef <- newTVarIO False
@@ -108,12 +113,6 @@ specs = aroundAll_ (bracket_ setup teardown) $ do
       -- of the transaction will complete successfully, as there will be no
       -- other concurrent transactions trying to update the same row this time
       -- around.
-      --
-      -- Note that this test is intentionally failing, as support for retryable
-      -- transactions has not yet been implemeted in persistent. The specific
-      -- failure is from thread 2:
-      --   uncaught exception: SqlError
-      --   SqlError {sqlState = "40001", sqlExecStatus = FatalError, sqlErrorMsg = "could not serialize access due to concurrent update", sqlErrorDetail = "", sqlErrorHint = ""}
       mTimeoutRes <- timeout 10000000 $ runConcurrently $
         (\() () () -> ())
           <$> Concurrently

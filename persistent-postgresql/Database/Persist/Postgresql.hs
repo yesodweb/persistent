@@ -38,6 +38,10 @@ module Database.Persist.Postgresql
     , createPostgresqlPoolModified
     , createPostgresqlPoolModifiedWithVersion
     , createPostgresqlPoolWithConf
+
+    , isSerializationFailure
+    , isDeadlockDetected
+
     , module Database.Persist.Sql
     , ConnectionString
     , HandleUpdateCollision
@@ -77,7 +81,7 @@ import qualified Database.PostgreSQL.Simple.Transaction as PG
 import qualified Database.PostgreSQL.Simple.Types as PG
 
 import Control.Arrow
-import Control.Exception (Exception, throw, throwIO)
+import Control.Exception (Exception(fromException), SomeException, throw, throwIO)
 import Control.Monad
 import Control.Monad.Except
 import Control.Monad.IO.Unlift (MonadIO(..), MonadUnliftIO)
@@ -1952,6 +1956,31 @@ createRawPostgresqlPoolWithConf conf hooks = do
   let getVer = pgConfHooksGetServerVersion hooks
       modConn = pgConfHooksAfterCreate hooks
   createSqlPoolWithConfig (open' modConn getVer withRawConnection (pgConnStr conf)) (postgresConfToConnectionPoolConfig conf)
+
+-- | An exception predicate checking for a PostgreSQL serialization error, i.e.
+-- a @SQLSTATE@ error code of @"40001"@ (@serialization_failure@).
+--
+-- This error can occur when concurrent transactions modify the same row(s) at
+-- serializable isolation level.
+--
+-- This predicate is intended for use with 'runSqlPoolWithExtensibleHooksRetry'.
+--
+-- @since 2.13.6.0
+isSerializationFailure :: SomeException -> Bool
+isSerializationFailure ex
+  | Just sqlError <- fromException ex = PG.isSerializationError sqlError
+  | otherwise = False
+
+-- | An exception predicate checking for a PostgreSQL deadlock detected error,
+-- i.e. a @SQLSTATE@ error code of @"40P01"@ (@deadlock_detected@).
+--
+-- This predicate is intended for use with 'runSqlPoolWithExtensibleHooksRetry'.
+--
+-- @since 2.13.6.0
+isDeadlockDetected :: SomeException -> Bool
+isDeadlockDetected ex
+  | Just sqlError <- fromException ex = PG.sqlState sqlError == "40P01"
+  | otherwise = False
 
 #if MIN_VERSION_base(4,12,0)
 instance (PersistCore b) => PersistCore (RawPostgresql b) where

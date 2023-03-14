@@ -1,6 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE LambdaCase #-}
 module Database.Persist.Sql.Run where
 
 import Control.Monad.IO.Unlift
@@ -21,6 +22,7 @@ import Database.Persist.Sql.Types
 import Database.Persist.Sql.Types.Internal
 import Database.Persist.SqlBackend.Internal.StatementCache
 import Database.Persist.SqlBackend.Internal.SqlPoolHooks
+import Database.Persist.SqlBackend.SqlPoolHooks (mapSqlPoolHooks)
 
 -- | Get a connection from the pool, run the given action, and then return the
 -- connection to the pool.
@@ -105,9 +107,7 @@ runSqlPoolWithHooks r pconn i before after onException =
 
 -- | This function is how 'runSqlPoolWithHooks' is defined.
 --
--- It's currently the most general function for using a SQL pool.
---
--- @since 2.13.0.0
+-- @since 2.13.3.0
 runSqlPoolWithExtensibleHooks
     :: forall backend m a. (MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => ReaderT backend m a
@@ -115,17 +115,55 @@ runSqlPoolWithExtensibleHooks
     -> Maybe IsolationLevel
     -> SqlPoolHooks m backend
     -> m a
-runSqlPoolWithExtensibleHooks r pconn i SqlPoolHooks{..} =
-    withRunInIO $ \runInIO ->
-    withResource pconn $ \conn ->
-    UE.mask $ \restore -> do
-        conn' <- restore $ runInIO $ alterBackend conn
-        _ <- restore $ runInIO $ runBefore conn' i
-        a <- restore (runInIO (runReaderT r conn'))
-            `UE.withException` \e -> do
-                runInIO $ runOnException conn' i e
-        _ <- restore $ runInIO $ runAfter conn' i
-        pure a
+runSqlPoolWithExtensibleHooks = runSqlPoolWithExtensibleHooksRetry $ const False
+
+-- | This function is equivalent to 'runSqlPoolWithExtensibleHooks' but
+-- additionally allows specifying an exception predicate. On encountering an
+-- exception during a transaction, this predicate decides whether or not the
+-- transaction should be retried. This can be used to build various retrying
+-- schemes, such as retrying on serialization/deadlock errors when running
+-- transactions at serializable isolation level.
+--
+-- Note that even though the predicate operates on 'UE.SomeException', it is
+-- only applied to synchronous exceptions. Asynchronous exceptions are always
+-- rethrown and will never trigger a retry of the transaction.
+--
+-- Considering @persistent@ abstracts over specific SQL backends, you will
+-- likely need to reach for a backend-specific exception type when defining an
+-- exception predicate.
+--
+-- @since 2.14.6.0
+runSqlPoolWithExtensibleHooksRetry
+    :: forall backend m a. (MonadUnliftIO m, BackendCompatible SqlBackend backend)
+    => (UE.SomeException -> Bool)
+    -> ReaderT backend m a
+    -> Pool backend
+    -> Maybe IsolationLevel
+    -> SqlPoolHooks m backend
+    -> m a
+runSqlPoolWithExtensibleHooksRetry shouldRetry r pconn i hooks =
+    withRunInIO $ \runInIO -> do
+        let hooksIO = mapSqlPoolHooks runInIO hooks
+        withResource pconn $ \conn -> do
+            UE.mask $ \restore -> do
+                conn' <- restore $ alterBackend hooksIO conn
+                loop (runBefore hooksIO conn' i) $ UE.try $ do
+                    a <- restore (runInIO $ runReaderT r conn')
+                        `UE.withException` \e -> do
+                            runOnException hooksIO conn' i e
+                    runAfter hooksIO conn' i
+                    pure a
+  where
+    loop :: IO () -> IO (Either UE.SomeException a) -> IO a
+    loop begin action = go
+      where
+        go = begin >> action >>= \case
+            Left ex ->
+                if shouldRetry ex
+                    then go
+                    else UE.throwIO ex
+            Right x ->
+                pure x
 
 rawAcquireSqlConn
     :: forall backend m

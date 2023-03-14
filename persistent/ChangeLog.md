@@ -5,6 +5,8 @@
 * [#xxx](FILL_THIS_IN_LATER)
     * Ensure `runOnException` hook is run when user-specified database action is
       interrupted via async exception
+    * Add `runSqlPoolWithExtensibleHooksRetry` to support automatic transaction
+      retrying on user-specified synchronous exceptions
 
 ## 2.14.5.1
 

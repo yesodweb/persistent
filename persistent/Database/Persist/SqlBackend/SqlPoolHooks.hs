@@ -1,6 +1,8 @@
+{-# LANGUAGE RankNTypes #-}
 module Database.Persist.SqlBackend.SqlPoolHooks
   ( SqlPoolHooks
   , defaultSqlPoolHooks
+  , mapSqlPoolHooks
   , getAlterBackend
   , modifyAlterBackend
   , setAlterBackend
@@ -50,6 +52,18 @@ defaultSqlPoolHooks = SqlPoolHooks
         let sqlBackend = projectBackend conn
         let getter = getStmtConn sqlBackend
         liftIO $ connRollback sqlBackend getter
+    }
+
+mapSqlPoolHooks
+  :: (forall x. m x -> n x)
+  -> SqlPoolHooks m backend
+  -> SqlPoolHooks n backend
+mapSqlPoolHooks f hooks = SqlPoolHooks
+    { alterBackend = f . alterBackend hooks
+    , runBefore = \conn mLevel -> f $ runBefore hooks conn mLevel
+    , runAfter = \conn mLevel -> f $ runAfter hooks conn mLevel
+    , runOnException = \conn mLevel ex ->
+        f $ runOnException hooks conn mLevel ex
     }
 
 getAlterBackend :: SqlPoolHooks m backend -> (backend -> m backend)
