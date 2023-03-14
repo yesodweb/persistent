@@ -23,11 +23,15 @@ module RetryableTransactionsTest
 import Control.Concurrent (threadDelay)
 import Data.Foldable (find)
 import Database.Persist.Postgresql (isSerializationFailure)
+import HookCounts
+  ( HookCounts(HookCounts, alterBackendCount, runAfterCount, runBeforeCount, runOnExceptionCount)
+  , hookCountsShouldBe, newHookCountRefs, trackHookCounts
+  )
 import Init (IsolationLevel(Serializable), aroundAll_, guard)
 import PgInit
-  ( MonadIO(..), PersistQueryWrite(deleteWhere), RunConnArgs(level, shouldRetry), Single(unSingle)
-  , (+=.), (-=.), Filter, ReaderT, Spec, SqlBackend, Text, defaultRunConnArgs, describe
-  , expectationFailure, get, insert, it, mkMigrate, mkPersist, persistLowerCase, rawSql
+  ( MonadIO(..), PersistQueryWrite(deleteWhere), RunConnArgs(level, shouldRetry, sqlPoolHooks)
+  , Single(unSingle), (+=.), (-=.), Filter, ReaderT, Spec, SqlBackend, Text, defaultRunConnArgs
+  , describe, expectationFailure, get, insert, it, mkMigrate, mkPersist, persistLowerCase, rawSql
   , runConnUsing, runConn_, runMigrationSilent, share, shouldReturn, sqlSettings, update, void
   )
 import UnliftIO.Async (Concurrently(Concurrently, runConcurrently))
@@ -59,10 +63,14 @@ specs :: Spec
 specs = aroundAll_ (bracket_ setup teardown) $ do
   describe "Testing retryable transactions" $ do
     it "serializable isolation" $ do
+      hookCountRefs <- newHookCountRefs
       let runConnArgs =
-            defaultRunConnArgs
+            (defaultRunConnArgs @IO)
               { level = Just Serializable
               , shouldRetry = isSerializationFailure
+              , sqlPoolHooks =
+                  trackHookCounts hookCountRefs
+                    $ sqlPoolHooks defaultRunConnArgs
               }
 
       child1WithinTxRef <- newTVarIO False
@@ -137,6 +145,22 @@ specs = aroundAll_ (bracket_ setup teardown) $ do
                       guard $ child1WithinTx && child2WithinTx
                       writeTVar child1ShouldUpdateRef True
 
+                    -- Check hook execution counts, verifying the following:
+                    -- 1) The main thread completed a full transaction when it
+                    -- inserted the test data. This contributes 1 towards
+                    -- @alterBackendCount@, 1 towards @runBeforeCount@, and 1
+                    -- towards @runAfterCount@).
+                    -- 2) Child threads 1 and 2 both have started a transaction.
+                    -- These child threads each contribute 1 towards
+                    -- @alterBackendCount@ and 1 towards @runBeforeCount@.
+                    hookCountRefs `hookCountsShouldBe`
+                      HookCounts
+                        { alterBackendCount = 3
+                        , runBeforeCount = 3
+                        , runOnExceptionCount = 0
+                        , runAfterCount = 1
+                        }
+
                     atomically $ do
                       guard =<< readTVar child1UpdateDoneRef
                       writeTVar child2ShouldUpdateRef True
@@ -149,6 +173,22 @@ specs = aroundAll_ (bracket_ setup teardown) $ do
 
                     atomically $ do
                       writeTVar child1ShouldCommitRef True
+
+                    -- Check hook execution counts, verifying the following:
+                    -- 1) The counts checked previously were preserved.
+                    -- 2) Child thread 1 completed its transaction, contributing
+                    -- 1 towards @runAfterCount@.
+                    -- 3) Child thread 2 retried its transaction on encountering
+                    -- a serialization failure, so it contributes 1 to
+                    -- @runOnExceptionCount@, then 1 each for @runBeforeCount@
+                    -- and @runAfterCount@ for the new transaction.
+                    hookCountRefs `hookCountsShouldBe`
+                      HookCounts
+                        { alterBackendCount = 4
+                        , runBeforeCount = 4
+                        , runOnExceptionCount = 1
+                        , runAfterCount = 3
+                        }
                 )
 
       case mTimeoutRes of
