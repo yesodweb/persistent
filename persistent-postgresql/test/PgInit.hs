@@ -1,5 +1,6 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
@@ -9,6 +10,10 @@ module PgInit
     , runConn_
     , runConnAssert
     , runConnAssertUseConf
+
+    , runConnUsing
+    , defaultRunConnArgs
+    , RunConnArgs(..)
 
     , MonadIO
     , persistSettings
@@ -125,6 +130,7 @@ import System.Log.FastLogger (fromLogStr)
 import Database.Persist
 import Database.Persist.Postgresql
 import Database.Persist.Sql
+import Database.Persist.SqlBackend.SqlPoolHooks (SqlPoolHooks, defaultSqlPoolHooks)
 import Database.Persist.TH ()
 
 _debugOn :: Bool
@@ -144,7 +150,7 @@ runConn :: MonadUnliftIO m => SqlPersistT (LoggingT m) t -> m ()
 runConn f = runConn_ f >>= const (return ())
 
 runConn_ :: MonadUnliftIO m => SqlPersistT (LoggingT m) t -> m t
-runConn_ f = runConnInternal RunConnBasic f
+runConn_ f = runConnUsing defaultRunConnArgs f
 
 -- | Data type to switch between pool creation functions, to ease testing both.
 data RunConnType =
@@ -152,8 +158,26 @@ data RunConnType =
   | RunConnConf -- ^ Use 'withPostgresqlPoolWithConf'
   deriving (Show, Eq)
 
-runConnInternal :: MonadUnliftIO m => RunConnType -> SqlPersistT (LoggingT m) t -> m t
-runConnInternal connType f = do
+data RunConnArgs m = RunConnArgs
+  { connType :: RunConnType
+  , sqlPoolHooks :: SqlPoolHooks (LoggingT m) SqlBackend
+  , level :: Maybe IsolationLevel
+  }
+
+defaultRunConnArgs :: forall m . (MonadIO m) => RunConnArgs m
+defaultRunConnArgs =
+  RunConnArgs
+    { connType = RunConnBasic
+    , sqlPoolHooks = defaultSqlPoolHooks
+    , level = Nothing
+    }
+
+runConnUsing
+  :: MonadUnliftIO m
+  => RunConnArgs m
+  -> SqlPersistT (LoggingT m) t
+  -> m t
+runConnUsing RunConnArgs { connType, sqlPoolHooks, level } action = do
   travis <- liftIO isTravis
   let debugPrint = not travis && _debugOn
       printDebug = if debugPrint then print . fromLogStr else void . return
@@ -170,7 +194,8 @@ runConnInternal connType f = do
     let go =
             case connType of
                 RunConnBasic ->
-                    withPostgresqlPool connString poolSize $ runSqlPool f
+                    withPostgresqlPool connString poolSize $ \pool -> do
+                        runSqlPoolWithExtensibleHooks action pool level sqlPoolHooks
                 RunConnConf -> do
                     let conf = PostgresConf
                           { pgConnStr = connString
@@ -178,8 +203,9 @@ runConnInternal connType f = do
                           , pgPoolIdleTimeout = 60
                           , pgPoolSize = poolSize
                           }
-                        hooks = defaultPostgresConfHooks
-                    withPostgresqlPoolWithConf conf hooks (runSqlPool f)
+                        pgConfHooks = defaultPostgresConfHooks
+                    withPostgresqlPoolWithConf conf pgConfHooks $ \pool -> do
+                        runSqlPoolWithExtensibleHooks action pool level sqlPoolHooks
     -- horrifying hack :( postgresql is having weird connection failures in
     -- CI, for no reason that i can determine. see this PR for notes:
                     -- https://github.com/yesodweb/persistent/pull/1197
@@ -204,7 +230,9 @@ runConnAssert actions = do
 -- | Like runConnAssert, but uses the "conf" flavor of functions to test that code path.
 runConnAssertUseConf :: SqlPersistT (LoggingT (ResourceT IO)) () -> Assertion
 runConnAssertUseConf actions = do
-  runResourceT $ runConnInternal RunConnConf (actions >> transactionUndo)
+  runResourceT
+    $ runConnUsing defaultRunConnArgs { connType = RunConnConf }
+    $ actions >> transactionUndo
 
 newtype AValue = AValue { getValue :: Value }
 
