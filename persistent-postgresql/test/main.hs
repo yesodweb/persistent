@@ -62,6 +62,7 @@ import qualified TypeLitFieldDefsTest
 import qualified UniqueTest
 import qualified UpsertTest
 import qualified UpsertWhere
+import qualified AsyncExceptionsTest
 
 type Tuple = (,)
 
@@ -214,3 +215,4 @@ main = do
       PgIntervalTest.specs
       ArrayAggTest.specs
       GeneratedColumnTestSQL.specsWith runConnAssert
+      AsyncExceptionsTest.specs

@@ -58,6 +58,7 @@ test-suite test
                      UpsertWhere
                      ImplicitUuidSpec
                      MigrationReferenceSpec
+                     AsyncExceptionsTest
     ghc-options:     -Wall
 
     build-depends:   base                 >= 4.9 && < 5
