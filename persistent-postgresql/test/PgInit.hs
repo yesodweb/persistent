@@ -124,6 +124,7 @@ import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Vector (Vector)
+import Database.PostgreSQL.Simple (SqlError(SqlError))
 import System.Environment (getEnvironment)
 import System.Log.FastLogger (fromLogStr)
 
@@ -211,15 +212,17 @@ runConnUsing RunConnArgs { connType, sqlPoolHooks, level } action = do
                     -- https://github.com/yesodweb/persistent/pull/1197
     eres <- try go
     case eres of
-        Left (err :: SomeException) -> do
-            eres' <- try go
-            case eres' of
-                Left (err' :: SomeException) ->
-                    if show err == show err'
-                    then throwIO err
-                    else throwIO err'
-                Right a ->
-                    pure a
+        Left (err :: SomeException)
+          | isSqlError err -> throwIO err -- throw, rather than trying the action again
+          | otherwise -> do
+              eres' <- try go
+              case eres' of
+                  Left (err' :: SomeException) ->
+                      if show err == show err'
+                      then throwIO err
+                      else throwIO err'
+                  Right a ->
+                      pure a
         Right a ->
             pure a
 
@@ -233,6 +236,11 @@ runConnAssertUseConf actions = do
   runResourceT
     $ runConnUsing defaultRunConnArgs { connType = RunConnConf }
     $ actions >> transactionUndo
+
+isSqlError :: SomeException -> Bool
+isSqlError ex
+  | Just SqlError {} <- fromException ex = True
+  | otherwise = False
 
 newtype AValue = AValue { getValue :: Value }
 

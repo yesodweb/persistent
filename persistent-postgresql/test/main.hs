@@ -63,6 +63,7 @@ import qualified UniqueTest
 import qualified UpsertTest
 import qualified UpsertWhere
 import qualified AsyncExceptionsTest
+import qualified RetryableTransactionsTest
 
 type Tuple = (,)
 
@@ -216,3 +217,4 @@ main = do
       ArrayAggTest.specs
       GeneratedColumnTestSQL.specsWith runConnAssert
       AsyncExceptionsTest.specs
+      RetryableTransactionsTest.specs
