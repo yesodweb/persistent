@@ -2,7 +2,7 @@
 
 ## 2.13.6.0
 
-* [#xxx](FILL_THIS_IN_LATER)
+* [#1482](https://github.com/yesodweb/persistent/pull/1482)
    * Add `isSerializationFailure` and `isDeadlockDetected` exception predicates
 
 ## 2.13.5.2

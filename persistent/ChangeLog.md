@@ -2,7 +2,7 @@
 
 ## 2.14.6.0
 
-* [#xxx](FILL_THIS_IN_LATER)
+* [#1482](https://github.com/yesodweb/persistent/pull/1482)
     * Ensure `runOnException` hook is run when user-specified database action is
       interrupted via async exception
     * Add `runSqlPoolWithExtensibleHooksRetry` to support automatic transaction
