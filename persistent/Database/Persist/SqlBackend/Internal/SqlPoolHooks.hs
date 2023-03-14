@@ -18,4 +18,8 @@ data SqlPoolHooks m backend = SqlPoolHooks
     -- ^ This action is performed when an exception is received. The
     -- exception is provided as a convenience - it is rethrown once this
     -- cleanup function is complete.
+    --
+    -- Note that this action is run in an @uninterruptibleMask@. If you are
+    -- overriding this hook, be sure your action can complete in a timely
+    -- manner.
     }

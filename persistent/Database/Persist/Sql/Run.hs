@@ -122,9 +122,8 @@ runSqlPoolWithExtensibleHooks r pconn i SqlPoolHooks{..} =
         conn' <- restore $ runInIO $ alterBackend conn
         _ <- restore $ runInIO $ runBefore conn' i
         a <- restore (runInIO (runReaderT r conn'))
-            `UE.catchAny` \e -> do
-                _ <- restore $ runInIO $ runOnException conn' i e
-                UE.throwIO e
+            `UE.withException` \e -> do
+                runInIO $ runOnException conn' i e
         _ <- restore $ runInIO $ runAfter conn' i
         pure a
 

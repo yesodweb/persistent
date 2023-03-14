@@ -104,9 +104,6 @@ specs = aroundAll_ (bracket_ setup teardown) $ do
       killThread threadId
 
       -- Verify that the @runOnExceptionHandler@ hook was indeed executed.
-      --
-      -- Note that the test will fail here until async exception handling is
-      -- introduced to @runSqlPoolWithExtensibleHooks@.
       hookCountRefs `hookCountsShouldBe`
         HookCounts
           { alterBackendCount = 1
