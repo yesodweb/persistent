@@ -11,6 +11,8 @@ module Database.Persist.SqlBackend.SqlPoolHooks
   , modifyRunAfter
   , setRunAfter
   , getRunOnException
+  , modifyRunOnException
+  , setRunOnException
   )
   where
 
