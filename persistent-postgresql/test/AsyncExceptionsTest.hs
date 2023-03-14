@@ -23,21 +23,20 @@ module AsyncExceptionsTest
 import Control.Concurrent (ThreadId, forkIO, killThread, myThreadId, newEmptyMVar, putMVar, takeMVar)
 import Control.Exception (MaskingState(MaskedUninterruptible), getMaskingState)
 import Data.Function ((&))
-import Database.Persist.SqlBackend.SqlPoolHooks
-  ( modifyAlterBackend, modifyRunAfter, modifyRunBefore, modifyRunOnException
-  )
+import Database.Persist.SqlBackend.SqlPoolHooks (modifyRunOnException)
 import GHC.Stack (SrcLoc, callStack, getCallStack)
-import Init (Expectation, aroundAll_, guard)
+import HookCounts
+  ( HookCountRefs(..), HookCounts(..), hookCountsShouldBe, newHookCountRefs, trackHookCounts
+  )
+import Init (aroundAll_)
 import PgInit
   ( MonadIO(..), PersistQueryWrite(deleteWhere), PersistStoreWrite(insert_)
-  , RunConnArgs(sqlPoolHooks), Filter, HasCallStack, LoggingT, ReaderT, Spec, SqlBackend, Text
-  , defaultRunConnArgs, describe, expectationFailure, it, mkMigrate, mkPersist, persistLowerCase
-  , runConnUsing, runConn_, runMigrationSilent, share, sqlSettings, void
+  , RunConnArgs(sqlPoolHooks), Filter, HasCallStack, ReaderT, Spec, SqlBackend, Text
+  , defaultRunConnArgs, describe, it, mkMigrate, mkPersist, persistLowerCase, runConnUsing, runConn_
+  , runMigrationSilent, share, sqlSettings, void
   )
 import Test.HUnit.Lang (FailureReason(Reason), HUnitFailure(HUnitFailure))
 import UnliftIO.Exception (bracket_, throwTo)
-import UnliftIO.STM (STM, TVar, atomically, modifyTVar', newTVarIO, readTVar)
-import UnliftIO.Timeout (timeout)
 
 share
   [mkPersist sqlSettings, mkMigrate "asyncExceptionsTestMigrate"]
@@ -133,15 +132,7 @@ mkRunConnArgs hookCountRefs = do
   threadId <- liftIO myThreadId
   pure $ (defaultRunConnArgs @m)
     { sqlPoolHooks =
-        sqlPoolHooks defaultRunConnArgs
-          & flip modifyAlterBackend (\origAlterBackend conn -> do
-              bumpCount alterBackendCountRef
-              origAlterBackend conn
-            )
-          & flip modifyRunBefore (\origRunBefore conn level -> do
-              bumpCount runBeforeCountRef
-              origRunBefore conn level
-            )
+        trackHookCounts hookCountRefs (sqlPoolHooks defaultRunConnArgs)
           & flip modifyRunOnException (\origRunOnException conn level ex -> do
               -- It's sneaky to make this masking state assertion here rather
               -- than explicitly in a spec. At this time, it feels a bit cleaner
@@ -157,75 +148,9 @@ mkRunConnArgs hookCountRefs = do
                       threadId
                       "Expected runOnException masking to be uninterruptible"
 
-              bumpCount runOnExceptionCountRef
               origRunOnException conn level ex
             )
-          & flip modifyRunAfter (\origRunAfter conn level -> do
-              bumpCount runAfterCountRef
-              origRunAfter conn level
-            )
     }
-  where
-  bumpCount :: TVar Int -> LoggingT m ()
-  bumpCount countRef = do
-    liftIO $ atomically $ modifyTVar' countRef (+ 1)
-
-  HookCountRefs
-    { alterBackendCountRef
-    , runBeforeCountRef
-    , runOnExceptionCountRef
-    , runAfterCountRef
-    } = hookCountRefs
-
-hookCountsShouldBe :: HasCallStack => HookCountRefs -> HookCounts -> Expectation
-hookCountsShouldBe hookCountRefs hookCounts =
-  checkHookCounts hookCountRefs (== hookCounts)
-
-checkHookCounts
-  :: HasCallStack
-  => HookCountRefs
-  -> (HookCounts -> Bool)
-  -> Expectation
-checkHookCounts hookCountRefs p = do
-  -- The input predicate can cause the STM transaction to retry, so the STM
-  -- computation is wrapped in a timeout of 10 seconds in case the STM
-  -- transaction never completes.
-  mResult <- timeout 10000000 $ atomically $ do
-    hookCounts <- hookCountsSTM hookCountRefs
-    guard $ p hookCounts
-  case mResult of
-    Nothing -> expectationFailure "checkHookCounts: took too long"
-    Just () -> pure ()
-
-data HookCountRefs = HookCountRefs
-  { alterBackendCountRef :: TVar Int
-  , runBeforeCountRef :: TVar Int
-  , runOnExceptionCountRef :: TVar Int
-  , runAfterCountRef :: TVar Int
-  }
-
-newHookCountRefs :: IO HookCountRefs
-newHookCountRefs =
-  HookCountRefs
-    <$> newTVarIO 0
-    <*> newTVarIO 0
-    <*> newTVarIO 0
-    <*> newTVarIO 0
-
-hookCountsSTM :: HookCountRefs -> STM HookCounts
-hookCountsSTM hookCountRefs =
-  HookCounts
-    <$> readTVar (alterBackendCountRef hookCountRefs)
-    <*> readTVar (runBeforeCountRef hookCountRefs)
-    <*> readTVar (runOnExceptionCountRef hookCountRefs)
-    <*> readTVar (runAfterCountRef hookCountRefs)
-
-data HookCounts = HookCounts
-  { alterBackendCount :: Int
-  , runBeforeCount :: Int
-  , runOnExceptionCount :: Int
-  , runAfterCount :: Int
-  } deriving stock (Eq, Show)
 
 throwExpectationFailureTo
   :: HasCallStack

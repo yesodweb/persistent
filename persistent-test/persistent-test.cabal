@@ -57,6 +57,7 @@ library
         UniqueTest
         UpsertTest
         LongIdentifierTest
+        HookCounts
 
     hs-source-dirs: src
 
