@@ -5,6 +5,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -19,11 +20,13 @@ module AsyncExceptionsTest
   ( specs
   ) where
 
-import Control.Concurrent (forkIO, killThread, newEmptyMVar, putMVar, takeMVar)
+import Control.Concurrent (ThreadId, forkIO, killThread, myThreadId, newEmptyMVar, putMVar, takeMVar)
+import Control.Exception (MaskingState(MaskedUninterruptible), getMaskingState)
 import Data.Function ((&))
 import Database.Persist.SqlBackend.SqlPoolHooks
   ( modifyAlterBackend, modifyRunAfter, modifyRunBefore, modifyRunOnException
   )
+import GHC.Stack (SrcLoc, callStack, getCallStack)
 import Init (Expectation, aroundAll_, guard)
 import PgInit
   ( MonadIO(..), PersistQueryWrite(deleteWhere), PersistStoreWrite(insert_)
@@ -31,7 +34,8 @@ import PgInit
   , defaultRunConnArgs, describe, expectationFailure, it, mkMigrate, mkPersist, persistLowerCase
   , runConnUsing, runConn_, runMigrationSilent, share, sqlSettings, void
   )
-import UnliftIO.Exception (bracket_)
+import Test.HUnit.Lang (FailureReason(Reason), HUnitFailure(HUnitFailure))
+import UnliftIO.Exception (bracket_, throwTo)
 import UnliftIO.STM (STM, TVar, atomically, modifyTVar', newTVarIO, readTVar)
 import UnliftIO.Timeout (timeout)
 
@@ -61,9 +65,10 @@ specs = aroundAll_ (bracket_ setup teardown) $ do
       shouldProceedRef <- newEmptyMVar
 
       hookCountRefs <- newHookCountRefs
+      runConnArgs <- mkRunConnArgs hookCountRefs
 
       threadId <- forkIO $ do
-        runConnUsing (mkRunConnArgs hookCountRefs) $ do
+        runConnUsing runConnArgs $ do
           insert_ $ AsyncExceptionTestData "bloorp"
           liftIO $ do
             -- "Child" thread signals to the main thread that the insert was
@@ -101,9 +106,13 @@ specs = aroundAll_ (bracket_ setup teardown) $ do
       -- Main thread kills the "child" thread via async exception while the
       -- "child" thread is still in its user-specified DB action, which should
       -- cause the @runOnException@ hook to fire, rolling back the transaction.
+      --
+      -- Note that the @runOnException@ hook produced by @mkRunConnArgs@ also
+      -- ensures the handler's masking state is uninterruptible. See
+      -- @mkRunConnArgs@ for that check's implementation.
       killThread threadId
 
-      -- Verify that the @runOnExceptionHandler@ hook was indeed executed.
+      -- Verify that the @runOnException@ hook was indeed executed.
       hookCountRefs `hookCountsShouldBe`
         HookCounts
           { alterBackendCount = 1
@@ -112,13 +121,17 @@ specs = aroundAll_ (bracket_ setup teardown) $ do
           , runAfterCount = 0
           }
 
+-- | Build a 'RunConnArgs' value for use in this module's specs.
+--
+-- This function should only be called from the main thread.
 mkRunConnArgs
   :: forall m
    . (MonadIO m)
   => HookCountRefs
-  -> RunConnArgs m
-mkRunConnArgs hookCountRefs =
-  (defaultRunConnArgs @m)
+  -> m (RunConnArgs m)
+mkRunConnArgs hookCountRefs = do
+  threadId <- liftIO myThreadId
+  pure $ (defaultRunConnArgs @m)
     { sqlPoolHooks =
         sqlPoolHooks defaultRunConnArgs
           & flip modifyAlterBackend (\origAlterBackend conn -> do
@@ -130,6 +143,20 @@ mkRunConnArgs hookCountRefs =
               origRunBefore conn level
             )
           & flip modifyRunOnException (\origRunOnException conn level ex -> do
+              -- It's sneaky to make this masking state assertion here rather
+              -- than explicitly in a spec. At this time, it feels a bit cleaner
+              -- to keep this assertion tucked away in here. The downside is
+              -- that this function does not run in the main thread, so we must
+              -- throw an expectation failure into the main thread on assertion
+              -- failure to have it reported by Hspec.
+              liftIO $
+                getMaskingState >>= \case
+                  MaskedUninterruptible -> pure ()
+                  _ ->
+                    throwExpectationFailureTo
+                      threadId
+                      "Expected runOnException masking to be uninterruptible"
+
               bumpCount runOnExceptionCountRef
               origRunOnException conn level ex
             )
@@ -199,3 +226,16 @@ data HookCounts = HookCounts
   , runOnExceptionCount :: Int
   , runAfterCount :: Int
   } deriving stock (Eq, Show)
+
+throwExpectationFailureTo
+  :: HasCallStack
+  => ThreadId
+  -> String
+  -> IO ()
+throwExpectationFailureTo threadId msg =
+  throwTo threadId $ HUnitFailure location $ Reason msg
+
+location :: HasCallStack => Maybe SrcLoc
+location = case reverse $ getCallStack callStack of
+  (_, loc) : _ -> Just loc
+  [] -> Nothing
