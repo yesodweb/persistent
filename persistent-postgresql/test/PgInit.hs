@@ -131,7 +131,8 @@ import System.Log.FastLogger (fromLogStr)
 import Database.Persist
 import Database.Persist.Postgresql
 import Database.Persist.Sql
-import Database.Persist.SqlBackend.SqlPoolHooks (SqlPoolHooks, defaultSqlPoolHooks)
+import Database.Persist.SqlBackend.SqlPoolHooks
+       (SqlPoolHooks, defaultSqlPoolHooks)
 import Database.Persist.TH ()
 
 _debugOn :: Bool

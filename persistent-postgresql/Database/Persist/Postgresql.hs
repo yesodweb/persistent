@@ -81,13 +81,14 @@ import qualified Database.PostgreSQL.Simple.Transaction as PG
 import qualified Database.PostgreSQL.Simple.Types as PG
 
 import Control.Arrow
-import Control.Exception (Exception(fromException), SomeException, throw, throwIO)
+import Control.Exception
+       (Exception(fromException), SomeException, throw, throwIO)
 import Control.Monad
 import Control.Monad.Except
 import Control.Monad.IO.Unlift (MonadIO(..), MonadUnliftIO)
 import Control.Monad.Logger (MonadLoggerIO, runNoLoggingT)
-import Control.Monad.Trans.Reader (ReaderT(..), asks, runReaderT)
 import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.Reader (ReaderT(..), asks, runReaderT)
 #if !MIN_VERSION_base(4,12,0)
 import Control.Monad.Trans.Reader (withReaderT)
 #endif
@@ -106,8 +107,8 @@ import qualified Data.Conduit.List as CL
 import Data.Data (Data)
 import Data.Either (partitionEithers)
 import Data.Function (on)
-import Data.IORef
 import Data.Int (Int64)
+import Data.IORef
 import Data.List (find, foldl', groupBy, sort)
 import qualified Data.List as List
 import Data.List.NonEmpty (NonEmpty)
@@ -126,12 +127,13 @@ import System.Environment (getEnvironment)
 #if MIN_VERSION_base(4,12,0)
 import Database.Persist.Compatible
 #endif
+import qualified Data.Vault.Strict as Vault
 import Database.Persist.Postgresql.Internal
 import Database.Persist.Sql
 import qualified Database.Persist.Sql.Util as Util
 import Database.Persist.SqlBackend
-import Database.Persist.SqlBackend.StatementCache (StatementCache, mkSimpleStatementCache, mkStatementCache)
-import qualified Data.Vault.Strict as Vault
+import Database.Persist.SqlBackend.StatementCache
+       (StatementCache, mkSimpleStatementCache, mkStatementCache)
 import System.IO.Unsafe (unsafePerformIO)
 
 -- | A @libpq@ connection string.  A simple example of connection

@@ -20,11 +20,11 @@ module Database.Persist.SqlBackend.SqlPoolHooks
 
 import Control.Exception
 import Control.Monad.IO.Class
+import Database.Persist.Class.PersistStore
 import Database.Persist.Sql.Raw
 import Database.Persist.SqlBackend.Internal
-import Database.Persist.SqlBackend.Internal.SqlPoolHooks
 import Database.Persist.SqlBackend.Internal.IsolationLevel
-import Database.Persist.Class.PersistStore
+import Database.Persist.SqlBackend.Internal.SqlPoolHooks
 
 -- | Lifecycle hooks that may be altered to extend SQL pool behavior
 -- in a backwards compatible fashion.

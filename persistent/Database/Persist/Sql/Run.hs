@@ -1,12 +1,12 @@
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Database.Persist.Sql.Run where
 
+import Control.Monad (void)
 import Control.Monad.IO.Unlift
 import Control.Monad.Logger.CallStack
-import Control.Monad (void)
 import Control.Monad.Reader (MonadReader)
 import qualified Control.Monad.Reader as MonadReader
 import Control.Monad.Trans.Reader hiding (local)
@@ -20,8 +20,8 @@ import Database.Persist.Class.PersistStore
 import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Types.Internal
-import Database.Persist.SqlBackend.Internal.StatementCache
 import Database.Persist.SqlBackend.Internal.SqlPoolHooks
+import Database.Persist.SqlBackend.Internal.StatementCache
 import Database.Persist.SqlBackend.SqlPoolHooks (mapSqlPoolHooks)
 
 -- | Get a connection from the pool, run the given action, and then return the

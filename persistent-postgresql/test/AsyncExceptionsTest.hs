@@ -20,21 +20,51 @@ module AsyncExceptionsTest
   ( specs
   ) where
 
-import Control.Concurrent (ThreadId, forkIO, killThread, myThreadId, newEmptyMVar, putMVar, takeMVar)
+import Control.Concurrent
+       ( ThreadId
+       , forkIO
+       , killThread
+       , myThreadId
+       , newEmptyMVar
+       , putMVar
+       , takeMVar
+       )
 import Control.Exception (MaskingState(MaskedUninterruptible), getMaskingState)
 import Data.Function ((&))
 import Database.Persist.SqlBackend.SqlPoolHooks (modifyRunOnException)
 import GHC.Stack (SrcLoc, callStack, getCallStack)
 import HookCounts
-  ( HookCountRefs(..), HookCounts(..), hookCountsShouldBe, newHookCountRefs, trackHookCounts
-  )
+       ( HookCountRefs(..)
+       , HookCounts(..)
+       , hookCountsShouldBe
+       , newHookCountRefs
+       , trackHookCounts
+       )
 import Init (aroundAll_)
 import PgInit
-  ( MonadIO(..), PersistQueryWrite(deleteWhere), PersistStoreWrite(insert_)
-  , RunConnArgs(sqlPoolHooks), Filter, HasCallStack, ReaderT, Spec, SqlBackend, Text
-  , defaultRunConnArgs, describe, it, mkMigrate, mkPersist, persistLowerCase, runConnUsing, runConn_
-  , runMigrationSilent, share, sqlSettings, void
-  )
+       ( Filter
+       , HasCallStack
+       , MonadIO(..)
+       , PersistQueryWrite(deleteWhere)
+       , PersistStoreWrite(insert_)
+       , ReaderT
+       , RunConnArgs(sqlPoolHooks)
+       , Spec
+       , SqlBackend
+       , Text
+       , defaultRunConnArgs
+       , describe
+       , it
+       , mkMigrate
+       , mkPersist
+       , persistLowerCase
+       , runConnUsing
+       , runConn_
+       , runMigrationSilent
+       , share
+       , sqlSettings
+       , void
+       )
 import Test.HUnit.Lang (FailureReason(Reason), HUnitFailure(HUnitFailure))
 import UnliftIO.Exception (bracket_, throwTo)
 

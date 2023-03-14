@@ -15,8 +15,12 @@ module HookCounts
 import Control.Monad.IO.Unlift (MonadIO(liftIO))
 import Data.Function ((&))
 import Database.Persist.SqlBackend.SqlPoolHooks
-  ( SqlPoolHooks, modifyAlterBackend, modifyRunAfter, modifyRunBefore, modifyRunOnException
-  )
+       ( SqlPoolHooks
+       , modifyAlterBackend
+       , modifyRunAfter
+       , modifyRunBefore
+       , modifyRunOnException
+       )
 import Init (Expectation, HasCallStack, expectationFailure, guard)
 import UnliftIO.STM (STM, TVar, atomically, modifyTVar', newTVarIO, readTVar)
 import UnliftIO.Timeout (timeout)

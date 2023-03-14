@@ -22,23 +22,50 @@ module RetryableTransactionsTest
 
 import Control.Concurrent (threadDelay)
 import Data.Foldable (find)
+import qualified Data.Text as Text
 import Database.Persist.Postgresql (isSerializationFailure)
 import HookCounts
-  ( HookCounts(HookCounts, alterBackendCount, runAfterCount, runBeforeCount, runOnExceptionCount)
-  , hookCountsShouldBe, newHookCountRefs, trackHookCounts
-  )
+       ( HookCounts(HookCounts, alterBackendCount, runAfterCount, runBeforeCount, runOnExceptionCount)
+       , hookCountsShouldBe
+       , newHookCountRefs
+       , trackHookCounts
+       )
 import Init (IsolationLevel(Serializable), aroundAll_, guard)
 import PgInit
-  ( MonadIO(..), PersistQueryWrite(deleteWhere), RunConnArgs(level, shouldRetry, sqlPoolHooks)
-  , Single(unSingle), (+=.), (-=.), Filter, ReaderT, Spec, SqlBackend, Text, defaultRunConnArgs
-  , describe, expectationFailure, get, insert, it, mkMigrate, mkPersist, persistLowerCase, rawSql
-  , runConnUsing, runConn_, runMigrationSilent, share, shouldReturn, sqlSettings, update, void
-  )
+       ( Filter
+       , MonadIO(..)
+       , PersistQueryWrite(deleteWhere)
+       , ReaderT
+       , RunConnArgs(level, shouldRetry, sqlPoolHooks)
+       , Single(unSingle)
+       , Spec
+       , SqlBackend
+       , Text
+       , defaultRunConnArgs
+       , describe
+       , expectationFailure
+       , get
+       , insert
+       , it
+       , mkMigrate
+       , mkPersist
+       , persistLowerCase
+       , rawSql
+       , runConnUsing
+       , runConn_
+       , runMigrationSilent
+       , share
+       , shouldReturn
+       , sqlSettings
+       , update
+       , void
+       , (+=.)
+       , (-=.)
+       )
 import UnliftIO.Async (Concurrently(Concurrently, runConcurrently))
 import UnliftIO.Exception (bracket_)
 import UnliftIO.STM (atomically, newTVarIO, readTVar, writeTVar)
 import UnliftIO.Timeout (timeout)
-import qualified Data.Text as Text
 
 share
   [mkPersist sqlSettings, mkMigrate "retryableTransactionsTestMigrate"]

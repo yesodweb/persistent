@@ -23,6 +23,7 @@ import Data.Time
 import Test.QuickCheck
 
 import qualified ArrayAggTest
+import qualified AsyncExceptionsTest
 import qualified CompositeTest
 import qualified CustomConstraintTest
 import qualified CustomPersistFieldTest
@@ -47,14 +48,15 @@ import qualified MigrationReferenceSpec
 import qualified MigrationTest
 import qualified MpsCustomPrefixTest
 import qualified MpsNoPrefixTest
-import qualified PersistUniqueTest
 import qualified PersistentTest
+import qualified PersistUniqueTest
 import qualified PgIntervalTest
 import qualified PrimaryTest
 import qualified RawSqlTest
 import qualified ReadWriteTest
 import qualified Recursive
 import qualified RenameTest
+import qualified RetryableTransactionsTest
 import qualified SumTypeTest
 import qualified TransactionLevelTest
 import qualified TreeTest
@@ -62,8 +64,6 @@ import qualified TypeLitFieldDefsTest
 import qualified UniqueTest
 import qualified UpsertTest
 import qualified UpsertWhere
-import qualified AsyncExceptionsTest
-import qualified RetryableTransactionsTest
 
 type Tuple = (,)
 
