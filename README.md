@@ -88,14 +88,12 @@ Key-value stores such as Redis can be used with persistent, but only fill out th
 Persistent provides several hooks to create backend-specific functionality.
 One can always fall back to using the raw database driver or other lower-level or less type-safe libraries and can utilize Persistent for un-serializing the database response to a Haskell record.
 
-## Install from source
+# Help improve Persistent
 
-Clone the repo and run `stack build` to build all targets. Persistent
+To install from source clone the repo and run `stack build` to build all targets. Persistent
 supports many backends. If you have only some of these installed the
 [development doc](development.md) shows how to build against a subset of
 targets.
 
-## Development
-
-For more information on how to hack ont he `persistent` set of libraries, see
+For more information on how to hack on the `persistent` set of libraries, see
 the [`development.md`](development.md) file.
