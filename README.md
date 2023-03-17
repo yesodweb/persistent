@@ -13,6 +13,23 @@ Persistent's goal is to catch every possible error at compile-time, and it comes
 
 # Quickstart
 
+<details>
+<summary>
+Click to show package.yaml part.
+<a href="https://www.yesodweb.com/book/persistent#persistent_synopsis" target="_blank">View extended example.</a>
+</summary>
+
+```yaml
+dependencies:
+- base ^>= 4.17
+- text ^>= 2
+- persistent ^>= 2.14
+- persistent-sqlite ^>= 2.13
+```
+
+</details>
+<p></p>
+
 ```haskell
 {-# LANGUAGE EmptyDataDecls             #-}
 {-# LANGUAGE FlexibleContexts           #-}
