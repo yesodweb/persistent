@@ -11,6 +11,52 @@ In dynamic languages rather than compile time errors, safety comes from creating
 
 Persistent's goal is to catch every possible error at compile-time, and it comes close to that.
 
+# Quickstart
+
+```haskell
+{-# LANGUAGE EmptyDataDecls             #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE GADTs                      #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE QuasiQuotes                #-}
+{-# LANGUAGE TemplateHaskell            #-}
+{-# LANGUAGE TypeFamilies               #-}
+import           Control.Monad.IO.Class  (liftIO)
+import           Database.Persist
+import           Database.Persist.Sqlite
+import           Database.Persist.TH
+import           Data.Text
+
+share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
+Person
+    name Text
+    age Int Maybe
+    deriving Show
+|]
+
+main :: IO ()
+main = runSqlite ":memory:" $ do
+    -- setup db schema
+    runMigration migrateAll
+    
+    -- write to db
+    insert $ Person "Jane Doe" Nothing
+    johnId <- insert $ Person "John Doe" $ Just 35
+
+    -- read from db
+    john1 <- selectList [PersonId ==. johnId] [LimitTo 1]
+    john2 <- get johnId
+
+    liftIO $ print (john1 :: [Entity Person])
+    liftIO $ print (john2 :: Maybe Person)
+    
+    -- delete from db
+    delete johnId
+    deleteWhere [PersonId ==. johnId]
+```
+
 # Backend agnostic
 
 Supports PostgreSql, Sqlite, MongoDB, Redis, ZooKeeper, and many other databases via [persistent-odbc](https://github.com/gbwey/persistent-odbc).
