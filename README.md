@@ -1,6 +1,4 @@
-## Learn more: http://www.yesodweb.com/book/persistent
-
-[![Join the chat at https://gitter.im/yesodweb/persistent](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/yesodweb/persistent?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge) [![Build Status](https://travis-ci.org/yesodweb/persistent.svg?branch=master)](https://travis-ci.org/yesodweb/persistent) ![Hackage](https://img.shields.io/hackage/v/persistent.svg) ![Hackage-Deps](https://img.shields.io/hackage-deps/v/persistent.svg)
+# Persistent [![Build Status](https://travis-ci.org/yesodweb/persistent.svg?branch=master)](https://travis-ci.org/yesodweb/persistent) ![Hackage](https://img.shields.io/hackage/v/persistent.svg) ![Hackage-Deps](https://img.shields.io/hackage-deps/v/persistent.svg) [![Join the chat at https://gitter.im/yesodweb/persistent](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/yesodweb/persistent?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 A Haskell datastore. Datastores are often referred to as "ORM"s. While 'O' traditionally means object, the concept can be generalized as:
 
@@ -16,7 +14,7 @@ Persistent's goal is to catch every possible error at compile-time, and it comes
 <details>
 <summary>
 Click to show package.yaml part.
-<a href="https://www.yesodweb.com/book/persistent#persistent_synopsis" target="_blank">View extended example.</a>
+Learn more at <a href="https://www.yesodweb.com/book/persistent" target="_blank">http://www.yesodweb.com/book/persistent.</a>
 </summary>
 
 ```yaml
@@ -89,7 +87,6 @@ Key-value stores such as Redis can be used with persistent, but only fill out th
 
 Persistent provides several hooks to create backend-specific functionality.
 One can always fall back to using the raw database driver or other lower-level or less type-safe libraries and can utilize Persistent for un-serializing the database response to a Haskell record.
-
 
 ## Install from source
 
