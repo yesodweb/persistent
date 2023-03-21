@@ -15,7 +15,7 @@ bug-reports:     https://github.com/yesodweb/persistent/issues
 extra-source-files: ChangeLog.md README.md
 
 library
-    build-depends:   
+    build-depends:
         base                     >= 4.11.1.0     && < 5
       , aeson                    >= 1.0 && < 2.2
       , attoparsec
@@ -29,13 +29,13 @@ library
       , http-api-data            >= 0.3
       , lift-type                >= 0.1.0.0 && < 0.2.0.0
       , monad-logger             >= 0.3.28
-      , mtl                                   
+      , mtl
       , path-pieces              >= 0.2
       , resource-pool            >= 0.2.3
       , resourcet                >= 1.1.10
       , scientific
       , silently
-      , template-haskell         >= 2.13 && < 2.20
+      , template-haskell         >= 2.13 && < 2.21
       , text                     >= 1.2
       , th-lift-instances        >= 0.1.14    && < 0.2
       , time                     >= 1.6
@@ -46,13 +46,13 @@ library
       , vault
       , vector
 
-    default-extensions: 
+    default-extensions:
         FlexibleContexts
       , MultiParamTypeClasses
       , OverloadedStrings
       , TypeFamilies
 
-    exposed-modules: 
+    exposed-modules:
         Database.Persist
         Database.Persist.Types
         Database.Persist.Names
@@ -92,7 +92,7 @@ library
         Database.Persist.Class.PersistField
         Database.Persist.Class.PersistStore
 
-    other-modules:   
+    other-modules:
         Database.Persist.Types.Base
 
         Database.Persist.Sql.Internal
@@ -106,9 +106,9 @@ library
 
     -- These modules only make sense for compilers with access to DerivingVia
     if impl(ghc >= 8.6.1)
-        exposed-modules: 
+        exposed-modules:
             Database.Persist.Compatible
-        other-modules: 
+        other-modules:
             Database.Persist.Compatible.Types
             Database.Persist.Compatible.TH
 
@@ -119,7 +119,7 @@ test-suite test
     type:          exitcode-stdio-1.0
     main-is:       main.hs
 
-    build-depends:   
+    build-depends:
         base >= 4.9 && < 5
       , aeson
       , attoparsec
@@ -164,7 +164,7 @@ test-suite test
                       , TypeFamilies
                       , TypeOperators
 
-    other-modules:   
+    other-modules:
         Database.Persist.ClassSpec
         Database.Persist.PersistValueSpec
         Database.Persist.QuasiSpec
