@@ -45,7 +45,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        cabal: ["3.6"]
+        cabal: ["3.8"]
         ghc:
           - "8.4.4"
           - "8.6.5"
@@ -54,6 +54,7 @@ jobs:
           - "9.0.2"
           - "9.2.4"
           - "9.4.1"
+          - "9.6.1"
 
     env:
       CONFIG: "--enable-tests --enable-benchmarks"
