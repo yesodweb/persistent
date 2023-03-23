@@ -52,6 +52,7 @@ module Database.Sqlite  (
     -- > $ ([PersistInt64 1,PersistInt64 1],[PersistInt64 2,PersistInt64 2])
 
                          open,
+                         open',
                          close,
                          prepare,
                          step,
@@ -221,10 +222,10 @@ sqlError maybeConnection functionName error = do
 foreign import ccall "sqlite3_open_v2"
   openC :: CString -> Ptr (Ptr ()) -> Int -> CString -> IO Int
 
-openError :: Text -> IO (Either Connection Error)
+openError :: BS.ByteString -> IO (Either Connection Error)
 openError path' = do
     let flag = sqliteFlagReadWrite .|. sqliteFlagCreate .|. sqliteFlagUri
-    BS.useAsCString (encodeUtf8 path') $ \path -> alloca $ \database -> do
+    BS.useAsCString path' $ \path -> alloca $ \database -> do
         err <- decodeError <$> openC path database flag nullPtr
         case err of
             ErrorOK -> do database' <- peek database
@@ -238,7 +239,11 @@ openError path' = do
     sqliteFlagUri       = 0x40
 
 open :: Text -> IO Connection
-open path = do
+open path = open' (encodeUtf8 path)
+
+-- @since 2.13.2.0
+open' :: BS.ByteString -> IO Connection
+open' path = do
   databaseOrError <- openError path
   case databaseOrError of
     Left database -> return database
