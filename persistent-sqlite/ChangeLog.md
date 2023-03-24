@@ -11,6 +11,11 @@
     * Add `SqlBackendHooks` to allow for instrumentation of queries.
 * [#1327](https://github.com/yesodweb/persistent/pull/1327)
     * Update backend to support new `StatementCache` interface
+* [#1488](https://github.com/yesodweb/persistent/pull/1488)
+    * Add `openRawSqliteConn` for creating `RawSqlite SqlBackend` connections
+      that aren't automatically cleaned-up.
+* [#1459](https://github.com/yesodweb/persistent/pull/1459)
+    * Make use of `CautiousMigration` type alias for clarity.
 
 ## 2.13.0.4
 
