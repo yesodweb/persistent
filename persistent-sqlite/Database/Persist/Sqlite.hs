@@ -48,6 +48,7 @@ module Database.Persist.Sqlite
     , ForeignKeyViolation(..)
     , checkForeignKeys
     , RawSqlite
+    , openRawSqliteConn
     , persistentBackend
     , rawSqliteConnection
     , openRawSqliteConn
