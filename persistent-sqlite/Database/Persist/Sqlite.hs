@@ -94,8 +94,8 @@ import qualified Data.Conduit.Combinators as C
 import qualified Data.Conduit.List as CL
 import Data.Foldable (toList)
 import qualified Data.HashMap.Lazy as HashMap
-import Data.Int (Int64)
 import Data.IORef (newIORef)
+import Data.Int (Int64)
 import Data.Maybe
 import Data.Pool (Pool)
 import Data.Text (Text)
