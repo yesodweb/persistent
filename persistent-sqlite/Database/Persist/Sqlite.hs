@@ -945,6 +945,8 @@ data RawSqlite backend = RawSqlite
 -- cleaning up the resulting connection. To do this, use 'close' with the
 -- 'rawSqliteConnection' - it's enough to simply drop the 'persistBackend'
 -- afterwards.
+--
+-- @since 2.13.2
 openRawSqliteConn
     :: (MonadUnliftIO m, MonadLoggerIO m)
     => SqliteConnectionInfo
