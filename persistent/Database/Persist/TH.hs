@@ -458,7 +458,9 @@ liftAndFixKeys mps emEntities entityMap unboundEnt =
         (fieldRef', sqlTyp') =
             case extractForeignRef entityMap ufd of
                 Just targetTable ->
-                    (lift (ForeignRef targetTable), liftSqlTypeExp (SqlTypeReference targetTable))
+                    let targetTableQualified =
+                          fromMaybe targetTable (guessFieldReferenceQualified ufd)
+                     in (lift (ForeignRef targetTable), liftSqlTypeExp (SqlTypeReference targetTableQualified))
                 Nothing ->
                     (lift NoReference, liftSqlTypeExp sqlTypeExp)
 
@@ -507,8 +509,8 @@ extractForeignRef :: EntityMap -> UnboundFieldDef -> Maybe EntityNameHS
 extractForeignRef entityMap fieldDef = do
     refName <- guessFieldReference fieldDef
     -- entityMap does not use the qualified name as key, so drop the qualifier.
-    let refName' = EntityNameHS $ snd $ T.breakOnEnd "." (unEntityNameHS refName)
-    ent <- M.lookup refName' entityMap
+    -- let refName' = EntityNameHS $ snd $ T.breakOnEnd "." (unEntityNameHS refName)
+    ent <- M.lookup refName entityMap  -- refName'
     pure $ entityHaskell $ unboundEntityDef ent
 
 guessFieldReference :: UnboundFieldDef -> Maybe EntityNameHS
@@ -516,6 +518,32 @@ guessFieldReference = guessReference . unboundFieldType
 
 guessReference :: FieldType -> Maybe EntityNameHS
 guessReference ft =
+    EntityNameHS <$> guessReferenceText (Just ft)
+  where
+    checkIdSuffix =
+        T.stripSuffix "Id"
+    guessReferenceText mft =
+        asum
+            [ do
+                FTTypeCon mmod (checkIdSuffix -> Just tableName) <- mft
+                pure tableName
+                -- handle qualified name.
+                -- pure $ maybe tableName (\qualName -> qualName <> "." <> tableName) mmod
+            , do
+                FTApp (FTTypeCon _ "Key") (FTTypeCon mmod tableName) <- mft
+                pure tableName
+                -- handle qualified name.
+                -- pure $ maybe tableName (\qualName -> qualName <> "." <> tableName) mmod
+            , do
+                FTApp (FTTypeCon _ "Maybe") next <- mft
+                guessReferenceText (Just next)
+            ]
+
+guessFieldReferenceQualified :: UnboundFieldDef -> Maybe EntityNameHS
+guessFieldReferenceQualified = guessReferenceQualified . unboundFieldType
+
+guessReferenceQualified :: FieldType -> Maybe EntityNameHS
+guessReferenceQualified ft =
     EntityNameHS <$> guessReferenceText (Just ft)
   where
     checkIdSuffix =
@@ -709,18 +737,21 @@ lookupEmbedEntity allEntities field = do
     entName <- EntityNameHS <$> asum
         [ do
             FTTypeCon mmod t <- mfieldTy
-            entName <- stripSuffix "Id" t
+            -- entName <-
+            stripSuffix "Id" t
             -- handle qualified name.
-            pure $ maybe entName (\qualName -> qualName <> "." <> entName) mmod
+            -- pure $ maybe entName (\qualName -> qualName <> "." <> entName) mmod
         , do
             FTApp (FTTypeCon _ "Key") (FTTypeCon mmod entName) <- mfieldTy
+            pure entName
             -- handle qualified name.
-            pure $ maybe entName (\qualName -> qualName <> "." <> entName) mmod
+            -- pure $ maybe entName (\qualName -> qualName <> "." <> entName) mmod
         , do
             FTApp (FTTypeCon _ "Maybe") (FTTypeCon mmod t) <- mfieldTy
-            entName <- stripSuffix "Id" t
+            -- entName <-
+            stripSuffix "Id" t
             -- handle qualified name.
-            pure $ maybe entName (\qualName -> qualName <> "." <> entName) mmod
+            -- pure $ maybe entName (\qualName -> qualName <> "." <> entName) mmod
         ]
     guard (M.member entName allEntities) -- check entity name exists in embed fmap
     pure entName
