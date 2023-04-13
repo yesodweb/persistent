@@ -50,6 +50,7 @@ module Database.Persist.Sqlite
     , RawSqlite
     , persistentBackend
     , rawSqliteConnection
+    , openRawSqliteConn
     , withRawSqliteConnInfo
     , createRawSqlitePoolFromInfo
     , createRawSqlitePoolFromInfo_
