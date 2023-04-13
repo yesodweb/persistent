@@ -349,6 +349,13 @@ data FieldAttr
     -- User
     --     uuid     Text    sqltype="UUID"
     -- @
+    | FieldAttrCollate Text
+    -- ^ Specify the (custom) collation used for the column.
+    --
+    -- @
+    -- Email
+    --     address    Text  collate="lowercase"
+    -- @
     | FieldAttrMaxlen Integer
     -- ^ Set a maximum length for a column. Useful for VARCHAR and indexes.
     --
@@ -389,6 +396,7 @@ parseFieldAttrs = fmap $ \case
         | Just x <- T.stripPrefix "constraint=" raw -> FieldAttrConstraint x
         | Just x <- T.stripPrefix "default=" raw -> FieldAttrDefault x
         | Just x <- T.stripPrefix "sqltype=" raw -> FieldAttrSqltype x
+        | Just x <- T.stripPrefix "collate=" raw -> FieldAttrCollate x
         | Just x <- T.stripPrefix "maxlen=" raw -> case reads (T.unpack x) of
             [(n, s)] | all isSpace s -> FieldAttrMaxlen n
             _ -> error $ "Could not parse maxlen field with value " <> show raw
