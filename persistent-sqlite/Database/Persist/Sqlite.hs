@@ -625,7 +625,7 @@ mayGenerated gen = case gen of
     Just g -> " GENERATED ALWAYS AS (" <> g <> ") STORED"
 
 sqlColumn :: Bool -> Column -> Text
-sqlColumn noRef (Column name isNull typ def gen _cn _maxLen ref) = T.concat
+sqlColumn noRef (Column name isNull typ def gen _cn _maxLen _collation ref) = T.concat
     [ ","
     , escapeF name
     , " "
