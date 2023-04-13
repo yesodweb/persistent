@@ -129,6 +129,7 @@ mkColumns allDefs t overrides =
             , cGenerated = fieldGenerated fd
             , cDefaultConstraintName =  Nothing
             , cMaxLen = maxLen $ fieldAttrs fd
+            , cCollation = collation $ fieldAttrs fd
             , cReference = mkColumnReference fd
             }
 
@@ -148,12 +149,18 @@ mkColumns allDefs t overrides =
             , cGenerated = fieldGenerated fd
             , cDefaultConstraintName =  Nothing
             , cMaxLen = maxLen $ fieldAttrs fd
+            , cCollation = collation $ fieldAttrs fd
             , cReference = mkColumnReference fd
             }
 
     maxLen :: [FieldAttr] -> Maybe Integer
     maxLen = findMaybe $ \case
         FieldAttrMaxlen n -> Just n
+        _ -> Nothing
+
+    collation :: [FieldAttr] -> Maybe CollationName
+    collation = findMaybe $ \case
+        FieldAttrCollate n -> Just (CollationName n)
         _ -> Nothing
 
     refNameFn = fromMaybe refName (backendSpecificForeignKeyName overrides)
