@@ -618,7 +618,8 @@ getColumns connectInfo getter def cols = do
       ,   "NUMERIC_PRECISION, "
       ,   "NUMERIC_SCALE, "
       ,   "COLUMN_DEFAULT, "
-      ,   "GENERATION_EXPRESSION "
+      ,   "GENERATION_EXPRESSION, "
+      ,   "COLLATION_NAME "
       , "FROM INFORMATION_SCHEMA.COLUMNS "
       , "WHERE TABLE_SCHEMA = ? "
       ,   "AND TABLE_NAME   = ? "
@@ -690,6 +691,7 @@ getColumn connectInfo getter tname [ PersistText cname
                                    , colScale
                                    , default'
                                    , generated
+                                   , collation
                                    ] cRef =
     fmap (either (Left . pack) Right) $
     runExceptT $ do
@@ -752,9 +754,13 @@ getColumn connectInfo getter tname [ PersistText cname
             , cGenerated = generated_
             , cDefaultConstraintName = Nothing
             , cMaxLen = maxLen
+            , cCollation = parseCollation collation
             , cReference = ref
             }
   where
+    parseCollation (PersistText n) = Just (CollationName n)
+    parseCollation _ = Nothing
+
     getRef Nothing = return Nothing
     getRef (Just refName') = do
         -- Foreign key (if any)
@@ -916,7 +922,7 @@ findAlters
     -> Column
     -> [Column]
     -> ([AlterColumn], [Column])
-findAlters edef allDefs col@(Column name isNull type_ def gen _defConstraintName maxLen ref) cols =
+findAlters edef allDefs col@(Column name isNull type_ def gen _defConstraintName maxLen collation ref) cols =
     case filter ((name ==) . cName) cols of
     -- new fkey that didn't exist before
         [] ->
@@ -928,7 +934,7 @@ findAlters edef allDefs col@(Column name isNull type_ def gen _defConstraintName
                         cnstr = [addReference allDefs cname tname name (crFieldCascade cr)]
                     in
                         (Add' col : cnstr, cols)
-        Column _ isNull' type_' def' gen' _defConstraintName' maxLen' ref' : _ ->
+        Column _ isNull' type_' def' gen' _defConstraintName' maxLen' collation ref' : _ ->
             let -- Foreign key
                 refDrop =
                     case (ref == ref', ref') of
@@ -985,7 +991,7 @@ showAlterColumn :: Column -> String
 showAlterColumn = showColumn True
 
 showColumn :: Bool -> Column -> String
-showColumn showReferences (Column n nu t def gen _defConstraintName maxLen ref) = concat
+showColumn showReferences (Column n nu t def gen _defConstraintName maxLen _collation ref) = concat
     [ escapeF n
     , " "
     , showSqlType t maxLen True
@@ -1078,14 +1084,14 @@ showAlterTable table (DropUniqueConstraint cname) = concat
 
 -- | Render an action that must be done on a column.
 showAlter :: EntityNameDB -> AlterColumn -> String
-showAlter table (Change (Column n nu t def gen defConstraintName maxLen _ref)) =
+showAlter table (Change (Column n nu t def gen defConstraintName maxLen collation _ref)) =
     concat
     [ "ALTER TABLE "
     , escapeE table
     , " CHANGE "
     , escapeF n
     , " "
-    , showAlterColumn (Column n nu t def gen defConstraintName maxLen Nothing)
+    , showAlterColumn (Column n nu t def gen defConstraintName maxLen collation Nothing)
     ]
 showAlter table (Add' col) =
     concat
