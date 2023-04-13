@@ -605,6 +605,20 @@ bindCompositeDef ued ucd = do
             }
         |]
 
+-- | TODO: This should call the same `getType` used
+-- in the migration autogenerator before assigning
+-- something as SqlOther, ex.:
+--
+-- > email Text 
+-- ...is assigned to SqlString, whereas:
+--
+-- > email Text sqltype=text
+-- ...is assigned to (SqlOther "text") because of this function.
+--
+-- ...even though all `text` columns get parsed to SqlString
+-- anyway during migration autogeneration.
+--
+-- ...thereby perpetually forcing an unnecessary migration.
 getSqlType :: M.Map EntityNameHS a -> EntityMap -> UnboundFieldDef -> SqlTypeExp
 getSqlType emEntities entityMap field =
     maybe
