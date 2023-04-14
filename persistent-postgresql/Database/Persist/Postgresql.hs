@@ -1205,10 +1205,11 @@ getAddReference allDefs entity cname cr@ColumnReference {crTableName = s, crCons
                 return $ NEL.toList $ Util.dbIdColumnsEsc escapeF entDef
 
 showColumn :: Column -> Text
-showColumn (Column n nu sqlType' def gen _defConstraintName _maxLen _collation _ref) = T.concat
+showColumn (Column n nu sqlType' def gen _defConstraintName _maxLen collation _ref) = T.concat
     [ escapeF n
     , " "
     , showSqlType sqlType'
+    , maybe mempty (\c -> " COLLATE " <> escapeCl c) collation
     , " "
     , if nu then "NULL" else "NOT NULL"
     , case def of
