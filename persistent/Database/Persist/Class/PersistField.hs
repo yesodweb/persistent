@@ -209,26 +209,31 @@ intParseError haskellType original = T.concat
 instance PersistField Data.Word.Word where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
+    fromPersistValue (PersistDouble i) = Right $ truncate i
     fromPersistValue x = Left $ fromPersistValueError "Word" "integer" x
 
 instance PersistField Word8 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
+    fromPersistValue (PersistDouble i) = Right $ truncate i
     fromPersistValue x = Left $ fromPersistValueError "Word8" "integer" x
 
 instance PersistField Word16 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
+    fromPersistValue (PersistDouble i) = Right $ truncate i
     fromPersistValue x = Left $ fromPersistValueError "Word16" "integer" x
 
 instance PersistField Word32 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
+    fromPersistValue (PersistDouble i) = Right $ truncate i
     fromPersistValue x = Left $ fromPersistValueError "Word32" "integer" x
 
 instance PersistField Word64 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
+    fromPersistValue (PersistDouble i) = Right $ truncate i
     fromPersistValue x = Left $ fromPersistValueError "Word64" "integer" x
 
 instance PersistField Double where
