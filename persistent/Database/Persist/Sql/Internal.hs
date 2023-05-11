@@ -7,6 +7,7 @@
 module Database.Persist.Sql.Internal
     ( mkColumns
     , defaultAttribute
+    , collation
     , BackendSpecificOverrides(..)
     , getBackendSpecificForeignKeyName
     , setBackendSpecificForeignKeyName
@@ -72,6 +73,11 @@ emptyBackendSpecificOverrides = BackendSpecificOverrides Nothing
 defaultAttribute :: [FieldAttr] -> Maybe Text
 defaultAttribute = findMaybe $ \case
     FieldAttrDefault x -> Just x
+    _ -> Nothing
+
+collation :: [FieldAttr] -> Maybe CollationName
+collation = findMaybe $ \case
+    FieldAttrCollate n -> Just (CollationName n)
     _ -> Nothing
 
 -- | Create the list of columns for the given entity.
@@ -156,11 +162,6 @@ mkColumns allDefs t overrides =
     maxLen :: [FieldAttr] -> Maybe Integer
     maxLen = findMaybe $ \case
         FieldAttrMaxlen n -> Just n
-        _ -> Nothing
-
-    collation :: [FieldAttr] -> Maybe CollationName
-    collation = findMaybe $ \case
-        FieldAttrCollate n -> Just (CollationName n)
         _ -> Nothing
 
     refNameFn = fromMaybe refName (backendSpecificForeignKeyName overrides)
