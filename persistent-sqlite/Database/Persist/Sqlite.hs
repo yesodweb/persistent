@@ -609,11 +609,17 @@ mkCreateTable isTemp entity (cols, uniqs, fdefs) =
             , " "
             , showSqlType $ fieldSqlType fd
             , " PRIMARY KEY"
+            , mayCollate $ collation $ fieldAttrs fd
             , mayDefault $ defaultAttribute $ fieldAttrs fd
             , T.concat $ map (sqlColumn isTemp) nonIdCols
             ]
 
     nonIdCols = filter (\c -> Just (cName c) /= fmap fieldDB (getEntityIdField entity)) cols
+
+mayCollate :: Maybe CollationName -> Text
+mayCollate c = case c of
+    Nothing -> ""
+    Just c -> " COLLATE " <> escapeCl c
 
 mayDefault :: Maybe Text -> Text
 mayDefault def = case def of
@@ -626,12 +632,13 @@ mayGenerated gen = case gen of
     Just g -> " GENERATED ALWAYS AS (" <> g <> ") STORED"
 
 sqlColumn :: Bool -> Column -> Text
-sqlColumn noRef (Column name isNull typ def gen _cn _maxLen _collation ref) = T.concat
+sqlColumn noRef (Column name isNull typ def gen _cn _maxLen collation ref) = T.concat
     [ ","
     , escapeF name
     , " "
     , showSqlType typ
     , if isNull then " NULL" else " NOT NULL"
+    , mayCollate collation
     , mayDefault def
     , mayGenerated gen
     , case ref of
@@ -681,6 +688,9 @@ sqlUnique (UniqueDef _ cname cols _) = T.concat
 
 escapeC :: ConstraintNameDB -> Text
 escapeC = escapeWith escape
+
+escapeCl :: CollationName -> Text
+escapeCl = escapeWith escape
 
 escapeE :: EntityNameDB -> Text
 escapeE = escapeWith escape
