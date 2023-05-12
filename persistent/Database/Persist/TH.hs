@@ -1994,18 +1994,26 @@ mkEntity embedEntityMap entityMap mps preDef = do
     [keyFromRecordM'] <-
         case unboundPrimarySpec entDef of
             NaturalKey ucd -> do
+                let rawKeyFields' =
+                        fieldNameToRecordName mps entDef <$> unboundCompositeCols ucd
+
+                keyFieldNames <- forM rawKeyFields' $ \fieldName -> do
+                    fieldVarName <- newName (nameBase fieldName)
+                    return (fieldName, fieldVarName)
+
                 let
                     keyCon =
                         keyConName entDef
-                    keyFields' =
-                        fieldNameToRecordName mps entDef <$> unboundCompositeCols ucd
                     constr =
                         foldl'
                             AppE
                             (ConE keyCon)
-                            (VarE <$> keyFields')
+                            (VarE . snd <$> keyFieldNames)
                     keyFromRec = varP 'keyFromRecordM
-                    lam = LamE [RecP name [(n, VarP n) | n <- toList keyFields']] constr
+                    fieldPatterns = [ (fieldName, VarP fieldVarName)
+                                    | (fieldName, fieldVarName) <- toList keyFieldNames
+                                    ]
+                    lam = LamE [RecP name fieldPatterns] constr
                 [d|
                     $(keyFromRec) = Just $(pure lam)
                     |]
