@@ -53,8 +53,8 @@ module Database.Persist.Quasi.Internal
 import Prelude hiding (lines)
 
 import Control.Applicative (Alternative((<|>)))
-import Data.Char (isDigit, isLower, isSpace, isUpper, toLower)
 import Control.Monad
+import Data.Char (isDigit, isLower, isSpace, isUpper, toLower)
 import Data.List (find, foldl')
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NEL
