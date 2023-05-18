@@ -141,6 +141,7 @@ import Database.Persist.ImplicitIdDef.Internal
 conp :: Name -> [Pat] -> Pat
 conp name pats = ConP name [] pats
 #else
+conp :: Name -> [Pat] -> Pat
 conp = ConP
 #endif
 
@@ -1999,13 +2000,16 @@ mkEntity embedEntityMap entityMap mps preDef = do
                         keyConName entDef
                     keyFields' =
                         fieldNameToRecordName mps entDef <$> unboundCompositeCols ucd
+                    keyFields'VarNames = map (\(kf, index) -> mkName $ showName kf ++ "_" ++ show index) $
+                                         zip (toList keyFields' ) ( [1..] :: [Int])
                     constr =
                         foldl'
                             AppE
                             (ConE keyCon)
-                            (VarE <$> keyFields')
+                            (VarE <$> keyFields'VarNames)
                     keyFromRec = varP 'keyFromRecordM
-                    lam = LamE [RecP name [(n, VarP n) | n <- toList keyFields']] constr
+                    fieldPat = zipWith (\n varn -> (n, VarP varn)) (toList keyFields') keyFields'VarNames
+                    lam = LamE [RecP name fieldPat ] constr
                 [d|
                     $(keyFromRec) = Just $(pure lam)
                     |]

@@ -10,6 +10,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE UndecidableInstances #-}
 
+{-# OPTIONS_GHC -Wname-shadowing -Werror=name-shadowing #-}
+
 module Database.Persist.TH.CompositeKeyStyleSpec where
 
 import Data.Data (Data, constrFields, toConstr)
