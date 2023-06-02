@@ -1,5 +1,10 @@
 # Changelog for persistent
 
+## 2.14.6.0
+
+* [#1480](https://github.com/yesodweb/persistent/pull/1480)
+  * Add `mpsAvoidHsKeyword` in `MkPersistSettings`
+
 ## 2.14.5.0
 
 * [#1469](https://github.com/yesodweb/persistent/pull/1469)
