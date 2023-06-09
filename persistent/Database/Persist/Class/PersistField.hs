@@ -1,44 +1,46 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE PatternGuards, DataKinds, TypeOperators, UndecidableInstances, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE UndecidableInstances #-}
 module Database.Persist.Class.PersistField
     ( PersistField (..)
     , getPersistMap
     , OverflowNatural(..)
     ) where
 
+import Control.Applicative ((<|>))
 import Control.Arrow (second)
 import Control.Monad ((<=<))
-import Control.Applicative ((<|>))
 import qualified Data.Aeson as A
-import Data.ByteString.Char8 (ByteString, unpack, readInt)
+import Data.ByteString.Char8 (ByteString, readInt, unpack)
 import qualified Data.ByteString.Lazy as L
 import Data.Fixed
-import Data.Int (Int8, Int16, Int32, Int64)
+import Data.Int (Int16, Int32, Int64, Int8)
 import qualified Data.IntMap as IM
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Data.Text (Text)
 import qualified Data.Text as T
-import Data.Text.Read (double)
 import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Encoding.Error as TERR
 import qualified Data.Text.Lazy as TL
+import Data.Text.Read (double)
 import qualified Data.Vector as V
-import Data.Word (Word, Word8, Word16, Word32, Word64)
+import Data.Word (Word, Word16, Word32, Word64, Word8)
+import GHC.TypeLits
 import Numeric.Natural (Natural)
 import Text.Blaze.Html
 import Text.Blaze.Html.Renderer.Text (renderHtml)
-import GHC.TypeLits
 
 import Database.Persist.Types.Base
 
-import Data.Time (Day(..), TimeOfDay, UTCTime,
-    parseTimeM)
-import Data.Time (defaultTimeLocale)
+import Data.Time (Day(..), TimeOfDay, UTCTime, defaultTimeLocale, parseTimeM)
 
 #ifdef HIGH_PRECISION_DATE
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
@@ -209,26 +211,31 @@ intParseError haskellType original = T.concat
 instance PersistField Data.Word.Word where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
+    fromPersistValue (PersistDouble i) = Right $ truncate i
     fromPersistValue x = Left $ fromPersistValueError "Word" "integer" x
 
 instance PersistField Word8 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
+    fromPersistValue (PersistDouble i) = Right $ truncate i
     fromPersistValue x = Left $ fromPersistValueError "Word8" "integer" x
 
 instance PersistField Word16 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
+    fromPersistValue (PersistDouble i) = Right $ truncate i
     fromPersistValue x = Left $ fromPersistValueError "Word16" "integer" x
 
 instance PersistField Word32 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
+    fromPersistValue (PersistDouble i) = Right $ truncate i
     fromPersistValue x = Left $ fromPersistValueError "Word32" "integer" x
 
 instance PersistField Word64 where
     toPersistValue = PersistInt64 . fromIntegral
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
+    fromPersistValue (PersistDouble i) = Right $ truncate i
     fromPersistValue x = Left $ fromPersistValueError "Word64" "integer" x
 
 instance PersistField Double where

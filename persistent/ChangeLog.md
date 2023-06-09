@@ -1,5 +1,12 @@
 # Changelog for persistent
 
+## 2.14.5.1
+
+* [#1491](https://github.com/yesodweb/persistent/pull/1491)
+    * Change `PersistField` instance for `Word`, `Word64`, etc. to allow
+      deserialising from `PersistDouble` values, by truncating the floating
+      point value.
+
 ## 2.14.5.0
 
 * [#1469](https://github.com/yesodweb/persistent/pull/1469)
