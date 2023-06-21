@@ -1,10 +1,11 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StrictData #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE TypeInType #-}
 
 -- | WARNING: This is an @Internal@ module. As such, breaking changes to the API
 -- of this module will not have a corresponding major version bump.
@@ -201,8 +202,11 @@ fieldTypeFromTypeable = go (typeRep @t)
                 FTTypeCon Nothing $ Text.pack $ tyConName tyCon
             App trA trB ->
                 FTApp (go trA) (go trB)
+#if __GLASGOW_HASKELL__ < 906
+            -- Ghc-9.6 removed this constructor from this data type.
             Fun _ _ ->
                 error "No functions in field defs."
+#endif
 
 -- | Remove the default attribute of the 'ImplicitIdDef' column. This will
 -- require you to provide an ID for the model with every insert, using
