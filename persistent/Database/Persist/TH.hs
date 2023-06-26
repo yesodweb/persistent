@@ -45,6 +45,7 @@ module Database.Persist.TH
     , mpsPrefixFields
     , mpsFieldLabelModifier
     , mpsConstraintLabelModifier
+    , mpsEntityHaddocks
     , mpsEntityJSON
     , mpsGenerateLenses
     , mpsDeriveInstances
@@ -1070,6 +1071,10 @@ data MkPersistSettings = MkPersistSettings
     -- Note: this setting is ignored if mpsPrefixFields is set to False.
     --
     -- @since 2.11.0.0
+    , mpsEntityHaddocks :: Bool
+    -- ^ Generate Haddocks from entity documentation comments. Default: False.
+    --
+    -- @since 2.14.6.0
     , mpsEntityJSON :: Maybe EntityJSON
     -- ^ Generate @ToJSON@/@FromJSON@ instances for each model types. If it's
     -- @Nothing@, no instances will be generated. Default:
@@ -1161,6 +1166,7 @@ mkPersistSettings backend = MkPersistSettings
     , mpsPrefixFields = True
     , mpsFieldLabelModifier = (++)
     , mpsConstraintLabelModifier = (++)
+    , mpsEntityHaddocks = False
     , mpsEntityJSON = Just EntityJSON
         { entityToJSON = 'entityIdToJSON
         , entityFromJSON = 'entityIdFromJSON
@@ -1209,8 +1215,9 @@ dataTypeDec mps entityMap entDef = do
                 (stockDerives <> anyclassDerives)
 #if __GLASGOW_HASKELL__ > 900
     case entityComments (unboundEntityDef entDef) of
-        Just doc -> withDecDoc (unpack doc) (pure dec)
-        Nothing -> pure dec
+        Just doc
+            | mpsEntityHaddocks mps -> withDecDoc (unpack doc) (pure dec)
+        _ -> pure dec
 #else
     pure dec
 #endif
