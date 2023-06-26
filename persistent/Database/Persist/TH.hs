@@ -120,7 +120,11 @@ import Instances.TH.Lift ()
 import Data.Foldable (asum, toList)
 import qualified Data.Set as Set
 import Language.Haskell.TH.Lib
+#if __GLASGOW_HASKELL__ > 900
+       (appT, conE, conK, conT, litT, strTyLit, varE, varP, varT, withDecDoc)
+#else
        (appT, conE, conK, conT, litT, strTyLit, varE, varP, varT)
+#endif
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
 import Web.HttpApiData (FromHttpApiData(..), ToHttpApiData(..))
@@ -1199,10 +1203,18 @@ dataTypeDec mps entityMap entDef = do
             pure (DerivClause (Just AnyclassStrategy) (fmap ConT anyclasses))
     unless (null anyclassDerives) $ do
         requireExtensions [[DeriveAnyClass]]
-    pure $ DataD [] nameFinal paramsFinal
+    let dec = DataD [] nameFinal paramsFinal
                 Nothing
                 constrs
                 (stockDerives <> anyclassDerives)
+#if __GLASGOW_HASKELL__ > 900
+    case entityComments (unboundEntityDef entDef) of
+        Just doc -> withDecDoc (unpack doc) (pure dec)
+        Nothing -> pure dec
+#else
+    pure dec
+#endif
+
   where
     stratFor n =
         if n `elem` stockClasses then
