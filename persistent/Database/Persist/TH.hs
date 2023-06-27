@@ -141,6 +141,7 @@ import Database.Persist.ImplicitIdDef.Internal
 conp :: Name -> [Pat] -> Pat
 conp name pats = ConP name [] pats
 #else
+conp :: Name -> [Pat] -> Pat
 conp = ConP
 #endif
 
@@ -1994,18 +1995,20 @@ mkEntity embedEntityMap entityMap mps preDef = do
     [keyFromRecordM'] <-
         case unboundPrimarySpec entDef of
             NaturalKey ucd -> do
-                let
-                    keyCon =
-                        keyConName entDef
-                    keyFields' =
-                        fieldNameToRecordName mps entDef <$> unboundCompositeCols ucd
+                let keyFields' = fieldNameToRecordName mps entDef <$> unboundCompositeCols ucd
+                keyFieldNames' <- forM keyFields' $ \fieldName -> do
+                                         fieldVarName <- newName (nameBase fieldName)
+                                         return (fieldName, fieldVarName)
+
+                let keyCon = keyConName entDef
                     constr =
                         foldl'
                             AppE
                             (ConE keyCon)
-                            (VarE <$> keyFields')
+                            (VarE . snd <$> keyFieldNames')
                     keyFromRec = varP 'keyFromRecordM
-                    lam = LamE [RecP name [(n, VarP n) | n <- toList keyFields']] constr
+                    fieldPat = [(fieldName, VarP fieldVarName) | (fieldName, fieldVarName) <- toList keyFieldNames']
+                    lam = LamE [RecP name fieldPat ] constr
                 [d|
                     $(keyFromRec) = Just $(pure lam)
                     |]
