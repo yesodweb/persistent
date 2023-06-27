@@ -121,7 +121,7 @@ import Instances.TH.Lift ()
 import Data.Foldable (asum, toList)
 import qualified Data.Set as Set
 import Language.Haskell.TH.Lib
-#if __GLASGOW_HASKELL__ > 900
+#if MIN_VERSION_template_haskell(2,18,0)
        (appT, conE, conK, conT, litT, strTyLit, varE, varP, varT, withDecDoc)
 #else
        (appT, conE, conK, conT, litT, strTyLit, varE, varP, varT)
@@ -1213,7 +1213,7 @@ dataTypeDec mps entityMap entDef = do
                 Nothing
                 constrs
                 (stockDerives <> anyclassDerives)
-#if __GLASGOW_HASKELL__ > 900
+#if MIN_VERSION_template_haskell(2,18,0)
     case entityComments (unboundEntityDef entDef) of
         Just doc
             | mpsEntityHaddocks mps -> withDecDoc (unpack doc) (pure dec)
