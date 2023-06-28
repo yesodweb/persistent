@@ -1,5 +1,10 @@
 # Changelog for persistent
 
+## Unreleased
+
+* [1497](https://github.com/yesodweb/persistent/pull/1497)
+    * Always generates `SymbolToField "id"` instance
+
 ## 2.14.5.1
 
 * [#1496](https://github.com/yesodweb/persistent/pull/1496)
