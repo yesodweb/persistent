@@ -612,8 +612,7 @@ Likewise, the field documentation is present in the @fieldComments@ field on the
 "A user can be old, or young, and we care about\nthis for some reason."
 @
 
-Since @persistent-2.14.6.0@, documentation comments on *entities* are included in documentation generated using Haddock if `mpsEntityHaddocks` is enabled (defaults to False).
-Generating Haddocks for fields is not yet supported in Template Haskell.
+Since @persistent-2.14.6.0@, documentation comments are included in documentation generated using Haddock if `mpsEntityHaddocks` is enabled (defaults to False).
 @persistent@ backends can also use this to generate SQL @COMMENT@s, which are useful for a database perspective, and you can use the <https://hackage.haskell.org/package/persistent-documentation @persistent-documentation@> library to render a Markdown document of the entity definitions.
 
 = Sum types
