@@ -121,11 +121,7 @@ import Instances.TH.Lift ()
 import Data.Foldable (asum, toList)
 import qualified Data.Set as Set
 import Language.Haskell.TH.Lib
-#if MIN_VERSION_template_haskell(2,18,0)
-       (appT, conE, conK, conT, litT, strTyLit, varE, varP, varT, withDecDoc)
-#else
        (appT, conE, conK, conT, litT, strTyLit, varE, varP, varT)
-#endif
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
 import Web.HttpApiData (FromHttpApiData(..), ToHttpApiData(..))
@@ -1214,18 +1210,18 @@ dataTypeDec mps entityMap entDef = do
                 constrs
                 (stockDerives <> anyclassDerives)
 #if MIN_VERSION_template_haskell(2,18,0)
-    case entityComments (unboundEntityDef entDef) of
-        Just doc
-            | mpsEntityHaddocks mps -> do
-                forM_ cols $ \((name, _, _), maybeComments) -> do
-                    case maybeComments of
-                        Just comment -> addModFinalizer $ putDoc (DeclDoc name) (unpack comment)
-                        Nothing -> pure ()
-                withDecDoc (unpack doc) (pure dec)
-        _ -> pure dec
-#else
-    pure dec
+    when (mpsEntityHaddocks mps) $ do
+        forM_ cols $ \((name, _, _), maybeComments) -> do
+            case maybeComments of
+                Just comment -> addModFinalizer $
+                    putDoc (DeclDoc name) (unpack comment)
+                Nothing -> pure ()
+        case entityComments (unboundEntityDef entDef) of
+            Just doc -> do
+                addModFinalizer $ putDoc (DeclDoc nameFinal) (unpack doc)
+            _ -> pure ()
 #endif
+    pure dec
 
   where
     stratFor n =
