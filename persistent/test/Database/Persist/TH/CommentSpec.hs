@@ -12,14 +12,19 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Database.Persist.TH.CommentSpec where
+{-# OPTIONS_GHC -haddock #-}
+
+module Database.Persist.TH.CommentSpec
+    ( CommentModel (..)
+    , spec
+    ) where
 
 import TemplateTestImports
 
 import Database.Persist.EntityDef.Internal (EntityDef(..))
 import Database.Persist.FieldDef.Internal (FieldDef(..))
 
-mkPersist sqlSettings [persistLowerCase|
+mkPersist (sqlSettings {mpsEntityHaddocks = True}) [persistLowerCase|
 
 -- | Doc comments work.
 -- | Has multiple lines.

@@ -53,6 +53,7 @@ import qualified Database.Persist.TH.CommentSpec as CommentSpec
 import qualified Database.Persist.TH.CompositeKeyStyleSpec as CompositeKeyStyleSpec
 import qualified Database.Persist.TH.DiscoverEntitiesSpec as DiscoverEntitiesSpec
 import qualified Database.Persist.TH.EmbedSpec as EmbedSpec
+import qualified Database.Persist.TH.EntityHaddockSpec as EntityHaddockSpec
 import qualified Database.Persist.TH.ForeignRefSpec as ForeignRefSpec
 import qualified Database.Persist.TH.ImplicitIdColSpec as ImplicitIdColSpec
 import qualified Database.Persist.TH.JsonEncodingSpec as JsonEncodingSpec
@@ -204,6 +205,7 @@ spec = describe "THSpec" $ do
     ToFromPersistValuesSpec.spec
     JsonEncodingSpec.spec
     CommentSpec.spec
+    EntityHaddockSpec.spec
     CompositeKeyStyleSpec.spec
     describe "TestDefaultKeyCol" $ do
         let EntityIdField FieldDef{..} =
