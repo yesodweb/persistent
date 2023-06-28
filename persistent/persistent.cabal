@@ -145,7 +145,6 @@ test-suite test
       , silently
       , template-haskell         >= 2.4
       , text
-      , th-lift
       , th-lift-instances
       , time
       , transformers

@@ -8,7 +8,7 @@ import TemplateTestImports
 #if MIN_VERSION_template_haskell(2,18,0)
 import Database.Persist.TH.CommentSpec (CommentModel (..))
 import Language.Haskell.TH (DocLoc (DeclDoc), getDoc)
-import Language.Haskell.TH.Lift (lift)
+import Language.Haskell.TH.Syntax (lift)
 
 [d|
     commentModelDoc :: Maybe String
