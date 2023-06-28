@@ -1,6 +1,6 @@
 # Changelog for persistent
 
-## Unreleased
+## 2.14.5.1
 
 * [#1496](https://github.com/yesodweb/persistent/pull/1496)
     * Fixes name shadowing error at the generated `keyFromRecordM` function.
