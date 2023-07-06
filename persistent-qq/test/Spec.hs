@@ -2,6 +2,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TypeFamilies #-}
 
+import Control.Monad (when)
 import Control.Monad.Logger (LoggingT, runLoggingT)
 import Control.Monad.Trans.Resource
 import Control.Monad.Reader
