@@ -238,10 +238,10 @@ instance PersistField DB.ObjectId where
     fromPersistValue _ = Left $ T.pack "expected PersistObjectId"
 
 instance Sql.PersistFieldSql DB.ObjectId where
-    sqlType _ = Sql.SqlOther "doesn't make much sense for MongoDB"
+    sqlType = const Sql.SqlBlob
 
 instance Sql.PersistFieldSql (BackendKey DB.MongoContext) where
-    sqlType _ = Sql.SqlOther "doesn't make much sense for MongoDB"
+    sqlType = const Sql.SqlBlob
 
 
 withConnection :: (Trans.MonadIO m)
