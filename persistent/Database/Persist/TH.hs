@@ -1667,7 +1667,7 @@ mkLensClauses mps entDef _genDataType = do
 -- @'PathPiece'@, @'ToHttpApiData'@ and @'FromHttpApiData'@ instances are only generated for a Key with one field
 mkKeyTypeDec :: MkPersistSettings -> UnboundEntityDef -> Q (Dec, [Dec])
 mkKeyTypeDec mps entDef = do
-    (instDecs, i) <-
+    (instDecs, typeclasses) <-
       if mpsGeneric mps
         then if not useNewtype
                then do pfDec <- pfInstD
@@ -1687,15 +1687,9 @@ mkKeyTypeDec mps entDef = do
 
     requirePersistentExtensions
 
-    -- Always use StockStrategy for Show/Read. This means e.g. (FooKey 1) shows as ("FooKey 1"), rather than just "1"
-    -- This is much better for debugging/logging purposes
-    -- cf. https://github.com/yesodweb/persistent/issues/1104
-    let alwaysStockStrategyTypeclasses = [''Show, ''Read]
-        deriveClauses = fmap (\typeclass ->
-            if (not useNewtype || typeclass `elem` alwaysStockStrategyTypeclasses)
-                then DerivClause (Just StockStrategy) [(ConT typeclass)]
-                else DerivClause (Just NewtypeStrategy) [(ConT typeclass)]
-            ) i
+    let deriveClauses = fmap (\typeclass ->
+            DerivClause (Just (decideStrategy typeclass)) [(ConT typeclass)]
+            ) typeclasses
 
 #if MIN_VERSION_template_haskell(2,15,0)
     let kd = if useNewtype
@@ -1741,7 +1735,7 @@ mkKeyTypeDec mps entDef = do
         requirePersistentExtensions
 
         alwaysInstances <-
-          -- See the "Always use StockStrategy" comment above, on why Show/Read use "stock" here
+          -- See the "Always use StockStrategy" comment below, on why Show/Read use "stock" here
           [d|deriving stock instance Show (BackendKey $(pure backendT)) => Show (Key $(pure recordType))
              deriving stock instance Read (BackendKey $(pure backendT)) => Read (Key $(pure recordType))
              deriving newtype instance Eq (BackendKey $(pure backendT)) => Eq (Key $(pure recordType))
@@ -1779,6 +1773,16 @@ mkKeyTypeDec mps entDef = do
 
     supplement :: [Name] -> [Name]
     supplement names = names <> (filter (`notElem` names) $ mpsDeriveInstances mps)
+
+    -- Always use StockStrategy for Show/Read.
+    -- This means e.g. (FooKey 1) shows as ("FooKey 1"), rather than just "1".
+    -- This is much better for debugging/logging purposes:
+    -- cf. https://github.com/yesodweb/persistent/issues/1104
+    decideStrategy :: Name -> DerivStrategy
+    decideStrategy typeclass
+        | typeclass `elem` [''Show, ''Read] = StockStrategy
+        | useNewtype = NewtypeStrategy
+        | otherwise = StockStrategy
 
 -- | Returns 'True' if the key definition has less than 2 fields.
 --
