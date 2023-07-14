@@ -124,10 +124,11 @@ import Language.Haskell.TH.Lib
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
 import Web.HttpApiData (FromHttpApiData(..), ToHttpApiData(..))
-import Web.PathPieces (PathPiece(..))
+import Web.PathPieces (PathMultiPiece, PathPiece(..))
 
 import Database.Persist
 import Database.Persist.Class.PersistEntity
+import Database.Persist.Class.PersistPathMultiPiece
 import Database.Persist.Quasi
 import Database.Persist.Quasi.Internal
 import Database.Persist.Sql
@@ -1667,28 +1668,39 @@ mkLensClauses mps entDef _genDataType = do
 -- @'PathPiece'@, @'ToHttpApiData'@ and @'FromHttpApiData'@ instances are only generated for a Key with one field
 mkKeyTypeDec :: MkPersistSettings -> UnboundEntityDef -> Q (Dec, [Dec])
 mkKeyTypeDec mps entDef = do
-    (instDecs, typeclasses) <-
+    (instDecs, typeclasses, mkEntityName) <-
       if mpsGeneric mps
         then if not useNewtype
                then do pfDec <- pfInstD
-                       return (pfDec, supplement [''Generic])
+                       return (pfDec, supplement [''Generic], mkEntityDefGenericName)
                else do gi <- genericNewtypeInstances
-                       return (gi, supplement [])
+                       return (gi, supplement [], mkEntityDefGenericName)
         else if not useNewtype
                then do pfDec <- pfInstD
-                       return (pfDec, supplement [''Show, ''Read, ''Eq, ''Ord, ''Generic])
-                else do
+                       let instances = [''Show, ''Read, ''Eq, ''Ord, ''Generic]
+                       return (pfDec, supplement instances, mkEntityDefName)
+               else do
                     let allInstances = supplement [''Show, ''Read, ''Eq, ''Ord, ''PathPiece, ''ToHttpApiData, ''FromHttpApiData, ''PersistField, ''PersistFieldSql, ''ToJSON, ''FromJSON]
                     if customKeyType
-                      then return ([], allInstances)
+                      then return ([], allInstances, mkEntityDefName)
                       else do
                         bi <- backendKeyI
-                        return (bi, allInstances)
+                        return (bi, allInstances, mkEntityDefName)
 
     requirePersistentExtensions
 
-    let deriveClauses = fmap (\typeclass ->
-            DerivClause (Just (decideStrategy typeclass)) [(ConT typeclass)]
+    standaloneDerivs <-
+      if (''PathMultiPiece `elem` typeclasses)
+        then do requireExtensions [[DeriveAnyClass]]
+                let clsType = ConT ''PersistPathMultiPiece
+                    entType = ConT (mkEntityName entDef)
+                    instType = AppT clsType entType
+                pure [StandaloneDerivD (Just AnyclassStrategy) [] instType]
+        else pure []
+
+    let deriveClauses = mapMaybe (\typeclass ->
+            do strategy <- decideStrategy typeclass
+               pure $ DerivClause (Just strategy) [(ConT typeclass)]
             ) typeclasses
 
 #if MIN_VERSION_template_haskell(2,15,0)
@@ -1700,7 +1712,7 @@ mkKeyTypeDec mps entDef = do
                then NewtypeInstD [] k [recordType] Nothing dec deriveClauses
                else DataInstD    [] k [recordType] Nothing [dec] deriveClauses
 #endif
-    return (kd, instDecs)
+    return (kd, instDecs <> standaloneDerivs)
   where
     keyConE = keyConExp entDef
     unKeyE = unKeyExp entDef
@@ -1778,11 +1790,15 @@ mkKeyTypeDec mps entDef = do
     -- This means e.g. (FooKey 1) shows as ("FooKey 1"), rather than just "1".
     -- This is much better for debugging/logging purposes:
     -- cf. https://github.com/yesodweb/persistent/issues/1104
-    decideStrategy :: Name -> DerivStrategy
+    --
+    -- PathMultiPiece is special: instances for composite keys are created using
+    -- a PersistPathMultiPiece instance derived for the entity data type.
+    decideStrategy :: Name -> Maybe DerivStrategy
     decideStrategy typeclass
-        | typeclass `elem` [''Show, ''Read] = StockStrategy
-        | useNewtype = NewtypeStrategy
-        | otherwise = StockStrategy
+        | typeclass `elem` [''Show, ''Read] = Just StockStrategy
+        | typeclass == ''PathMultiPiece = Nothing
+        | useNewtype = Just NewtypeStrategy
+        | otherwise = Just StockStrategy
 
 -- | Returns 'True' if the key definition has less than 2 fields.
 --
