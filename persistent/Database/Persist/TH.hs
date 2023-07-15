@@ -1206,11 +1206,12 @@ dataTypeDec mps entityMap entDef = do
                 constrs
                 (stockDerives <> anyclassDerives)
   where
-    stratFor n =
-        if n `elem` stockClasses then
-            Left n
-        else
-            Right n
+    stratFor n
+        | n `elem` pathMultiPieceNames = Right ''PersistPathMultiPiece
+        | n `elem` stockClasses = Left n
+        | otherwise = Right n
+
+    pathMultiPieceNames = Set.fromList [mkName "PathMultiPiece", ''PathMultiPiece]
 
     stockClasses =
         Set.fromList (fmap mkName
