@@ -1669,39 +1669,28 @@ mkLensClauses mps entDef _genDataType = do
 -- @'PathPiece'@, @'ToHttpApiData'@ and @'FromHttpApiData'@ instances are only generated for a Key with one field
 mkKeyTypeDec :: MkPersistSettings -> UnboundEntityDef -> Q (Dec, [Dec])
 mkKeyTypeDec mps entDef = do
-    (instDecs, typeclasses, mkEntityName) <-
+    (instDecs, typeclasses) <-
       if mpsGeneric mps
         then if not useNewtype
                then do pfDec <- pfInstD
-                       return (pfDec, supplement [''Generic], mkEntityDefGenericName)
+                       return (pfDec, supplement [''Generic])
                else do gi <- genericNewtypeInstances
-                       return (gi, supplement [], mkEntityDefGenericName)
+                       return (gi, supplement [])
         else if not useNewtype
                then do pfDec <- pfInstD
-                       let instances = [''Show, ''Read, ''Eq, ''Ord, ''Generic]
-                       return (pfDec, supplement instances, mkEntityDefName)
-               else do
+                       return (pfDec, supplement [''Show, ''Read, ''Eq, ''Ord, ''Generic])
+                else do
                     let allInstances = supplement [''Show, ''Read, ''Eq, ''Ord, ''PathPiece, ''ToHttpApiData, ''FromHttpApiData, ''PersistField, ''PersistFieldSql, ''ToJSON, ''FromJSON]
                     if customKeyType
-                      then return ([], allInstances, mkEntityDefName)
+                      then return ([], allInstances)
                       else do
                         bi <- backendKeyI
-                        return (bi, allInstances, mkEntityDefName)
+                        return (bi, allInstances)
 
     requirePersistentExtensions
 
-    standaloneDerivs <-
-      if (''PathMultiPiece `elem` typeclasses)
-        then do requireExtensions [[DeriveAnyClass]]
-                let clsType = ConT ''PersistPathMultiPiece
-                    entType = ConT (mkEntityName entDef)
-                    instType = AppT clsType entType
-                pure [StandaloneDerivD (Just AnyclassStrategy) [] instType]
-        else pure []
-
-    let deriveClauses = mapMaybe (\typeclass ->
-            do strategy <- decideStrategy typeclass
-               pure $ DerivClause (Just strategy) [(ConT typeclass)]
+    let deriveClauses = fmap (\typeclass ->
+            DerivClause (Just (decideStrategy typeclass)) [(ConT typeclass)]
             ) typeclasses
 
 #if MIN_VERSION_template_haskell(2,15,0)
@@ -1713,7 +1702,7 @@ mkKeyTypeDec mps entDef = do
                then NewtypeInstD [] k [recordType] Nothing dec deriveClauses
                else DataInstD    [] k [recordType] Nothing [dec] deriveClauses
 #endif
-    return (kd, instDecs <> standaloneDerivs)
+    return (kd, instDecs)
   where
     keyConE = keyConExp entDef
     unKeyE = unKeyExp entDef
@@ -1791,15 +1780,11 @@ mkKeyTypeDec mps entDef = do
     -- This means e.g. (FooKey 1) shows as ("FooKey 1"), rather than just "1".
     -- This is much better for debugging/logging purposes:
     -- cf. https://github.com/yesodweb/persistent/issues/1104
-    --
-    -- PathMultiPiece is special: instances for composite keys are created using
-    -- a PersistPathMultiPiece instance derived for the entity data type.
-    decideStrategy :: Name -> Maybe DerivStrategy
+    decideStrategy :: Name -> DerivStrategy
     decideStrategy typeclass
-        | typeclass `elem` [''Show, ''Read] = Just StockStrategy
-        | typeclass == ''PathMultiPiece = Nothing
-        | useNewtype = Just NewtypeStrategy
-        | otherwise = Just StockStrategy
+        | typeclass `elem` [''Show, ''Read] = StockStrategy
+        | useNewtype = NewtypeStrategy
+        | otherwise = StockStrategy
 
 -- | Returns 'True' if the key definition has less than 2 fields.
 --
