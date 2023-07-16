@@ -1689,8 +1689,9 @@ mkKeyTypeDec mps entDef = do
 
     requirePersistentExtensions
 
-    let deriveClauses = fmap (\typeclass ->
-            DerivClause (Just (decideStrategy typeclass)) [(ConT typeclass)]
+    let deriveClauses = mapMaybe (\typeclass ->
+            do strategy <- decideStrategy typeclass
+               pure $ DerivClause (Just strategy) [(ConT typeclass)]
             ) typeclasses
 
 #if MIN_VERSION_template_haskell(2,15,0)
@@ -1780,11 +1781,15 @@ mkKeyTypeDec mps entDef = do
     -- This means e.g. (FooKey 1) shows as ("FooKey 1"), rather than just "1".
     -- This is much better for debugging/logging purposes:
     -- cf. https://github.com/yesodweb/persistent/issues/1104
-    decideStrategy :: Name -> DerivStrategy
+    --
+    -- PathMultiPiece is special: instances for composite keys are created using
+    -- a PersistPathMultiPiece instance derived for the entity data type.
+    decideStrategy :: Name -> Maybe DerivStrategy
     decideStrategy typeclass
-        | typeclass `elem` [''Show, ''Read] = StockStrategy
-        | useNewtype = NewtypeStrategy
-        | otherwise = StockStrategy
+        | typeclass `elem` [''Show, ''Read] = Just StockStrategy
+        | typeclass == ''PathMultiPiece = Nothing
+        | useNewtype = Just NewtypeStrategy
+        | otherwise = Just StockStrategy
 
 -- | Returns 'True' if the key definition has less than 2 fields.
 --

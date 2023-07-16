@@ -6,8 +6,10 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Database.Persist.TH.CompositeKeyPathMultiPieceSpec (spec) where
@@ -21,24 +23,38 @@ import Test.Hspec.QuickCheck
 import Test.QuickCheck
 import Web.PathPieces
 
+mkPersist sqlSettings {mpsDeriveInstances = [''PathMultiPiece]}
+  [persistLowerCase|
+    MkPersistSettingsInstance
+      keyField1 Int
+      keyField2 Int
+      Primary keyField1 keyField2
+  |]
+
 mkPersist sqlSettings
   [persistLowerCase|
-    CompositeKeyedEntity
+    QuasiQuoterInstance
       keyField1 Int
       keyField2 Int
       Primary keyField1 keyField2
       deriving PathMultiPiece
   |]
 
-spec :: Spec
-spec = describe "CompositeKeyPathMultiPieceSpec" $ do
+entSpec
+    :: forall a. (PersistPathMultiPiece a)
+    => String
+    -> (Int -> Int -> Key a)
+    -> (Key a -> Int)
+    -> (Key a -> Int)
+    -> Spec
+entSpec name keyConstructor keyField1 keyField2 = describe name $ do
     describe "fromPathMultiPiece" $ do
         prop "orders fields correctly" $ \k1 k2 -> do
-            let key :: Maybe (Key CompositeKeyedEntity)
+            let key :: Maybe (Key a)
                 key = fromPathMultiPiece (pack . show <$> [k1 :: Int, k2])
-            compositeKeyedEntityKeykeyField1 <$> key `shouldBe` Just k1
-            compositeKeyedEntityKeykeyField2 <$> key `shouldBe` Just k2
-        let rejected :: Maybe (Key CompositeKeyedEntity)
+            keyField1 <$> key `shouldBe` Just k1
+            keyField2 <$> key `shouldBe` Just k2
+        let rejected :: Maybe (Key a)
             rejected = Nothing
         prop "rejects paths with too many/few pieces" $ \n -> do
             let badPath = Prelude.replicate (abs n) (pack "0")
@@ -48,6 +64,21 @@ spec = describe "CompositeKeyPathMultiPieceSpec" $ do
             fromPathMultiPiece (pack <$> ["0", "a"]) `shouldBe` rejected
     describe "toPathMultiPiece" $ do
         prop "orders fields correctly" $ \k1 k2 -> do
-            let key = CompositeKeyedEntityKey k1 k2
+            let key = keyConstructor k1 k2
                 path = toPathMultiPiece key
             path `shouldBe` pack . show <$> [k1, k2]
+
+spec :: Spec
+spec = do
+    entSpec
+        @MkPersistSettingsInstance
+        "instance derived using MkPersistSettings"
+        MkPersistSettingsInstanceKey
+        mkPersistSettingsInstanceKeykeyField1
+        mkPersistSettingsInstanceKeykeyField2
+    entSpec
+        @QuasiQuoterInstance
+        "instance derived using quasi-quoter"
+        QuasiQuoterInstanceKey
+        quasiQuoterInstanceKeykeyField1
+        quasiQuoterInstanceKeykeyField2
