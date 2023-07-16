@@ -16,7 +16,6 @@ module Database.Persist.TH.CompositeKeyPathMultiPieceSpec (spec) where
 
 import Data.Text
 import Database.Persist.Class.PersistEntity
-import Database.Persist.Class.PersistPathMultiPiece
 import Database.Persist.TH
 import Test.Hspec
 import Test.Hspec.QuickCheck

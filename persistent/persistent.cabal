@@ -91,7 +91,6 @@ library
         Database.Persist.Class.PersistConfig
         Database.Persist.Class.PersistField
         Database.Persist.Class.PersistStore
-        Database.Persist.Class.PersistPathMultiPiece
 
     other-modules:   
         Database.Persist.Types.Base

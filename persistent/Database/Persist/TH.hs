@@ -128,7 +128,6 @@ import Web.PathPieces (PathMultiPiece, PathPiece(..))
 
 import Database.Persist
 import Database.Persist.Class.PersistEntity
-import Database.Persist.Class.PersistPathMultiPiece
 import Database.Persist.Quasi
 import Database.Persist.Quasi.Internal
 import Database.Persist.Sql
