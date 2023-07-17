@@ -1688,7 +1688,9 @@ mkKeyTypeDec mps entDef = do
     deriveClauses <- mapM (\typeclass ->
             do let strategy = decideStrategy typeclass
                case strategy of
+#if MIN_VERSION_GLASGOW_HASKELL(8,6,1,0)
                    ViaStrategy _ -> requireExtensions [[DerivingVia]]
+#endif
                    _ -> pure ()
                pure $ DerivClause (Just strategy) [(ConT typeclass)]
             ) typeclasses
@@ -1783,8 +1785,10 @@ mkKeyTypeDec mps entDef = do
     decideStrategy :: Name -> DerivStrategy
     decideStrategy typeclass
         | typeclass `elem` [''Show, ''Read] = StockStrategy
+#if MIN_VERSION_GLASGOW_HASKELL(8,6,1,0)
         | typeclass == ''PathMultiPiece =
             ViaStrategy $ ConT ''ViaPersistEntity `AppT` recordType
+#endif
         | useNewtype = NewtypeStrategy
         | otherwise = StockStrategy
 

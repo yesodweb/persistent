@@ -1,3 +1,5 @@
+#if MIN_VERSION_GLASGOW_HASKELL(8,6,1,0)
+
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
@@ -52,3 +54,15 @@ spec = describe "CompositeKeyPathMultiPieceSpec" $ do
             let key = CompositeKeyEntityKey k1 k2
                 path = toPathMultiPiece key
             path `shouldBe` pack . show <$> [k1, k2]
+
+#else
+
+module Database.Persist.TH.CompositeKeyPathMultiPieceSpec (spec) where
+
+import Test.Hspec
+
+spec :: Spec
+spec = describe "CompositeKeyPathMultiPieceSpec" $ do
+    pendingWith "DerivingVia not supported"
+
+#endif
