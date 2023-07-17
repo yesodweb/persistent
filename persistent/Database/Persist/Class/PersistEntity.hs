@@ -24,7 +24,7 @@ module Database.Persist.Class.PersistEntity
     , FilterValue (..)
     , BackendSpecificFilter
     , Entity (.., Entity, entityKey, entityVal)
-    , PersistPathMultiPiece (..)
+    , ViaPersistEntity (..)
 
     , recordName
     , entityValues
@@ -182,26 +182,17 @@ class ( PersistField (Key record), ToJSON (Key record), FromJSON (Key record)
     keyFromRecordM :: Maybe (record -> Key record)
     keyFromRecordM = Nothing
 
--- | An auxiliary class to enable 'PathMultiPiece' instance derivation for
--- 'PersistEntity' composite keys. Instances of 'PersistPathMultiPiece' should
--- be derived using the @DeriveAnyClass@ strategy.
+-- | Newtype wrapper for optionally deriving typeclass instances on
+-- 'PersistEntity' keys.
 --
 -- @since 2.14.6.0
-class PersistEntity record => PersistPathMultiPiece record where
-    -- | 'fromPathMultiPiece' wrapper. The default implementation uses
-    -- 'keyFromValues' and 'fromPathPiece', which are provided by the context.
-    keyFromPieces :: [Text] -> Maybe (Key record)
-    keyFromPieces pieces = do
-        Right key <- keyFromValues <$> mapM fromPathPiece pieces
-        pure key
-    -- | 'toPathMultiPiece' wrapper. The default implementation uses
-    -- 'keyToValues' and 'toPathPiece', which are provided by the context.
-    keyToPieces :: Key record -> [Text]
-    keyToPieces = map toPathPiece . keyToValues
+newtype ViaPersistEntity record = ViaPersistEntity (Key record)
 
-instance PersistPathMultiPiece record => PathMultiPiece (Key record) where
-    fromPathMultiPiece = keyFromPieces
-    toPathMultiPiece = keyToPieces
+instance PersistEntity record => PathMultiPiece (ViaPersistEntity record) where
+    fromPathMultiPiece pieces = do
+        Right key <- keyFromValues <$> mapM fromPathPiece pieces
+        pure $ ViaPersistEntity key
+    toPathMultiPiece (ViaPersistEntity key) = map toPathPiece $ keyToValues key
 
 -- | Construct an @'Entity' record@ by providing a value for each of the
 -- record's fields.

@@ -1088,10 +1088,6 @@ data MkPersistSettings = MkPersistSettings
     -- ^ Automatically derive these typeclass instances for all record and key
     -- types.
     --
-    -- If 'PathMultiPiece' is included in this list, then instances are only
-    -- derived for composite keys. You can specify 'PersistPathMultiPiece'
-    -- instead to derive 'PathMultiPiece' instances for every key.
-    --
     -- Default: []
     --
     -- @since 2.8.1
@@ -1195,7 +1191,7 @@ dataTypeDec mps entityMap entDef = do
         names =
             mkEntityDefDeriveNames mps entDef
 
-    let (stocks, anyclasses) = partitionEithers (mapMaybe stratFor names)
+    let (stocks, anyclasses) = partitionEithers (fmap stratFor names)
     let stockDerives = do
             guard (not (null stocks))
             pure (DerivClause (Just StockStrategy) (fmap ConT stocks))
@@ -1210,14 +1206,8 @@ dataTypeDec mps entityMap entDef = do
                 (stockDerives <> anyclassDerives)
   where
     stratFor n
-        | n `elem` pathMultiPieceNames =
-            if pkNewtype mps entDef
-            then Nothing
-            else Just $ Right ''PersistPathMultiPiece
-        | n `elem` stockClasses = Just $ Left n
-        | otherwise = Just $ Right n
-
-    pathMultiPieceNames = Set.fromList [mkName "PathMultiPiece", ''PathMultiPiece]
+        | n `elem` stockClasses = Left n
+        | otherwise = Right n
 
     stockClasses =
         Set.fromList (fmap mkName
@@ -1695,8 +1685,11 @@ mkKeyTypeDec mps entDef = do
 
     requirePersistentExtensions
 
-    let deriveClauses = mapMaybe (\typeclass ->
-            do strategy <- decideStrategy typeclass
+    deriveClauses <- mapM (\typeclass ->
+            do let strategy = decideStrategy typeclass
+               case strategy of
+                   ViaStrategy _ -> requireExtensions [[DerivingVia]]
+                   _ -> pure ()
                pure $ DerivClause (Just strategy) [(ConT typeclass)]
             ) typeclasses
 
@@ -1787,15 +1780,13 @@ mkKeyTypeDec mps entDef = do
     -- This means e.g. (FooKey 1) shows as ("FooKey 1"), rather than just "1".
     -- This is much better for debugging/logging purposes:
     -- cf. https://github.com/yesodweb/persistent/issues/1104
-    --
-    -- PathMultiPiece is special: instances for composite keys are created using
-    -- a PersistPathMultiPiece instance derived for the entity data type.
-    decideStrategy :: Name -> Maybe DerivStrategy
+    decideStrategy :: Name -> DerivStrategy
     decideStrategy typeclass
-        | typeclass `elem` [''Show, ''Read] = Just StockStrategy
-        | typeclass `elem` [''PathMultiPiece, ''PersistPathMultiPiece] = Nothing
-        | useNewtype = Just NewtypeStrategy
-        | otherwise = Just StockStrategy
+        | typeclass `elem` [''Show, ''Read] = StockStrategy
+        | typeclass == ''PathMultiPiece =
+            ViaStrategy $ ConT ''ViaPersistEntity `AppT` recordType
+        | useNewtype = NewtypeStrategy
+        | otherwise = StockStrategy
 
 -- | Returns 'True' if the key definition has less than 2 fields.
 --

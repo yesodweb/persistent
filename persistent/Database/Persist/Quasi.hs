@@ -171,26 +171,6 @@ As a key with multiple fields, it is also a "composite key."
 
 You can specify a @Primary@ key with a single field, too.
 
-== Deriving @PathMultiPiece@ for composite keys
-
-@PathMultiPiece@ can be added to a deriving clause in a table to derive an instance for its key.
-This enables composite keys to be used in Yesod routes, for example.
-
-@
-Email
-    firstPart   Text
-    secondPart  Text
-
-    Primary firstPart secondPart
-
-    deriving PathMultiPiece
-@
-
-This creates a @PathMultiPiece@ instance for @(Key Email)@ which expects paths of the form @\/firstPart\/secondPart@.
-The order of the path pieces is determined by the order of the fields in the @Primary@ clause.
-
-This feature requires the @DeriveAnyClass@ language extension.
-
 = Overriding SQL
 
 You can use a @sql=custom@ annotation to provide some customization on the entity and field.
