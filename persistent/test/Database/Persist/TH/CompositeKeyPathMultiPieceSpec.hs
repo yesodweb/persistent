@@ -68,7 +68,7 @@ entSpec name keyConstructor keyField1 keyField2 = describe name $ do
             path `shouldBe` pack . show <$> [k1, k2]
 
 spec :: Spec
-spec = do
+spec = describe "CompositeKeyPathMultiPieceSpec" $ do
     entSpec
         @MkPersistSettingsInstance
         "instance derived using MkPersistSettings"
