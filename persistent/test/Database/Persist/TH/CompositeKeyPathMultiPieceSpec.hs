@@ -30,6 +30,14 @@ mkPersist sqlSettings {mpsDeriveInstances = [''PathMultiPiece]}
       Primary keyField1 keyField2
   |]
 
+mkPersist sqlSettings {mpsDeriveInstances = [''PersistPathMultiPiece]}
+  [persistLowerCase|
+    MkPersistSettingsOverrideInstance
+      keyField1 Int
+      keyField2 Int
+      Primary keyField1 keyField2
+  |]
+
 mkPersist sqlSettings
   [persistLowerCase|
     QuasiQuoterInstance
@@ -37,6 +45,15 @@ mkPersist sqlSettings
       keyField2 Int
       Primary keyField1 keyField2
       deriving PathMultiPiece
+  |]
+
+mkPersist sqlSettings
+  [persistLowerCase|
+    QuasiQuoterOverrideInstance
+      keyField1 Int
+      keyField2 Int
+      Primary keyField1 keyField2
+      deriving PersistPathMultiPiece
   |]
 
 entSpec
@@ -76,8 +93,20 @@ spec = describe "CompositeKeyPathMultiPieceSpec" $ do
         mkPersistSettingsInstanceKeykeyField1
         mkPersistSettingsInstanceKeykeyField2
     entSpec
+        @MkPersistSettingsOverrideInstance
+        "instance derived using MkPersistSettings with override"
+        MkPersistSettingsOverrideInstanceKey
+        mkPersistSettingsOverrideInstanceKeykeyField1
+        mkPersistSettingsOverrideInstanceKeykeyField2
+    entSpec
         @QuasiQuoterInstance
         "instance derived using quasi-quoter"
         QuasiQuoterInstanceKey
         quasiQuoterInstanceKeykeyField1
         quasiQuoterInstanceKeykeyField2
+    entSpec
+        @QuasiQuoterOverrideInstance
+        "instance derived using quasi-quoter with override"
+        QuasiQuoterOverrideInstanceKey
+        quasiQuoterOverrideInstanceKeykeyField1
+        quasiQuoterOverrideInstanceKeykeyField2

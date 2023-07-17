@@ -1793,7 +1793,7 @@ mkKeyTypeDec mps entDef = do
     decideStrategy :: Name -> Maybe DerivStrategy
     decideStrategy typeclass
         | typeclass `elem` [''Show, ''Read] = Just StockStrategy
-        | typeclass == ''PathMultiPiece = Nothing
+        | typeclass `elem` [''PathMultiPiece, ''PersistPathMultiPiece] = Nothing
         | useNewtype = Just NewtypeStrategy
         | otherwise = Just StockStrategy
 
