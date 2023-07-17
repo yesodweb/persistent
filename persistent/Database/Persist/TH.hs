@@ -1088,6 +1088,10 @@ data MkPersistSettings = MkPersistSettings
     -- ^ Automatically derive these typeclass instances for all record and key
     -- types.
     --
+    -- If 'PathMultiPiece' is included in this list, then instances are only
+    -- derived for composite keys. You can specify 'PersistPathMultiPiece'
+    -- instead to derive 'PathMultiPiece' instances for every key.
+    --
     -- Default: []
     --
     -- @since 2.8.1
@@ -1191,7 +1195,7 @@ dataTypeDec mps entityMap entDef = do
         names =
             mkEntityDefDeriveNames mps entDef
 
-    let (stocks, anyclasses) = partitionEithers (fmap stratFor names)
+    let (stocks, anyclasses) = partitionEithers (mapMaybe stratFor names)
     let stockDerives = do
             guard (not (null stocks))
             pure (DerivClause (Just StockStrategy) (fmap ConT stocks))
@@ -1206,9 +1210,12 @@ dataTypeDec mps entityMap entDef = do
                 (stockDerives <> anyclassDerives)
   where
     stratFor n
-        | n `elem` pathMultiPieceNames = Right ''PersistPathMultiPiece
-        | n `elem` stockClasses = Left n
-        | otherwise = Right n
+        | n `elem` pathMultiPieceNames =
+            if pkNewtype mps entDef
+            then Nothing
+            else Just $ Right ''PersistPathMultiPiece
+        | n `elem` stockClasses = Just $ Left n
+        | otherwise = Just $ Right n
 
     pathMultiPieceNames = Set.fromList [mkName "PathMultiPiece", ''PathMultiPiece]
 
