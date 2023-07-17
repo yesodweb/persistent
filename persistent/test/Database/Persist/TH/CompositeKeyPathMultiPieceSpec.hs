@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP #-}
+
 #if MIN_VERSION_GLASGOW_HASKELL(8,6,1,0)
 
 {-# LANGUAGE DataKinds #-}
