@@ -279,7 +279,7 @@ createPostgresqlPoolModifiedWithVersion = createPostgresqlPoolTailored open'
 -- The only time you should reach for this function is if you need to write custom logic for creating
 -- a connection to the database.
 --
--- @since 2.13.5.2
+-- @since 2.13.6
 createPostgresqlPoolTailored
     :: (MonadUnliftIO m, MonadLoggerIO m)
     =>
