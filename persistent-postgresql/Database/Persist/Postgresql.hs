@@ -66,6 +66,7 @@ module Database.Persist.Postgresql
     , createRawPostgresqlPoolModified
     , createRawPostgresqlPoolModifiedWithVersion
     , createRawPostgresqlPoolWithConf
+    , createBackend
     ) where
 
 import qualified Database.PostgreSQL.LibPQ as LibPQ
@@ -439,6 +440,8 @@ getSimpleConn = Vault.lookup underlyingConnectionKey <$> getConnVault
 
 -- | Create the backend given a logging function, server version, mutable statement cell,
 -- and connection.
+--
+-- @since 2.13.6
 createBackend :: LogFunc -> NonEmpty Word
               -> IORef (Map.Map Text Statement) -> PG.Connection -> SqlBackend
 createBackend logFunc serverVersion smap conn =
