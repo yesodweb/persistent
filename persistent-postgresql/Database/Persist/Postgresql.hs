@@ -286,14 +286,9 @@ createPostgresqlPoolTailored
     =>
     (    (PG.Connection -> IO ())
       -> (PG.Connection -> IO (NonEmpty Word))
-      -> ((PG.Connection -> SqlBackend) -> PG.Connection -> SqlBackend)
-      -- ^ How to construct the actual backend type desired. For most uses,
-      -- this is just 'id', since the desired backend type is 'SqlBackend'.
-      -- But some callers want a @'RawPostgresql' 'SqlBackend'@, and will
-      -- pass in 'withRawConnection'.
+      -> ((PG.Connection -> SqlBackend) -> PG.Connection -> SqlBackend) -- ^ How to construct the actual backend type desired. For most uses, this is just 'id', since the desired backend type is 'SqlBackend'. But some callers want a @'RawPostgresql' 'SqlBackend'@, and will pass in 'withRawConnection'.
       -> ConnectionString -> LogFunc -> IO SqlBackend
-    )
-    -- ^ Action that creates a postgresql connection.
+    ) -- ^ Action that creates a postgresql connection.
     -> (PG.Connection -> IO (Maybe Double)) -- ^ Action to perform to get the server version.
     -> (PG.Connection -> IO ()) -- ^ Action to perform after connection is created.
     -> ConnectionString -- ^ Connection string to the database.
