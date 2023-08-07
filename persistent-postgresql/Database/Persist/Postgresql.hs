@@ -37,6 +37,7 @@ module Database.Persist.Postgresql
     , createPostgresqlPool
     , createPostgresqlPoolModified
     , createPostgresqlPoolModifiedWithVersion
+    , createPostgresqlPoolTailored
     , createPostgresqlPoolWithConf
     , module Database.Persist.Sql
     , ConnectionString
@@ -270,9 +271,36 @@ createPostgresqlPoolModifiedWithVersion
     -> ConnectionString -- ^ Connection string to the database.
     -> Int -- ^ Number of connections to be kept open in the pool.
     -> m (Pool SqlBackend)
-createPostgresqlPoolModifiedWithVersion getVerDouble modConn ci = do
+createPostgresqlPoolModifiedWithVersion = createPostgresqlPoolTailored open'
+
+-- | Same as 'createPostgresqlPoolModifiedWithVersion', but takes a custom connection-creation
+-- function.
+--
+-- The only time you should reach for this function is if you need to write custom logic for creating
+-- a connection to the database.
+--
+-- @since 2.13.5.2
+createPostgresqlPoolTailored
+    :: (MonadUnliftIO m, MonadLoggerIO m)
+    =>
+    (    (PG.Connection -> IO ())
+      -> (PG.Connection -> IO (NonEmpty Word))
+      -> ((PG.Connection -> SqlBackend) -> PG.Connection -> SqlBackend)
+      -- ^ How to construct the actual backend type desired. For most uses,
+      -- this is just 'id', since the desired backend type is 'SqlBackend'.
+      -- But some callers want a @'RawPostgresql' 'SqlBackend'@, and will
+      -- pass in 'withRawConnection'.
+      -> ConnectionString -> LogFunc -> IO SqlBackend
+    )
+    -- ^ Action that creates a postgresql connection.
+    -> (PG.Connection -> IO (Maybe Double)) -- ^ Action to perform to get the server version.
+    -> (PG.Connection -> IO ()) -- ^ Action to perform after connection is created.
+    -> ConnectionString -- ^ Connection string to the database.
+    -> Int -- ^ Number of connections to be kept open in the pool.
+    -> m (Pool SqlBackend)
+createPostgresqlPoolTailored createConnection getVerDouble modConn ci = do
   let getVer = oldGetVersionToNew getVerDouble
-  createSqlPool $ open' modConn getVer id ci
+  createSqlPool $ createConnection modConn getVer id ci
 
 -- | Same as 'createPostgresqlPool', but can be configured with 'PostgresConf' and 'PostgresConfHooks'.
 --
