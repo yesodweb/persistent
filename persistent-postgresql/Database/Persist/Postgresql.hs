@@ -53,6 +53,7 @@ module Database.Persist.Postgresql
     , upsertManyWhere
     , openSimpleConn
     , openSimpleConnWithVersion
+    , getServerVersion
     , getSimpleConn
     , tableName
     , fieldName
@@ -358,6 +359,8 @@ open' modConn getVer constructor cstr logFunc = do
     return $ constructor (createBackend logFunc ver smap) conn
 
 -- | Gets the PostgreSQL server version
+--
+-- @since 2.13.6
 getServerVersion :: PG.Connection -> IO (Maybe Double)
 getServerVersion conn = do
   [PG.Only version] <- PG.query_ conn "show server_version";
