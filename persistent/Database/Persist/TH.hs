@@ -121,6 +121,9 @@ import Data.Foldable (asum, toList)
 import qualified Data.Set as Set
 import Language.Haskell.TH.Lib
        (appT, conE, conK, conT, litT, strTyLit, varE, varP, varT)
+#if MIN_VERSION_template_haskell(2,21,0)
+import Language.Haskell.TH.Lib (defaultBndrFlag)
+#endif
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
 import Web.HttpApiData (FromHttpApiData(..), ToHttpApiData(..))
@@ -2325,7 +2328,15 @@ mkLenses mps entityMap ent = fmap mconcat $ forM (getUnboundFieldDefs ent `zip` 
     where
         fieldNames = fieldDefToRecordName mps ent <$> getUnboundFieldDefs ent
 
-#if MIN_VERSION_template_haskell(2,17,0)
+#if MIN_VERSION_template_haskell(2,21,0)
+mkPlainTV
+    :: Name
+    -> TyVarBndr BndrVis
+mkPlainTV n = PlainTV n defaultBndrFlag
+
+mkForallTV :: Name -> TyVarBndr Specificity
+mkForallTV n = PlainTV n SpecifiedSpec
+#elif MIN_VERSION_template_haskell(2,17,0)
 mkPlainTV
     :: Name
     -> TyVarBndr ()
