@@ -1339,7 +1339,7 @@ showAlter table (DropReference cname) = T.concat
     , escapeC cname
     ]
 
--- | Get the SQL string for the table that a PeristEntity represents.
+-- | Get the SQL string for the table that a PersistEntity represents.
 -- Useful for raw SQL queries.
 tableName :: (PersistEntity record) => record -> Text
 tableName = escapeE . tableDBName
