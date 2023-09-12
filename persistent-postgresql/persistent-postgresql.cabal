@@ -1,5 +1,5 @@
 name:            persistent-postgresql
-version:         2.13.5.2
+version:         2.13.6.0
 license:         MIT
 license-file:    LICENSE
 author:          Felipe Lessa, Michael Snoyman <michael@snoyman.com>
@@ -58,6 +58,8 @@ test-suite test
                      UpsertWhere
                      ImplicitUuidSpec
                      MigrationReferenceSpec
+                     AsyncExceptionsTest
+                     RetryableTransactionsTest
     ghc-options:     -Wall
 
     build-depends:   base                 >= 4.9 && < 5
@@ -86,6 +88,7 @@ test-suite test
                    , unliftio
                    , unordered-containers
                    , vector
+                   , postgresql-simple
     default-language: Haskell2010
 
 executable conn-kill

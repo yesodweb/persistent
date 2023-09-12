@@ -1,6 +1,8 @@
+{-# LANGUAGE RankNTypes #-}
 module Database.Persist.SqlBackend.SqlPoolHooks
   ( SqlPoolHooks
   , defaultSqlPoolHooks
+  , mapSqlPoolHooks
   , getAlterBackend
   , modifyAlterBackend
   , setAlterBackend
@@ -11,16 +13,18 @@ module Database.Persist.SqlBackend.SqlPoolHooks
   , modifyRunAfter
   , setRunAfter
   , getRunOnException
+  , modifyRunOnException
+  , setRunOnException
   )
   where
 
 import Control.Exception
 import Control.Monad.IO.Class
+import Database.Persist.Class.PersistStore
 import Database.Persist.Sql.Raw
 import Database.Persist.SqlBackend.Internal
-import Database.Persist.SqlBackend.Internal.SqlPoolHooks
 import Database.Persist.SqlBackend.Internal.IsolationLevel
-import Database.Persist.Class.PersistStore
+import Database.Persist.SqlBackend.Internal.SqlPoolHooks
 
 -- | Lifecycle hooks that may be altered to extend SQL pool behavior
 -- in a backwards compatible fashion.
@@ -48,6 +52,18 @@ defaultSqlPoolHooks = SqlPoolHooks
         let sqlBackend = projectBackend conn
         let getter = getStmtConn sqlBackend
         liftIO $ connRollback sqlBackend getter
+    }
+
+mapSqlPoolHooks
+  :: (forall x. m x -> n x)
+  -> SqlPoolHooks m backend
+  -> SqlPoolHooks n backend
+mapSqlPoolHooks f hooks = SqlPoolHooks
+    { alterBackend = f . alterBackend hooks
+    , runBefore = \conn mLevel -> f $ runBefore hooks conn mLevel
+    , runAfter = \conn mLevel -> f $ runAfter hooks conn mLevel
+    , runOnException = \conn mLevel ex ->
+        f $ runOnException hooks conn mLevel ex
     }
 
 getAlterBackend :: SqlPoolHooks m backend -> (backend -> m backend)

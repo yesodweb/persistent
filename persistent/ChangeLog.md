@@ -1,5 +1,13 @@
 # Changelog for persistent
 
+## 2.14.6.0
+
+* [#1482](https://github.com/yesodweb/persistent/pull/1482)
+    * Ensure `runOnException` hook is run when user-specified database action is
+      interrupted via async exception
+    * Add `runSqlPoolWithExtensibleHooksRetry` to support automatic transaction
+      retrying on user-specified synchronous exceptions
+
 ## 2.14.5.1
 
 * [#1496](https://github.com/yesodweb/persistent/pull/1496)
