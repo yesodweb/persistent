@@ -1,5 +1,10 @@
 # Changelog for persistent-postgresql
 
+## 2.13.5.3
+
+* [#1516](https://github.com/yesodweb/persistent/pull/1516)
+   * Support postgresql-simple 0.7 and postgresql-libpq 0.10
+
 ## 2.13.5.2
 
 * [#1471](https://github.com/yesodweb/persistent/pull/1471)
