@@ -52,6 +52,8 @@ module Database.Persist.Sql
     , emptyBackendSpecificOverrides
     , getBackendSpecificForeignKeyName
     , setBackendSpecificForeignKeyName
+    , getBackendSpecificSchemaEntityName
+    , setBackendSpecificSchemaEntityName
     , defaultAttribute
       -- * Internal
     , IsolationLevel(..)

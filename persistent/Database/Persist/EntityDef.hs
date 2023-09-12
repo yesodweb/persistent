@@ -9,6 +9,7 @@ module Database.Persist.EntityDef
       -- * Accessors
     , getEntityHaskellName
     , getEntityDBName
+    , getEntityDBSchema
     , getEntityFields
     , getEntityFieldsDatabase
     , getEntityForeignDefs
@@ -27,6 +28,7 @@ module Database.Persist.EntityDef
     , setEntityId
     , setEntityIdDef
     , setEntityDBName
+    , setEntityDBSchema
     , overEntityFields
       -- * Related Types
     , EntityIdDef(..)
@@ -86,6 +88,14 @@ getEntityDBName
     -> EntityNameDB
 getEntityDBName = entityDB
 
+-- | Return the database schema name for the given entity.
+--
+-- @since XXX
+getEntityDBSchema
+    :: EntityDef
+    -> Maybe Text
+getEntityDBSchema = entitySchema
+
 getEntityExtra :: EntityDef -> Map Text [[Text]]
 getEntityExtra = entityExtra
 
@@ -97,6 +107,12 @@ setEntityDBName db ed = ed { entityDB = db }
 
 getEntityComments :: EntityDef -> Maybe Text
 getEntityComments = entityComments
+
+-- | Sets or resets the database schema name for the given entity.
+--
+-- @since XXX
+setEntityDBSchema :: Maybe Text -> EntityDef -> EntityDef
+setEntityDBSchema schema entDef = entDef { entitySchema = schema }
 
 -- |
 --

@@ -318,6 +318,7 @@ spec = describe "THSpec" $ do
                         EntityDef
                             { entityHaskell = EntityNameHS "HasSimpleCascadeRef"
                             , entityDB = EntityNameDB "HasSimpleCascadeRef"
+                            , entitySchema = Nothing
                             , entityId =
                                 EntityIdField FieldDef
                                     { fieldHaskell = FieldNameHS "Id"
