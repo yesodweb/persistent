@@ -1,7 +1,12 @@
 # Changelog for persistent
 
+
 ## Unreleased
 
+## 2.14.6.0
+
+* [#1503](https://github.com/yesodweb/persistent/pull/1503)
+    * Create Haddocks from entity documentation comments
 * [1497](https://github.com/yesodweb/persistent/pull/1497)
     * Always generates `SymbolToField "id"` instance
 
