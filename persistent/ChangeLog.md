@@ -1,5 +1,10 @@
 # Changelog for persistent
 
+## 2.14.6.0
+
+* [#1503](https://github.com/yesodweb/persistent/pull/1503)
+    * Create Haddocks from entity documentation comments
+
 ## 2.14.5.1
 
 * [#1496](https://github.com/yesodweb/persistent/pull/1496)
