@@ -1,7 +1,11 @@
 # Changelog for persistent-postgresql
 
-## 2.13.5.3
+## 2.13.6 (unreleased)
 
+* [#1511](https://github.com/yesodweb/persistent/pull/1511)
+   * Add the `createPostgresqlPoolTailored` function to support creating
+     connection pools with a custom connection creation function.
+   * Expose `getServerVersion` and `createBackend` for user's convenience.
 * [#1516](https://github.com/yesodweb/persistent/pull/1516)
    * Support postgresql-simple 0.7 and postgresql-libpq 0.10
 
