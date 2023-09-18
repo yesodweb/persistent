@@ -53,8 +53,8 @@ module Database.Persist.Quasi.Internal
 import Prelude hiding (lines)
 
 import Control.Applicative (Alternative((<|>)))
-import Data.Char (isDigit, isLower, isSpace, isUpper, toLower)
 import Control.Monad
+import Data.Char (isDigit, isLower, isSpace, isUpper, toLower)
 import Data.List (find, foldl')
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NEL
@@ -238,7 +238,7 @@ parseIndentationAmount txt =
 tokenize :: Text -> [Token]
 tokenize t
     | T.null t = []
-    | Just txt <- T.stripPrefix "-- | " t = [DocComment txt]
+    | Just txt <- T.stripPrefix "-- |" t = [DocComment (T.stripStart txt)]
     | "--" `T.isPrefixOf` t = [] -- Comment until the end of the line.
     | "#" `T.isPrefixOf` t = [] -- Also comment to the end of the line, needed for a CPP bug (#110)
     | T.head t == '"' = quotes (T.tail t) id
