@@ -1,10 +1,5 @@
 # Changelog for persistentChan
 
-## 2.14.6.1 (unreleased)
-
-* [#1518](https://github.com/yesodweb/persistent/pull/1518)
-    * Normalize postgres type aliases to prevent noop migrations
-
 ## 2.14.6.0
 
 * [#1503](https://github.com/yesodweb/persistent/pull/1503)

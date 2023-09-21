@@ -1,6 +1,11 @@
 # Changelog for persistent-postgresql
 
-## 2.13.6 (unreleased)
+## 2.13.6.1
+
+* [#1518](https://github.com/yesodweb/persistent/pull/1518)
+    * Normalize postgres type aliases to prevent noop migrations
+
+## 2.13.6
 
 * [#1511](https://github.com/yesodweb/persistent/pull/1511)
    * Add the `createPostgresqlPoolTailored` function to support creating
