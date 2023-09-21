@@ -1103,7 +1103,15 @@ getColumn _ _ columnName _ =
 -- | Intelligent comparison of SQL types, to account for SqlInt32 vs SqlOther integer
 sqlTypeEq :: SqlType -> SqlType -> Bool
 sqlTypeEq x y =
-    T.toCaseFold (showSqlType x) == T.toCaseFold (showSqlType y)
+    let
+        -- Non exhaustive helper to map postgres aliases to the same name. Based on
+        -- https://www.postgresql.org/docs/9.5/datatype.html.
+        -- This prevents needless `ALTER TYPE`s when the type is the same.
+        normalize "int8"    = "bigint"
+        normalize "serial8" = "bigserial"
+        normalize v         = v
+    in
+        normalize (T.toCaseFold (showSqlType x)) == normalize (T.toCaseFold (showSqlType y))
 
 findAlters
     :: [EntityDef]
