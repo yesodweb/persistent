@@ -45,6 +45,7 @@ module Database.Persist.TH
     , mpsPrefixFields
     , mpsFieldLabelModifier
     , mpsConstraintLabelModifier
+    , mpsEntityHaddocks
     , mpsEntityJSON
     , mpsGenerateLenses
     , mpsDeriveInstances
@@ -121,6 +122,9 @@ import Data.Foldable (asum, toList)
 import qualified Data.Set as Set
 import Language.Haskell.TH.Lib
        (appT, conE, conK, conT, litT, strTyLit, varE, varP, varT)
+#if MIN_VERSION_template_haskell(2,21,0)
+import Language.Haskell.TH.Lib (defaultBndrFlag)
+#endif
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
 import Web.HttpApiData (FromHttpApiData(..), ToHttpApiData(..))
@@ -1067,6 +1071,10 @@ data MkPersistSettings = MkPersistSettings
     -- Note: this setting is ignored if mpsPrefixFields is set to False.
     --
     -- @since 2.11.0.0
+    , mpsEntityHaddocks :: Bool
+    -- ^ Generate Haddocks from entity documentation comments. Default: False.
+    --
+    -- @since 2.14.6.0
     , mpsEntityJSON :: Maybe EntityJSON
     -- ^ Generate @ToJSON@/@FromJSON@ instances for each model types. If it's
     -- @Nothing@, no instances will be generated. Default:
@@ -1158,6 +1166,7 @@ mkPersistSettings backend = MkPersistSettings
     , mpsPrefixFields = True
     , mpsFieldLabelModifier = (++)
     , mpsConstraintLabelModifier = (++)
+    , mpsEntityHaddocks = False
     , mpsEntityJSON = Just EntityJSON
         { entityToJSON = 'entityIdToJSON
         , entityFromJSON = 'entityIdFromJSON
@@ -1200,10 +1209,24 @@ dataTypeDec mps entityMap entDef = do
             pure (DerivClause (Just AnyclassStrategy) (fmap ConT anyclasses))
     unless (null anyclassDerives) $ do
         requireExtensions [[DeriveAnyClass]]
-    pure $ DataD [] nameFinal paramsFinal
+    let dec = DataD [] nameFinal paramsFinal
                 Nothing
                 constrs
                 (stockDerives <> anyclassDerives)
+#if MIN_VERSION_template_haskell(2,18,0)
+    when (mpsEntityHaddocks mps) $ do
+        forM_ cols $ \((name, _, _), maybeComments) -> do
+            case maybeComments of
+                Just comment -> addModFinalizer $
+                    putDoc (DeclDoc name) (unpack comment)
+                Nothing -> pure ()
+        case entityComments (unboundEntityDef entDef) of
+            Just doc -> do
+                addModFinalizer $ putDoc (DeclDoc nameFinal) (unpack doc)
+            _ -> pure ()
+#endif
+    pure dec
+
   where
     stratFor n
         | n `elem` stockClasses = Left n
@@ -1226,7 +1249,7 @@ dataTypeDec mps entityMap entDef = do
         | otherwise =
             (mkEntityDefName entDef, [])
 
-    cols :: [VarBangType]
+    cols :: [(VarBangType, Maybe Text)]
     cols = do
         fieldDef <- getUnboundFieldDefs entDef
         let
@@ -1238,11 +1261,13 @@ dataTypeDec mps entityMap entDef = do
                 else notStrict
             fieldIdType =
                 maybeIdType mps entityMap fieldDef Nothing Nothing
-        pure (recordNameE, strictness, fieldIdType)
+            fieldComments =
+                unboundFieldComments fieldDef
+        pure ((recordNameE, strictness, fieldIdType), fieldComments)
 
     constrs
         | unboundEntitySum entDef = fmap sumCon $ getUnboundFieldDefs entDef
-        | otherwise = [RecC (mkEntityDefName entDef) cols]
+        | otherwise = [RecC (mkEntityDefName entDef) (map fst cols)]
 
     sumCon fieldDef = NormalC
         (sumConstrName mps entDef fieldDef)
@@ -2337,7 +2362,15 @@ mkLenses mps entityMap ent = fmap mconcat $ forM (getUnboundFieldDefs ent `zip` 
     where
         fieldNames = fieldDefToRecordName mps ent <$> getUnboundFieldDefs ent
 
-#if MIN_VERSION_template_haskell(2,17,0)
+#if MIN_VERSION_template_haskell(2,21,0)
+mkPlainTV
+    :: Name
+    -> TyVarBndr BndrVis
+mkPlainTV n = PlainTV n defaultBndrFlag
+
+mkForallTV :: Name -> TyVarBndr Specificity
+mkForallTV n = PlainTV n SpecifiedSpec
+#elif MIN_VERSION_template_haskell(2,17,0)
 mkPlainTV
     :: Name
     -> TyVarBndr ()

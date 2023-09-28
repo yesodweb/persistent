@@ -1,4 +1,14 @@
-# Changelog for persistent
+# Changelog for persistentChan
+
+## 2.14.6.0
+
+* [#1503](https://github.com/yesodweb/persistent/pull/1503)
+    * Create Haddocks from entity documentation comments
+
+## 2.14.5.2
+
+* [#1513](https://github.com/yesodweb/persistent/pull/1513)
+    * Support GHC 9.8 and `aeson-2.2`
 
 ## 2.14.5.1
 
