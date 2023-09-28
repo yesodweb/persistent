@@ -170,7 +170,6 @@ test-suite test
         Database.Persist.PersistValueSpec
         Database.Persist.QuasiSpec
         Database.Persist.TH.CommentSpec
-        Database.Persist.TH.CompositeKeyPathMultiPieceSpec
         Database.Persist.TH.CompositeKeyStyleSpec
         Database.Persist.TH.DiscoverEntitiesSpec
         Database.Persist.TH.EmbedSpec

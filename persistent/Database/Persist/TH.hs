@@ -128,7 +128,7 @@ import Language.Haskell.TH.Lib (defaultBndrFlag)
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
 import Web.HttpApiData (FromHttpApiData(..), ToHttpApiData(..))
-import Web.PathPieces (PathMultiPiece, PathPiece(..))
+import Web.PathPieces (PathPiece(..))
 
 import Database.Persist
 import Database.Persist.Class.PersistEntity
@@ -1228,9 +1228,11 @@ dataTypeDec mps entityMap entDef = do
     pure dec
 
   where
-    stratFor n
-        | n `elem` stockClasses = Left n
-        | otherwise = Right n
+    stratFor n =
+        if n `elem` stockClasses then
+            Left n
+        else
+            Right n
 
     stockClasses =
         Set.fromList (fmap mkName
@@ -1690,7 +1692,7 @@ mkLensClauses mps entDef _genDataType = do
 -- @'PathPiece'@, @'ToHttpApiData'@ and @'FromHttpApiData'@ instances are only generated for a Key with one field
 mkKeyTypeDec :: MkPersistSettings -> UnboundEntityDef -> Q (Dec, [Dec])
 mkKeyTypeDec mps entDef = do
-    (instDecs, typeclasses) <-
+    (instDecs, i) <-
       if mpsGeneric mps
         then if not useNewtype
                then do pfDec <- pfInstD
@@ -1710,15 +1712,15 @@ mkKeyTypeDec mps entDef = do
 
     requirePersistentExtensions
 
-    deriveClauses <- mapM (\typeclass ->
-            do let strategy = decideStrategy typeclass
-               case strategy of
-#if MIN_VERSION_GLASGOW_HASKELL(8,6,1,0)
-                   ViaStrategy _ -> requireExtensions [[DerivingVia]]
-#endif
-                   _ -> pure ()
-               pure $ DerivClause (Just strategy) [(ConT typeclass)]
-            ) typeclasses
+    -- Always use StockStrategy for Show/Read. This means e.g. (FooKey 1) shows as ("FooKey 1"), rather than just "1"
+    -- This is much better for debugging/logging purposes
+    -- cf. https://github.com/yesodweb/persistent/issues/1104
+    let alwaysStockStrategyTypeclasses = [''Show, ''Read]
+        deriveClauses = fmap (\typeclass ->
+            if (not useNewtype || typeclass `elem` alwaysStockStrategyTypeclasses)
+                then DerivClause (Just StockStrategy) [(ConT typeclass)]
+                else DerivClause (Just NewtypeStrategy) [(ConT typeclass)]
+            ) i
 
 #if MIN_VERSION_template_haskell(2,15,0)
     let kd = if useNewtype
@@ -1764,7 +1766,7 @@ mkKeyTypeDec mps entDef = do
         requirePersistentExtensions
 
         alwaysInstances <-
-          -- See the "Always use StockStrategy" comment below, on why Show/Read use "stock" here
+          -- See the "Always use StockStrategy" comment above, on why Show/Read use "stock" here
           [d|deriving stock instance Show (BackendKey $(pure backendT)) => Show (Key $(pure recordType))
              deriving stock instance Read (BackendKey $(pure backendT)) => Read (Key $(pure recordType))
              deriving newtype instance Eq (BackendKey $(pure backendT)) => Eq (Key $(pure recordType))
@@ -1802,20 +1804,6 @@ mkKeyTypeDec mps entDef = do
 
     supplement :: [Name] -> [Name]
     supplement names = names <> (filter (`notElem` names) $ mpsDeriveInstances mps)
-
-    -- Always use StockStrategy for Show/Read.
-    -- This means e.g. (FooKey 1) shows as ("FooKey 1"), rather than just "1".
-    -- This is much better for debugging/logging purposes:
-    -- cf. https://github.com/yesodweb/persistent/issues/1104
-    decideStrategy :: Name -> DerivStrategy
-    decideStrategy typeclass
-        | typeclass `elem` [''Show, ''Read] = StockStrategy
-#if MIN_VERSION_GLASGOW_HASKELL(8,6,1,0)
-        | typeclass == ''PathMultiPiece =
-            ViaStrategy $ ConT ''ViaPersistEntity `AppT` recordType
-#endif
-        | useNewtype = NewtypeStrategy
-        | otherwise = StockStrategy
 
 -- | Returns 'True' if the key definition has less than 2 fields.
 --
