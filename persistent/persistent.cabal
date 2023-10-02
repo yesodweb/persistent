@@ -157,7 +157,7 @@ test-suite test
     hs-source-dirs:
         test/
 
-    ghc-options: -Wall
+    ghc-options: -Wall -Wno-incomplete-uni-patterns
 
     default-extensions: FlexibleContexts
                       , MultiParamTypeClasses

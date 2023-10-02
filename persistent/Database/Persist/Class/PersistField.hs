@@ -29,7 +29,7 @@ import qualified Data.Text.Encoding.Error as TERR
 import qualified Data.Text.Lazy as TL
 import qualified Data.Vector as V
 import Data.Word (Word, Word8, Word16, Word32, Word64)
-import Numeric.Natural (Natural)
+import Numeric.Natural
 import Text.Blaze.Html
 import Text.Blaze.Html.Renderer.Text (renderHtml)
 import GHC.TypeLits
@@ -44,6 +44,7 @@ import Data.Time (defaultTimeLocale)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 #endif
 
+import Prelude
 
 -- | This class teaches Persistent how to take a custom type and marshal it to and from a 'PersistValue', allowing it to be stored in a database.
 --

@@ -23,7 +23,7 @@ module Database.Persist.Class.PersistEntity
     , Filter (..)
     , FilterValue (..)
     , BackendSpecificFilter
-    , Entity (.., Entity, entityKey, entityVal)
+    , Entity (..)
 
     , recordName
     , entityValues
@@ -38,8 +38,6 @@ module Database.Persist.Class.PersistEntity
       SafeToInsert
     , SafeToInsertErrorMessage
     ) where
-
-import Data.Functor.Constant
 
 import Data.Aeson
        ( FromJSON(..)
@@ -63,7 +61,6 @@ import qualified Data.Aeson.KeyMap as AM
 import qualified Data.HashMap.Strict as AM
 #endif
 
-import GHC.Records
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Maybe (isJust)
 import Data.Text (Text)
@@ -553,9 +550,9 @@ instance SymbolToField sym rec typ => IsLabel sym (EntityField rec typ) where
 class SafeToInsert a where
 
 type SafeToInsertErrorMessage a
-    = 'Text "The PersistEntity " ':<>: ShowType a ':<>: 'Text " does not have a default primary key."
+    = 'Text "The PersistEntity " ':<>: 'ShowType a ':<>: 'Text " does not have a default primary key."
     ':$$: 'Text "This means that 'insert' will fail with a database error."
-    ':$$: 'Text "Please  provide a default= clause inthe entity definition,"
+    ':$$: 'Text "Please  provide a default= clause in the entity definition,"
     ':$$: 'Text "or use 'insertKey' instead to provide one."
 
 instance (TypeError (FunctionErrorMessage a b)) => SafeToInsert (a -> b)

@@ -32,7 +32,7 @@ import Data.Functor.Identity (Identity(..))
 import Data.Int
 import qualified Data.List as List
 import Data.Proxy
-import Data.Text (Text, pack)
+import Data.Text (pack)
 import Data.Time
 import GHC.Generics (Generic)
 import System.Environment
@@ -207,9 +207,9 @@ spec = describe "THSpec" $ do
     CommentSpec.spec
     EntityHaddockSpec.spec
     CompositeKeyStyleSpec.spec
+    RequireOnlyPersistImportSpec.spec
+
     describe "TestDefaultKeyCol" $ do
-        let EntityIdField FieldDef{..} =
-                entityId (entityDef (Proxy @TestDefaultKeyCol))
         it "should be a BackendKey SqlBackend" $ do
             -- the purpose of this test is to verify that a custom Id column of
             -- the form:

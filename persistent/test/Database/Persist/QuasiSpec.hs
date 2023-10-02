@@ -514,9 +514,9 @@ User
 
     UniqueEmail emailFirst emailSecond
 |]
-                let [user] = parse lowerCaseSettings definitions
+                let user = head $ parse lowerCaseSettings definitions
                     uniques = entityUniques (unboundEntityDef user)
-                    [dbNames] = fmap snd . uniqueFields <$> uniques
+                    dbNames = head $ fmap snd . uniqueFields <$> uniques
                     errMsg = unwords
                         [ "Unknown column in \"UniqueEmail\" constraint: \"emailSecond\""
                         , "possible fields: [\"name\",\"emailFirst\"]"
@@ -530,7 +530,7 @@ User
     age Text
     Unique some
 |]
-                let [user] = parse lowerCaseSettings definitions
+                let user = head $ parse lowerCaseSettings definitions
                 evaluate (unboundPrimarySpec user) `shouldErrorWithMessage`
                     "invalid unique constraint on table[\"User\"] expecting an uppercase constraint name xs=[\"some\"]"
 
@@ -555,10 +555,10 @@ Notification
                 let
                     flippedFK (EntityNameHS entName) (ConstraintNameHS conName) =
                         conName <> entName
-                    [_user, notification] =
-                        parse (setPsToFKName flippedFK lowerCaseSettings) validDefinitions
-                    [notificationForeignDef] =
-                        unboundForeignDef <$> unboundForeignDefs notification
+                    (_user, notification) =
+                        listToTwoTuple $ parse (setPsToFKName flippedFK lowerCaseSettings) validDefinitions
+                    notificationForeignDef =
+                        head $ unboundForeignDef <$> unboundForeignDefs notification
                 foreignConstraintNameDBName notificationForeignDef
                     `shouldBe`
                         ConstraintNameDB "fk_noti_user_notification"
@@ -578,7 +578,8 @@ Notification
     sentToSecond    Text
     Foreign User
 |]
-                let [_user, notification] = parse (setPsUseSnakeCaseForiegnKeys lowerCaseSettings) definitions
+                let (_user, notification) =
+                        listToTwoTuple $ parse (setPsUseSnakeCaseForeignKeys lowerCaseSettings) definitions
                 mapM (evaluate . unboundForeignFields) (unboundForeignDefs notification)
                     `shouldErrorWithMessage`
                         "invalid foreign key constraint on table[\"Notification\"] expecting a lower case constraint name or a cascading action xs=[]"
@@ -598,7 +599,8 @@ Notification
     sentToSecond    Text
     Foreign User fk_noti_user
 |]
-                let [_user, notification] = parse (setPsUseSnakeCaseForiegnKeys lowerCaseSettings) definitions
+                let (_user, notification) =
+                        listToTwoTuple $ parse (setPsUseSnakeCaseForeignKeys lowerCaseSettings) definitions
                 mapM (evaluate . unboundForeignFields) (unboundForeignDefs notification)
                     `shouldErrorWithMessage`
                         "No fields on foreign reference."
@@ -618,7 +620,8 @@ Notification
     sentToSecond    Text
     Foreign User fk_noti_user sentToFirst sentToSecond References emailFirst
 |]
-                let [_user, notification] = parse (setPsUseSnakeCaseForiegnKeys lowerCaseSettings) definitions
+                let (_user, notification) =
+                        listToTwoTuple $ parse (setPsUseSnakeCaseForeignKeys lowerCaseSettings) definitions
                 mapM (evaluate . unboundForeignFields) (unboundForeignDefs notification)
                     `shouldErrorWithMessage`
                         "invalid foreign key constraint on table[\"Notification\"] Found 2 foreign fields but 1 parent fields"
@@ -638,7 +641,7 @@ Notification
     sentToSecond    Text
     Foreign User OnDeleteCascade OnDeleteCascade
 |]
-                let [_user, notification] = parse (setPsUseSnakeCaseForiegnKeys lowerCaseSettings) definitions
+                let (_user, notification) = listToTwoTuple $ parse (setPsUseSnakeCaseForeignKeys lowerCaseSettings) definitions
                 mapM (evaluate . unboundForeignFields) (unboundForeignDefs notification)
                     `shouldErrorWithMessage`
                         "invalid foreign key constraint on table[\"Notification\"] found more than one OnDelete actions"
@@ -658,16 +661,16 @@ Notification
     sentToSecond    Text
     Foreign User OnUpdateCascade OnUpdateCascade
 |]
-                let [_user, notification] = parse (setPsUseSnakeCaseForiegnKeys lowerCaseSettings) definitions
+                let (_user, notification) = listToTwoTuple $ parse (setPsUseSnakeCaseForeignKeys lowerCaseSettings) definitions
                 mapM (evaluate . unboundForeignFields) (unboundForeignDefs notification)
                     `shouldErrorWithMessage`
                         "invalid foreign key constraint on table[\"Notification\"] found more than one OnUpdate actions"
 
             it "should allow you to enable snake cased foriegn keys via a preset configuration function" $ do
-                let [_user, notification] =
-                        parse (setPsUseSnakeCaseForiegnKeys lowerCaseSettings) validDefinitions
-                    [notificationForeignDef] =
-                        unboundForeignDef <$> unboundForeignDefs notification
+                let (_user, notification) =
+                        listToTwoTuple $ parse (setPsUseSnakeCaseForeignKeys lowerCaseSettings) validDefinitions
+                    notificationForeignDef =
+                        head $ unboundForeignDef <$> unboundForeignDefs notification
                 foreignConstraintNameDBName notificationForeignDef
                     `shouldBe`
                         ConstraintNameDB "notification_fk_noti_user"
@@ -683,7 +686,7 @@ CustomerTransfer
     currencyCode CurrencyCode
     uuid TransferUuid
 |]
-                let [customerTransfer] = parse lowerCaseSettings tickedDefinition
+                let customerTransfer = head $ parse lowerCaseSettings tickedDefinition
                 let expectedType =
                         FTTypeCon Nothing "MoneyAmount" `FTApp` FTTypePromoted "Customer" `FTApp` FTTypePromoted "Debit"
 
@@ -703,7 +706,7 @@ WithFinite
     one    (Finite 1)
     twenty (Labelled "twenty")
 |]
-                let [withFinite] = parse lowerCaseSettings tickedDefinition
+                let withFinite = head $ parse lowerCaseSettings tickedDefinition
 
                 (simplifyField <$> unboundEntityFields withFinite) `shouldBe`
                     [ (FieldNameHS "one", FTApp (FTTypeCon Nothing "Finite") (FTLit (IntTypeLit 1)))
@@ -1138,7 +1141,7 @@ Baz
                     , "  Extra2"
                     , "    something"
                     ]
-        let [subject] = parse lowerCaseSettings lines
+        let subject = head $ parse lowerCaseSettings lines
         it "produces the right name" $ do
             getUnboundEntityNameHS subject `shouldBe` EntityNameHS "Foo"
         describe "unboundEntityFields" $ do
@@ -1162,7 +1165,7 @@ Baz
                 , ("Extra2", [["something"]])
                 ]
         describe "works with extra blocks" $ do
-            let [_, lowerCaseTable, idTable] =
+            let (_, lowerCaseTable, idTable) =
                     case parse lowerCaseSettings $ T.unlines
                         [ ""
                         , "IdTable"
@@ -1185,7 +1188,7 @@ Baz
                         , ""
                         ] of
                             [a, b, c] ->
-                                [a, b, c] :: [UnboundEntityDef]
+                                ( a, b, c )
                             xs ->
                                 error
                                 $ "Expected 3 elements in list, got: "
@@ -1234,3 +1237,7 @@ shouldErrorWithMessage action expectedMsg = do
             msg `shouldBe` expectedMsg
         _ ->
             expectationFailure "Expected `error` to have been called"
+
+listToTwoTuple :: HasCallStack => [a] -> (a, a)
+listToTwoTuple [a, b] = (a, b)
+listToTwoTuple xs = error $ "Expected two items in list exactly, got: " <> show (length xs)
