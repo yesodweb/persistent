@@ -1,23 +1,23 @@
-{-# LANGUAGE DataKinds                  #-}
-{-# LANGUAGE DerivingStrategies         #-}
-{-# LANGUAGE FlexibleContexts           #-}
-{-# LANGUAGE FlexibleInstances          #-}
-{-# LANGUAGE GADTs                      #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MultiParamTypeClasses      #-}
-{-# LANGUAGE OverloadedLabels           #-}
-{-# LANGUAGE PartialTypeSignatures      #-}
-{-# LANGUAGE QuasiQuotes                #-}
-{-# LANGUAGE StandaloneDeriving         #-}
-{-# LANGUAGE TemplateHaskell            #-}
-{-# LANGUAGE TypeFamilies               #-}
-{-# LANGUAGE UndecidableInstances       #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedLabels #-}
+{-# LANGUAGE PartialTypeSignatures #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 {-# OPTIONS_GHC -Wname-shadowing -Werror=name-shadowing #-}
 
 module Database.Persist.TH.OverloadedLabelSpec where
 
-import           TemplateTestImports
+import TemplateTestImports
 
 mkPersist sqlSettings [persistUpperCase|
 
@@ -33,6 +33,10 @@ Dog
 Organization
     name    String
 
+Student
+    userId  UserId
+    departmentName String
+    Primary userId
 |]
 
 spec :: Spec
@@ -57,6 +61,12 @@ spec = describe "OverloadedLabels" $ do
     it "works for id labels" $ do
         let UserId = #id
             orgId = #id :: EntityField Organization OrganizationId
+
+        compiles
+
+    it "works for Primary labels" $ do
+        let StudentId = #id
+            studentId = #id :: EntityField Student StudentId
 
         compiles
 

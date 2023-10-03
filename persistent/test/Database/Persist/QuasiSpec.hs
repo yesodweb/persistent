@@ -236,6 +236,13 @@ spec = describe "Quasi" $ do
                             [ DocComment "this is a comment"
                             ]
                         )
+            it "recognizes empty line" $ do
+                parseLine "-- |" `shouldBe`
+                    Just
+                        ( Line 0
+                            [ DocComment ""
+                            ]
+                        )
 
             it "works if comment is indented" $ do
                 parseLine "  -- | comment" `shouldBe`

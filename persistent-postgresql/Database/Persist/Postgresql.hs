@@ -37,6 +37,7 @@ module Database.Persist.Postgresql
     , createPostgresqlPool
     , createPostgresqlPoolModified
     , createPostgresqlPoolModifiedWithVersion
+    , createPostgresqlPoolTailored
     , createPostgresqlPoolWithConf
     , module Database.Persist.Sql
     , ConnectionString
@@ -52,6 +53,7 @@ module Database.Persist.Postgresql
     , upsertManyWhere
     , openSimpleConn
     , openSimpleConnWithVersion
+    , getServerVersion
     , getSimpleConn
     , tableName
     , fieldName
@@ -65,6 +67,7 @@ module Database.Persist.Postgresql
     , createRawPostgresqlPoolModified
     , createRawPostgresqlPoolModifiedWithVersion
     , createRawPostgresqlPoolWithConf
+    , createBackend
     ) where
 
 import qualified Database.PostgreSQL.LibPQ as LibPQ
@@ -82,8 +85,8 @@ import Control.Monad
 import Control.Monad.Except
 import Control.Monad.IO.Unlift (MonadIO(..), MonadUnliftIO)
 import Control.Monad.Logger (MonadLoggerIO, runNoLoggingT)
-import Control.Monad.Trans.Reader (ReaderT(..), asks, runReaderT)
 import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.Reader (ReaderT(..), asks, runReaderT)
 #if !MIN_VERSION_base(4,12,0)
 import Control.Monad.Trans.Reader (withReaderT)
 #endif
@@ -102,8 +105,8 @@ import qualified Data.Conduit.List as CL
 import Data.Data (Data)
 import Data.Either (partitionEithers)
 import Data.Function (on)
-import Data.IORef
 import Data.Int (Int64)
+import Data.IORef
 import Data.List (find, foldl', groupBy, sort)
 import qualified Data.List as List
 import Data.List.NonEmpty (NonEmpty)
@@ -122,12 +125,13 @@ import System.Environment (getEnvironment)
 #if MIN_VERSION_base(4,12,0)
 import Database.Persist.Compatible
 #endif
+import qualified Data.Vault.Strict as Vault
 import Database.Persist.Postgresql.Internal
 import Database.Persist.Sql
 import qualified Database.Persist.Sql.Util as Util
 import Database.Persist.SqlBackend
-import Database.Persist.SqlBackend.StatementCache (StatementCache, mkSimpleStatementCache, mkStatementCache)
-import qualified Data.Vault.Strict as Vault
+import Database.Persist.SqlBackend.StatementCache
+       (StatementCache, mkSimpleStatementCache, mkStatementCache)
 import System.IO.Unsafe (unsafePerformIO)
 
 -- | A @libpq@ connection string.  A simple example of connection
@@ -270,9 +274,31 @@ createPostgresqlPoolModifiedWithVersion
     -> ConnectionString -- ^ Connection string to the database.
     -> Int -- ^ Number of connections to be kept open in the pool.
     -> m (Pool SqlBackend)
-createPostgresqlPoolModifiedWithVersion getVerDouble modConn ci = do
+createPostgresqlPoolModifiedWithVersion = createPostgresqlPoolTailored open'
+
+-- | Same as 'createPostgresqlPoolModifiedWithVersion', but takes a custom connection-creation
+-- function.
+--
+-- The only time you should reach for this function is if you need to write custom logic for creating
+-- a connection to the database.
+--
+-- @since 2.13.6
+createPostgresqlPoolTailored
+    :: (MonadUnliftIO m, MonadLoggerIO m)
+    =>
+    (    (PG.Connection -> IO ())
+      -> (PG.Connection -> IO (NonEmpty Word))
+      -> ((PG.Connection -> SqlBackend) -> PG.Connection -> SqlBackend)
+      -> ConnectionString -> LogFunc -> IO SqlBackend
+    ) -- ^ Action that creates a postgresql connection (please see documentation on the un-exported @open'@ function in this same module.
+    -> (PG.Connection -> IO (Maybe Double)) -- ^ Action to perform to get the server version.
+    -> (PG.Connection -> IO ()) -- ^ Action to perform after connection is created.
+    -> ConnectionString -- ^ Connection string to the database.
+    -> Int -- ^ Number of connections to be kept open in the pool.
+    -> m (Pool SqlBackend)
+createPostgresqlPoolTailored createConnection getVerDouble modConn ci = do
   let getVer = oldGetVersionToNew getVerDouble
-  createSqlPool $ open' modConn getVer id ci
+  createSqlPool $ createConnection modConn getVer id ci
 
 -- | Same as 'createPostgresqlPool', but can be configured with 'PostgresConf' and 'PostgresConfHooks'.
 --
@@ -333,6 +359,8 @@ open' modConn getVer constructor cstr logFunc = do
     return $ constructor (createBackend logFunc ver smap) conn
 
 -- | Gets the PostgreSQL server version
+--
+-- @since 2.13.6
 getServerVersion :: PG.Connection -> IO (Maybe Double)
 getServerVersion conn = do
   [PG.Only version] <- PG.query_ conn "show server_version";
@@ -415,6 +443,8 @@ getSimpleConn = Vault.lookup underlyingConnectionKey <$> getConnVault
 
 -- | Create the backend given a logging function, server version, mutable statement cell,
 -- and connection.
+--
+-- @since 2.13.6
 createBackend :: LogFunc -> NonEmpty Word
               -> IORef (Map.Map Text Statement) -> PG.Connection -> SqlBackend
 createBackend logFunc serverVersion smap conn =
@@ -1073,7 +1103,15 @@ getColumn _ _ columnName _ =
 -- | Intelligent comparison of SQL types, to account for SqlInt32 vs SqlOther integer
 sqlTypeEq :: SqlType -> SqlType -> Bool
 sqlTypeEq x y =
-    T.toCaseFold (showSqlType x) == T.toCaseFold (showSqlType y)
+    let
+        -- Non exhaustive helper to map postgres aliases to the same name. Based on
+        -- https://www.postgresql.org/docs/9.5/datatype.html.
+        -- This prevents needless `ALTER TYPE`s when the type is the same.
+        normalize "int8"    = "bigint"
+        normalize "serial8" = "bigserial"
+        normalize v         = v
+    in
+        normalize (T.toCaseFold (showSqlType x)) == normalize (T.toCaseFold (showSqlType y))
 
 findAlters
     :: [EntityDef]
@@ -1339,7 +1377,7 @@ showAlter table (DropReference cname) = T.concat
     , escapeC cname
     ]
 
--- | Get the SQL string for the table that a PeristEntity represents.
+-- | Get the SQL string for the table that a PersistEntity represents.
 -- Useful for raw SQL queries.
 tableName :: (PersistEntity record) => record -> Text
 tableName = escapeE . tableDBName
