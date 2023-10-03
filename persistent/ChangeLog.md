@@ -8,7 +8,9 @@
     * Always generates `SymbolToField "id"` instance
 * [#1509](https://github.com/yesodweb/persistent/pull/1509)
     * Provide `ViaPersistEntity` for defining `PathMultiPiece` for entity keys.
-
+* [#1480](https://github.com/yesodweb/persistent/pull/1480)
+  * Add `mpsAvoidHsKeyword` in `MkPersistSettings`
+  * 
 ## 2.14.5.2
 
 * [#1513](https://github.com/yesodweb/persistent/pull/1513)
