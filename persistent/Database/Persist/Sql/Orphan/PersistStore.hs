@@ -80,7 +80,7 @@ whereStmtForKey conn k =
 whereStmtForKeys :: PersistEntity record => SqlBackend -> [Key record] -> Text
 whereStmtForKeys conn ks = T.intercalate " OR " $ whereStmtForKey conn `fmap` ks
 
--- | get the SQL string for the table that a PeristEntity represents
+-- | get the SQL string for the table that a PersistEntity represents
 -- Useful for raw SQL queries
 --
 -- Your backend may provide a more convenient tableName function

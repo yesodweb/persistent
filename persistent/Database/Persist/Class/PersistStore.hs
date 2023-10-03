@@ -79,7 +79,7 @@ class (HasPersistBackend backend) => IsPersistBackend backend where
 -- @
 -- foo ::
 --   ( 'PersistEntity' record
---   , 'PeristEntityBackend' record ~ 'BaseBackend' backend
+--   , 'PersistEntityBackend' record ~ 'BaseBackend' backend
 --   , 'IsSqlBackend' backend
 --   )
 -- @
