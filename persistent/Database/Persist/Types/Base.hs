@@ -201,7 +201,28 @@ entityKeyFields =
 -- columns for an 'EntityDef'.
 keyAndEntityFields :: EntityDef -> NonEmpty FieldDef
 keyAndEntityFields ent =
-    case entityId ent of
+    keyWithFields (entityId ent) fields
+  where
+    fields = filter isHaskellField $ entityFields ent
+
+-- | Returns a 'NonEmpty' list of 'FieldDef' that correspond with the key
+-- columns for an 'EntityDef' including those fields that are marked as
+-- 'MigrationOnly' (and therefore only present in the database) or
+-- 'SafeToRemove' (and a migration will drop the column if it exists in the
+-- database).
+--
+-- For fields on the Haskell type use 'keyAndEntityFieldsDatabase'
+--
+-- @since 2.14.6.0
+keyAndEntityFieldsDatabase :: EntityDef -> NonEmpty FieldDef
+keyAndEntityFieldsDatabase ent =
+    keyWithFields (entityId ent) fields
+  where
+    fields = entityFields ent
+
+keyWithFields :: EntityIdDef -> [FieldDef] -> NonEmpty FieldDef
+keyWithFields entId fields =
+    case entId of
         EntityIdField fd ->
             fd :| fields
         EntityIdNaturalKey _ ->
@@ -214,8 +235,6 @@ keyAndEntityFields ent =
                         ]
                 Just xs ->
                     xs
-  where
-    fields = filter isHaskellField $ entityFields ent
 
 type ExtraLine = [Text]
 
