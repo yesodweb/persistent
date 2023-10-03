@@ -464,7 +464,9 @@ liftAndFixKeys mps emEntities entityMap unboundEnt =
         (fieldRef', sqlTyp') =
             case extractForeignRef entityMap ufd of
                 Just targetTable ->
-                    (lift (ForeignRef targetTable), liftSqlTypeExp (SqlTypeReference targetTable))
+                    let targetTableQualified =
+                          fromMaybe targetTable (guessFieldReferenceQualified ufd)
+                     in (lift (ForeignRef targetTable), liftSqlTypeExp (SqlTypeReference targetTableQualified))
                 Nothing ->
                     (lift NoReference, liftSqlTypeExp sqlTypeExp)
 
@@ -532,6 +534,30 @@ guessReference ft =
             , do
                 FTApp (FTTypeCon _ "Key") (FTTypeCon _ tableName) <- mft
                 pure tableName
+            , do
+                FTApp (FTTypeCon _ "Maybe") next <- mft
+                guessReferenceText (Just next)
+            ]
+
+guessFieldReferenceQualified :: UnboundFieldDef -> Maybe EntityNameHS
+guessFieldReferenceQualified = guessReferenceQualified . unboundFieldType
+
+guessReferenceQualified :: FieldType -> Maybe EntityNameHS
+guessReferenceQualified ft =
+    EntityNameHS <$> guessReferenceText (Just ft)
+  where
+    checkIdSuffix =
+        T.stripSuffix "Id"
+    guessReferenceText mft =
+        asum
+            [ do
+                FTTypeCon mmod (checkIdSuffix -> Just tableName) <- mft
+                -- handle qualified name.
+                pure $ maybe tableName (\qualName -> qualName <> "." <> tableName) mmod
+            , do
+                FTApp (FTTypeCon _ "Key") (FTTypeCon mmod tableName) <- mft
+                -- handle qualified name.
+                pure $ maybe tableName (\qualName -> qualName <> "." <> tableName) mmod
             , do
                 FTApp (FTTypeCon _ "Maybe") next <- mft
                 guessReferenceText (Just next)
