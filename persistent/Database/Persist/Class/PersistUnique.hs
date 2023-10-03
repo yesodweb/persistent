@@ -33,7 +33,7 @@ import Data.List (deleteFirstsBy, (\\))
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NEL
 import qualified Data.Map as Map
-import Data.Maybe (catMaybes)
+import Data.Maybe (catMaybes, isJust)
 import GHC.TypeLits (ErrorMessage(..))
 
 import Database.Persist.Class.PersistEntity
@@ -77,6 +77,26 @@ class PersistStoreRead backend => PersistUniqueRead backend  where
     getBy
         :: forall record m. (MonadIO m, PersistRecordBackend record backend)
         => Unique record -> ReaderT backend m (Maybe (Entity record))
+
+    -- | Returns True if a record with this unique key exists, otherwise False.
+    --
+    -- === __Example usage__
+    --
+    -- With <#schema-persist-unique-1 schema-1> and <#dataset-persist-unique-1 dataset-1>:
+    --
+    -- > existsBySpjName :: MonadIO m  => ReaderT SqlBackend m Bool
+    -- > existsBySpjName = existsBy $ UniqueUserName "SPJ"
+    --
+    -- > spjEntExists <- existsBySpjName
+    --
+    -- The above query when applied on <#dataset-persist-unique-1 dataset-1>, will return
+    -- the value True.
+    --
+    -- @since 2.14.5
+    existsBy
+        :: forall record m. (MonadIO m, PersistRecordBackend record backend)
+        => Unique record -> ReaderT backend m Bool
+    existsBy uniq = isJust <$> getBy uniq
 
 -- | Some functions in this module ('insertUnique', 'insertBy', and
 -- 'replaceUnique') first query the unique indexes to check for
@@ -138,6 +158,37 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
         conflict <- checkUnique datum
         case conflict of
             Nothing -> Just `liftM` insert datum
+            Just _ -> return Nothing
+
+    -- | Same as 'insertUnique' but doesn't return a @Key@.
+    --
+    -- === __Example usage__
+    --
+    -- With <#schema-persist-unique-1 schema-1> and <#dataset-persist-unique-1 dataset-1>, we try to insert the following two records:
+    --
+    -- > linusId <- insertUnique_ $ User "Linus" 48
+    -- > spjId   <- insertUnique_ $ User "SPJ" 90
+    --
+    -- > +-----+------+-----+
+    -- > |id   |name  |age  |
+    -- > +-----+------+-----+
+    -- > |1    |SPJ   |40   |
+    -- > +-----+------+-----+
+    -- > |2    |Simon |41   |
+    -- > +-----+------+-----+
+    -- > |3    |Linus |48   |
+    -- > +-----+------+-----+
+    --
+    -- Linus's record was inserted to <#dataset-persist-unique-1 dataset-1>, while SPJ wasn't because SPJ already exists in <#dataset-persist-unique-1 dataset-1>.
+    --
+    -- @since 2.14.5.0
+    insertUnique_
+        :: forall record m. (MonadIO m, PersistRecordBackend record backend, SafeToInsert record)
+        => record -> ReaderT backend m (Maybe ())
+    insertUnique_ datum = do
+        conflict <- checkUnique datum
+        case conflict of
+            Nothing -> Just `liftM` insert_ datum
             Just _ -> return Nothing
 
     -- | Update based on a uniqueness constraint or insert:

@@ -25,6 +25,7 @@ User
     name Text
     Primary ident
     team TeamId
+    type Text
 
 Team
     name Text

@@ -51,6 +51,18 @@ specsWith runDb = describe "PersistUniqueTest" $ do
             Just vu <- getBy (UniqueBar b)
             vu @== Entity k vk
 
+    describe "existsBy" $ do
+        it "works to query the existence of a record in the database" $ runDb $ do
+            let b = 5
+            k <- insert Fo { foFoo = 3, foBar = b }
+            result <- existsBy $ UniqueBar b
+            result @== True
+
+        it "returns false for nonexistent records" $ runDb $ do
+            insert_ Fo { foFoo = 3, foBar = 5 }
+            result <- existsBy $ UniqueBar 17
+            result @== False
+
     describe "insertUniqueEntity" $ do
         it "inserts a value if no conflicts are present" $ runDb $ do
             let fo = Fo 3 5

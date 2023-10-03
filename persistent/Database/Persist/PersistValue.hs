@@ -23,7 +23,7 @@ import Data.Bits (shiftL, shiftR)
 import Numeric (readHex, showHex)
 import qualified Data.Text as Text
 import Data.Text (Text)
-import Data.ByteString (ByteString, foldl')
+import Data.ByteString as BS (ByteString, foldl')
 import Data.Time (Day, TimeOfDay, UTCTime)
 import Web.PathPieces (PathPiece(..))
 import qualified Data.Aeson as A
@@ -235,7 +235,7 @@ instance A.ToJSON PersistValue where
 
          -- taken from crypto-api
          bs2i :: ByteString -> Integer
-         bs2i bs = foldl' (\i b -> (i `shiftL` 8) + fromIntegral b) 0 bs
+         bs2i bs = BS.foldl' (\i b -> (i `shiftL` 8) + fromIntegral b) 0 bs
          {-# INLINE bs2i #-}
 
          -- showHex of n padded with leading zeros if necessary to fill d digits

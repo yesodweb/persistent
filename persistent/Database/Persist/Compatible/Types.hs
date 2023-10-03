@@ -12,10 +12,10 @@ module Database.Persist.Compatible.Types
     ( Compatible(..)
     ) where
 
+import Control.Monad.Trans.Reader (withReaderT)
 import Data.Aeson
 import Database.Persist.Class
 import Database.Persist.Sql.Class
-import Control.Monad.Trans.Reader (withReaderT)
 
 
 -- | A newtype wrapper for compatible backends, mainly useful for @DerivingVia@.
@@ -104,6 +104,7 @@ instance (HasPersistBackend b, BackendCompatible b s, PersistQueryWrite b) => Pe
 
 instance (HasPersistBackend b, BackendCompatible b s, PersistUniqueRead b) => PersistUniqueRead (Compatible b s) where
     getBy = withReaderT (projectBackend @b @s . unCompatible) . getBy
+    existsBy = withReaderT (projectBackend @b @s . unCompatible) . existsBy
 
 instance (HasPersistBackend b, BackendCompatible b s, PersistStoreWrite b) => PersistStoreWrite (Compatible b s) where
     insert = withReaderT (projectBackend @b @s . unCompatible) . insert
