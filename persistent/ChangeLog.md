@@ -6,6 +6,8 @@
     * Create Haddocks from entity documentation comments
 * [1497](https://github.com/yesodweb/persistent/pull/1497)
     * Always generates `SymbolToField "id"` instance
+* [#1509](https://github.com/yesodweb/persistent/pull/1509)
+    * Provide `ViaPersistEntity` for defining `PathMultiPiece` for entity keys.
 
 ## 2.14.5.2
 
