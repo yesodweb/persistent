@@ -1,5 +1,11 @@
 # Changelog for persistent-sqlite
 
+## 2.13.2
+
+* [#1488](https://github.com/yesodweb/persistent/pull/1488)
+    * Add `openRawSqliteConn` for creating `RawSqlite SqlBackend` connections
+      that aren't automatically cleaned-up.
+
 ## 2.13.1.1
 
 * [#1459](https://github.com/yesodweb/persistent/pull/1459)

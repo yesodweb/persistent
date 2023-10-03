@@ -48,6 +48,7 @@ module Database.Persist.Sqlite
     , ForeignKeyViolation(..)
     , checkForeignKeys
     , RawSqlite
+    , openRawSqliteConn
     , persistentBackend
     , rawSqliteConnection
     , withRawSqliteConnInfo
@@ -94,8 +95,8 @@ import qualified Data.Conduit.Combinators as C
 import qualified Data.Conduit.List as CL
 import Data.Foldable (toList)
 import qualified Data.HashMap.Lazy as HashMap
-import Data.Int (Int64)
 import Data.IORef (newIORef)
+import Data.Int (Int64)
 import Data.Maybe
 import Data.Pool (Pool)
 import Data.Text (Text)
@@ -937,6 +938,22 @@ data RawSqlite backend = RawSqlite
     { _persistentBackend :: backend -- ^ The persistent backend
     , _rawSqliteConnection :: Sqlite.Connection -- ^ The underlying `Sqlite.Connection`
     }
+
+-- | Open a @'RawSqlite' 'SqlBackend'@ connection from a 'SqliteConnectionInfo'.
+--
+-- When using this function, the caller has to accept the responsibility of
+-- cleaning up the resulting connection. To do this, use 'close' with the
+-- 'rawSqliteConnection' - it's enough to simply drop the 'persistBackend'
+-- afterwards.
+--
+-- @since 2.13.2
+openRawSqliteConn
+    :: (MonadUnliftIO m, MonadLoggerIO m)
+    => SqliteConnectionInfo
+    -> m (RawSqlite SqlBackend)
+openRawSqliteConn connInfo = do
+    logFunc <- askLoggerIO
+    liftIO $ openWith RawSqlite connInfo logFunc
 
 instance BackendCompatible b (RawSqlite b) where
     projectBackend = _persistentBackend
