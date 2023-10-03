@@ -1,6 +1,6 @@
 # Changelog for persistent
 
-## 2.14.6.0 (unreleased)
+## 2.14.6.0
 
 * [#1477](https://github.com/yesodweb/persistent/pull/1477)
     * Qualified references to other tables will work
@@ -12,7 +12,7 @@
     * Provide `ViaPersistEntity` for defining `PathMultiPiece` for entity keys.
 * [#1480](https://github.com/yesodweb/persistent/pull/1480)
   * Add `mpsAvoidHsKeyword` in `MkPersistSettings`
-  * 
+  *
 ## 2.14.5.2
 
 * [#1513](https://github.com/yesodweb/persistent/pull/1513)
