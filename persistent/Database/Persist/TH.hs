@@ -3013,11 +3013,7 @@ mkSymbolToFieldInstances mps entityMap (fixEntityDef -> ed) = do
                 mkEntityFieldConstr fieldHaskellName
         mkInstance fieldNameT fieldTypeT entityFieldConstr
 
-    mkey <-
-        case unboundPrimarySpec ed of
-            NaturalKey _ ->
-                pure []
-            _ -> do
+    mkey <- do
                 let
                     fieldHaskellName =
                         FieldNameHS "Id"
