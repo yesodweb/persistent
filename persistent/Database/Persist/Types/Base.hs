@@ -213,7 +213,7 @@ keyAndEntityFields ent =
 --
 -- For fields on the Haskell type use 'keyAndEntityFieldsDatabase'
 --
--- @since 2.14.7.0
+-- @since 2.14.6.0
 keyAndEntityFieldsDatabase :: EntityDef -> NonEmpty FieldDef
 keyAndEntityFieldsDatabase ent =
     keyWithFields (entityId ent) fields
