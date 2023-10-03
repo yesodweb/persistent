@@ -2,6 +2,8 @@
 
 ## 2.14.6.0 (unreleased)
 
+* [#1477](https://github.com/yesodweb/persistent/pull/1477)
+    * Qualified references to other tables will work
 * [#1503](https://github.com/yesodweb/persistent/pull/1503)
     * Create Haddocks from entity documentation comments
 * [1497](https://github.com/yesodweb/persistent/pull/1497)
