@@ -1,5 +1,9 @@
 # Changelog for persistent-qq
 
+## 2.12.0.6
+
+* Fix test compilation by importing `Control.Monad` explicitly [#1487](https://github.com/yesodweb/persistent/pull/1487)
+
 ## 2.12.0.5
 
 * Fix a bug where comments would break the quasiquoter. [#1436](https://github.com/yesodweb/persistent/pull/1436)
