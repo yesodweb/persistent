@@ -2,9 +2,10 @@
 
 ## 2.13.4.0
 
-* Add Database.Persist.Sqlite.createSqlitePoolWithConfig to create a SQLite
-  connection pool with a connection string and ConnectionPoolConfig.
-  Using ConnectionPoolConfig, it is possible to set the connection idle timeout.
+* [#1524](https://github.com/yesodweb/persistent/pull/1524)
+    * Add Database.Persist.Sqlite.createSqlitePoolWithConfig to create a SQLite
+      connection pool with a connection string and ConnectionPoolConfig.
+      Using ConnectionPoolConfig, it is possible to set the connection idle timeout.
 
 ## 2.13.3.0
 
