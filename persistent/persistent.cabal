@@ -19,7 +19,6 @@ library
         base                     >= 4.11.1.0     && < 5
       , aeson                    >= 1.0 && < 2.3
       , attoparsec
-      , attoparsec-aeson         >= 2.1.0.0 && < 2.3
       , base64-bytestring
       , blaze-html               >= 0.9
       , bytestring               >= 0.10
