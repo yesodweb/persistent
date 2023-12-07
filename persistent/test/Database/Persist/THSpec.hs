@@ -53,6 +53,7 @@ import qualified Database.Persist.TH.CommentSpec as CommentSpec
 import qualified Database.Persist.TH.CompositeKeyStyleSpec as CompositeKeyStyleSpec
 import qualified Database.Persist.TH.DiscoverEntitiesSpec as DiscoverEntitiesSpec
 import qualified Database.Persist.TH.EmbedSpec as EmbedSpec
+import qualified Database.Persist.TH.EntityHaddockSpec as EntityHaddockSpec
 import qualified Database.Persist.TH.ForeignRefSpec as ForeignRefSpec
 import qualified Database.Persist.TH.ImplicitIdColSpec as ImplicitIdColSpec
 import qualified Database.Persist.TH.JsonEncodingSpec as JsonEncodingSpec
@@ -75,7 +76,7 @@ import qualified Database.Persist.TH.TypeLitFieldDefsSpec as TypeLitFieldDefsSpe
 -- machinery
 type TextId = Text
 
-share [mkPersist sqlSettings { mpsGeneric = False, mpsDeriveInstances = [''Generic] }] [persistUpperCase|
+share [mkPersistWith  sqlSettings { mpsGeneric = False, mpsDeriveInstances = [''Generic] } [entityDef @JsonEncodingSpec.JsonEncoding Proxy]] [persistUpperCase|
 
 Person json
     name Text
@@ -101,6 +102,10 @@ CustomIdName
     Id      sql=id_col
     name    Text
     deriving Show Eq
+
+QualifiedReference
+    jsonEncoding JsonEncodingSpec.JsonEncodingId
+
 |]
 
 mkPersist sqlSettings [persistLowerCase|
@@ -204,7 +209,15 @@ spec = describe "THSpec" $ do
     ToFromPersistValuesSpec.spec
     JsonEncodingSpec.spec
     CommentSpec.spec
+    EntityHaddockSpec.spec
     CompositeKeyStyleSpec.spec
+    it "QualifiedReference" $ do
+        let ed = entityDef @QualifiedReference Proxy
+            [FieldDef {..}] = entityFields ed
+        fieldType `shouldBe` FTTypeCon (Just "JsonEncodingSpec") "JsonEncodingId"
+        fieldSqlType `shouldBe` sqlType @JsonEncodingSpec.JsonEncodingId Proxy
+        fieldReference `shouldBe` ForeignRef (EntityNameHS "JsonEncoding")
+
     describe "TestDefaultKeyCol" $ do
         let EntityIdField FieldDef{..} =
                 entityId (entityDef (Proxy @TestDefaultKeyCol))

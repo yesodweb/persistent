@@ -1,5 +1,30 @@
 # Changelog for persistent
 
+## 2.14.6.0
+
+* [#1477](https://github.com/yesodweb/persistent/pull/1477)
+    * Qualified references to other tables will work
+* [#1503](https://github.com/yesodweb/persistent/pull/1503)
+    * Create Haddocks from entity documentation comments
+* [1497](https://github.com/yesodweb/persistent/pull/1497)
+    * Always generates `SymbolToField "id"` instance
+* [#1509](https://github.com/yesodweb/persistent/pull/1509)
+    * Provide `ViaPersistEntity` for defining `PathMultiPiece` for entity keys.
+* [#1480](https://github.com/yesodweb/persistent/pull/1480)
+  * Add `mpsAvoidHsKeyword` in `MkPersistSettings`
+  *
+## 2.14.5.2
+
+* [#1513](https://github.com/yesodweb/persistent/pull/1513)
+    * Support GHC 9.8 and `aeson-2.2`
+
+## 2.14.5.1
+
+* [#1496](https://github.com/yesodweb/persistent/pull/1496)
+    * Fixes name shadowing error at the generated `keyFromRecordM` function.
+* [#1505](https://github.com/yesodweb/persistent/pull/1505)
+    * Fixes the comment line parsing rule so that accommodates paragraph breaks.
+
 ## 2.14.5.0
 
 * [#1469](https://github.com/yesodweb/persistent/pull/1469)

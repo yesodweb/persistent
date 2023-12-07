@@ -21,7 +21,7 @@ import PgInit
 
 share [mkPersist sqlSettings, mkMigrate "migrateAll1"] [persistLowerCase|
 EquivalentType sql=equivalent_types
-    field1 Int
+    field1 Int    sqltype=bigint
     field2 T.Text sqltype=text
     field3 T.Text sqltype=us_postal_code
     deriving Eq Show
@@ -29,7 +29,7 @@ EquivalentType sql=equivalent_types
 
 share [mkPersist sqlSettings, mkMigrate "migrateAll2"] [persistLowerCase|
 EquivalentType2 sql=equivalent_types
-    field1 Int
+    field1 Int    sqltype=int8
     field2 T.Text
     field3 T.Text sqltype=us_postal_code
     deriving Eq Show

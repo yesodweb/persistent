@@ -1,5 +1,5 @@
 name:            persistent
-version:         2.14.5.0
+version:         2.14.6.0
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -17,8 +17,9 @@ extra-source-files: ChangeLog.md README.md
 library
     build-depends:
         base                     >= 4.11.1.0     && < 5
-      , aeson                    >= 1.0 && < 2.2
+      , aeson                    >= 1.0 && < 2.3
       , attoparsec
+      , attoparsec-aeson         >= 2.1.0.0 && < 2.3
       , base64-bytestring
       , blaze-html               >= 0.9
       , bytestring               >= 0.10
@@ -35,7 +36,7 @@ library
       , resourcet                >= 1.1.10
       , scientific
       , silently
-      , template-haskell         >= 2.13 && < 2.21
+      , template-haskell         >= 2.13 && < 2.22
       , text                     >= 1.2
       , th-lift-instances        >= 0.1.14    && < 0.2
       , time                     >= 1.6
@@ -172,6 +173,7 @@ test-suite test
         Database.Persist.TH.CompositeKeyStyleSpec
         Database.Persist.TH.DiscoverEntitiesSpec
         Database.Persist.TH.EmbedSpec
+        Database.Persist.TH.EntityHaddockSpec
         Database.Persist.TH.ForeignRefSpec
         Database.Persist.TH.ImplicitIdColSpec
         Database.Persist.TH.JsonEncodingSpec

@@ -1,5 +1,5 @@
 name:            persistent-postgresql
-version:         2.13.5.2
+version:         2.13.6.1
 license:         MIT
 license-file:    LICENSE
 author:          Felipe Lessa, Michael Snoyman <michael@snoyman.com>
@@ -25,8 +25,8 @@ library
                    , containers            >= 0.5
                    , monad-logger          >= 0.3.25
                    , mtl
-                   , postgresql-simple     >= 0.6.1    && < 0.7
-                   , postgresql-libpq      >= 0.9.4.2  && < 0.10
+                   , postgresql-simple     >= 0.6.1    && < 0.8
+                   , postgresql-libpq      >= 0.9.4.2  && < 0.11
                    , resourcet             >= 1.1.9
                    , resource-pool
                    , string-conversions

@@ -1,5 +1,16 @@
 # Changelog for persistent-sqlite
 
+## 2.13.3.0
+
+* [#1486](https://github.com/yesodweb/persistent/pull/1486)
+    * Add Database.Sqlite.open' which takes a ByteString
+
+## 2.13.2.0
+
+* [#1488](https://github.com/yesodweb/persistent/pull/1488)
+    * Add `openRawSqliteConn` for creating `RawSqlite SqlBackend` connections
+      that aren't automatically cleaned-up.
+
 ## 2.13.1.1
 
 * [#1459](https://github.com/yesodweb/persistent/pull/1459)

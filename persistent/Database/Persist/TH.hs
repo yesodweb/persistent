@@ -44,7 +44,9 @@ module Database.Persist.TH
     , mpsGeneric
     , mpsPrefixFields
     , mpsFieldLabelModifier
+    , mpsAvoidHsKeyword
     , mpsConstraintLabelModifier
+    , mpsEntityHaddocks
     , mpsEntityJSON
     , mpsGenerateLenses
     , mpsDeriveInstances
@@ -121,6 +123,9 @@ import Data.Foldable (asum, toList)
 import qualified Data.Set as Set
 import Language.Haskell.TH.Lib
        (appT, conE, conK, conT, litT, strTyLit, varE, varP, varT)
+#if MIN_VERSION_template_haskell(2,21,0)
+import Language.Haskell.TH.Lib (defaultBndrFlag)
+#endif
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
 import Web.HttpApiData (FromHttpApiData(..), ToHttpApiData(..))
@@ -141,6 +146,7 @@ import Database.Persist.ImplicitIdDef.Internal
 conp :: Name -> [Pat] -> Pat
 conp name pats = ConP name [] pats
 #else
+conp :: Name -> [Pat] -> Pat
 conp = ConP
 #endif
 
@@ -458,7 +464,9 @@ liftAndFixKeys mps emEntities entityMap unboundEnt =
         (fieldRef', sqlTyp') =
             case extractForeignRef entityMap ufd of
                 Just targetTable ->
-                    (lift (ForeignRef targetTable), liftSqlTypeExp (SqlTypeReference targetTable))
+                    let targetTableQualified =
+                          fromMaybe targetTable (guessFieldReferenceQualified ufd)
+                     in (lift (ForeignRef targetTable), liftSqlTypeExp (SqlTypeReference targetTableQualified))
                 Nothing ->
                     (lift NoReference, liftSqlTypeExp sqlTypeExp)
 
@@ -526,6 +534,30 @@ guessReference ft =
             , do
                 FTApp (FTTypeCon _ "Key") (FTTypeCon _ tableName) <- mft
                 pure tableName
+            , do
+                FTApp (FTTypeCon _ "Maybe") next <- mft
+                guessReferenceText (Just next)
+            ]
+
+guessFieldReferenceQualified :: UnboundFieldDef -> Maybe EntityNameHS
+guessFieldReferenceQualified = guessReferenceQualified . unboundFieldType
+
+guessReferenceQualified :: FieldType -> Maybe EntityNameHS
+guessReferenceQualified ft =
+    EntityNameHS <$> guessReferenceText (Just ft)
+  where
+    checkIdSuffix =
+        T.stripSuffix "Id"
+    guessReferenceText mft =
+        asum
+            [ do
+                FTTypeCon mmod (checkIdSuffix -> Just tableName) <- mft
+                -- handle qualified name.
+                pure $ maybe tableName (\qualName -> qualName <> "." <> tableName) mmod
+            , do
+                FTApp (FTTypeCon _ "Key") (FTTypeCon mmod tableName) <- mft
+                -- handle qualified name.
+                pure $ maybe tableName (\qualName -> qualName <> "." <> tableName) mmod
             , do
                 FTApp (FTTypeCon _ "Maybe") next <- mft
                 guessReferenceText (Just next)
@@ -1057,6 +1089,12 @@ data MkPersistSettings = MkPersistSettings
     -- Note: this setting is ignored if mpsPrefixFields is set to False.
     --
     -- @since 2.11.0.0
+    , mpsAvoidHsKeyword :: Text -> Text
+    -- ^ Customise function for field accessors applied only when the field name matches any of Haskell keywords.
+    --
+    -- Default: suffix "_".
+    --
+    -- @since 2.14.6.0
     , mpsConstraintLabelModifier :: Text -> Text -> Text
     -- ^ Customise the Constraint names using the entity and field name. The
     -- result should be a valid haskell type (start with an upper cased letter).
@@ -1066,6 +1104,10 @@ data MkPersistSettings = MkPersistSettings
     -- Note: this setting is ignored if mpsPrefixFields is set to False.
     --
     -- @since 2.11.0.0
+    , mpsEntityHaddocks :: Bool
+    -- ^ Generate Haddocks from entity documentation comments. Default: False.
+    --
+    -- @since 2.14.6.0
     , mpsEntityJSON :: Maybe EntityJSON
     -- ^ Generate @ToJSON@/@FromJSON@ instances for each model types. If it's
     -- @Nothing@, no instances will be generated. Default:
@@ -1156,7 +1198,9 @@ mkPersistSettings backend = MkPersistSettings
     , mpsGeneric = False
     , mpsPrefixFields = True
     , mpsFieldLabelModifier = (++)
+    , mpsAvoidHsKeyword = (++ "_")
     , mpsConstraintLabelModifier = (++)
+    , mpsEntityHaddocks = False
     , mpsEntityJSON = Just EntityJSON
         { entityToJSON = 'entityIdToJSON
         , entityFromJSON = 'entityIdFromJSON
@@ -1199,10 +1243,24 @@ dataTypeDec mps entityMap entDef = do
             pure (DerivClause (Just AnyclassStrategy) (fmap ConT anyclasses))
     unless (null anyclassDerives) $ do
         requireExtensions [[DeriveAnyClass]]
-    pure $ DataD [] nameFinal paramsFinal
+    let dec = DataD [] nameFinal paramsFinal
                 Nothing
                 constrs
                 (stockDerives <> anyclassDerives)
+#if MIN_VERSION_template_haskell(2,18,0)
+    when (mpsEntityHaddocks mps) $ do
+        forM_ cols $ \((name, _, _), maybeComments) -> do
+            case maybeComments of
+                Just comment -> addModFinalizer $
+                    putDoc (DeclDoc name) (unpack comment)
+                Nothing -> pure ()
+        case entityComments (unboundEntityDef entDef) of
+            Just doc -> do
+                addModFinalizer $ putDoc (DeclDoc nameFinal) (unpack doc)
+            _ -> pure ()
+#endif
+    pure dec
+
   where
     stratFor n =
         if n `elem` stockClasses then
@@ -1227,7 +1285,7 @@ dataTypeDec mps entityMap entDef = do
         | otherwise =
             (mkEntityDefName entDef, [])
 
-    cols :: [VarBangType]
+    cols :: [(VarBangType, Maybe Text)]
     cols = do
         fieldDef <- getUnboundFieldDefs entDef
         let
@@ -1239,11 +1297,13 @@ dataTypeDec mps entityMap entDef = do
                 else notStrict
             fieldIdType =
                 maybeIdType mps entityMap fieldDef Nothing Nothing
-        pure (recordNameE, strictness, fieldIdType)
+            fieldComments =
+                unboundFieldComments fieldDef
+        pure ((recordNameE, strictness, fieldIdType), fieldComments)
 
     constrs
         | unboundEntitySum entDef = fmap sumCon $ getUnboundFieldDefs entDef
-        | otherwise = [RecC (mkEntityDefName entDef) cols]
+        | otherwise = [RecC (mkEntityDefName entDef) (map fst cols)]
 
     sumCon fieldDef = NormalC
         (sumConstrName mps entDef fieldDef)
@@ -1994,18 +2054,20 @@ mkEntity embedEntityMap entityMap mps preDef = do
     [keyFromRecordM'] <-
         case unboundPrimarySpec entDef of
             NaturalKey ucd -> do
-                let
-                    keyCon =
-                        keyConName entDef
-                    keyFields' =
-                        fieldNameToRecordName mps entDef <$> unboundCompositeCols ucd
+                let keyFields' = fieldNameToRecordName mps entDef <$> unboundCompositeCols ucd
+                keyFieldNames' <- forM keyFields' $ \fieldName -> do
+                                         fieldVarName <- newName (nameBase fieldName)
+                                         return (fieldName, fieldVarName)
+
+                let keyCon = keyConName entDef
                     constr =
                         foldl'
                             AppE
                             (ConE keyCon)
-                            (VarE <$> keyFields')
+                            (VarE . snd <$> keyFieldNames')
                     keyFromRec = varP 'keyFromRecordM
-                    lam = LamE [RecP name [(n, VarP n) | n <- toList keyFields']] constr
+                    fieldPat = [(fieldName, VarP fieldVarName) | (fieldName, fieldVarName) <- toList keyFieldNames']
+                    lam = LamE [RecP name fieldPat ] constr
                 [d|
                     $(keyFromRec) = Just $(pure lam)
                     |]
@@ -2322,7 +2384,15 @@ mkLenses mps entityMap ent = fmap mconcat $ forM (getUnboundFieldDefs ent `zip` 
     where
         fieldNames = fieldDefToRecordName mps ent <$> getUnboundFieldDefs ent
 
-#if MIN_VERSION_template_haskell(2,17,0)
+#if MIN_VERSION_template_haskell(2,21,0)
+mkPlainTV
+    :: Name
+    -> TyVarBndr BndrVis
+mkPlainTV n = PlainTV n defaultBndrFlag
+
+mkForallTV :: Name -> TyVarBndr Specificity
+mkForallTV n = PlainTV n SpecifiedSpec
+#elif MIN_VERSION_template_haskell(2,17,0)
 mkPlainTV
     :: Name
     -> TyVarBndr ()
@@ -2977,11 +3047,7 @@ mkSymbolToFieldInstances mps entityMap (fixEntityDef -> ed) = do
                 mkEntityFieldConstr fieldHaskellName
         mkInstance fieldNameT fieldTypeT entityFieldConstr
 
-    mkey <-
-        case unboundPrimarySpec ed of
-            NaturalKey _ ->
-                pure []
-            _ -> do
+    mkey <- do
                 let
                     fieldHaskellName =
                         FieldNameHS "Id"
@@ -3116,7 +3182,7 @@ mkRecordName mps prefix entNameHS fieldNameHS =
         unFieldNameHS fieldNameHS
 
     avoidKeyword :: Text -> Text
-    avoidKeyword name = if name `Set.member` haskellKeywords then name ++ "_" else name
+    avoidKeyword name = if name `Set.member` haskellKeywords then mpsAvoidHsKeyword mps name else name
 
 haskellKeywords :: Set.Set Text
 haskellKeywords = Set.fromList

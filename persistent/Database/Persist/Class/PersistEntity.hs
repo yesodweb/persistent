@@ -24,6 +24,7 @@ module Database.Persist.Class.PersistEntity
     , FilterValue (..)
     , BackendSpecificFilter
     , Entity (.., Entity, entityKey, entityVal)
+    , ViaPersistEntity (..)
 
     , recordName
     , entityValues
@@ -56,6 +57,7 @@ import Data.Aeson.Text (encodeToTextBuilder)
 import Data.Aeson.Types (Parser, Result(Error, Success))
 import Data.Attoparsec.ByteString (parseOnly)
 import Data.Functor.Identity
+import Web.PathPieces (PathMultiPiece(..), PathPiece(..))
 
 #if MIN_VERSION_aeson(2,0,0)
 import qualified Data.Aeson.KeyMap as AM
@@ -179,6 +181,18 @@ class ( PersistField (Key record), ToJSON (Key record), FromJSON (Key record)
     -- @since 2.11.0.0
     keyFromRecordM :: Maybe (record -> Key record)
     keyFromRecordM = Nothing
+
+-- | Newtype wrapper for optionally deriving typeclass instances on
+-- 'PersistEntity' keys.
+--
+-- @since 2.14.6.0
+newtype ViaPersistEntity record = ViaPersistEntity (Key record)
+
+instance PersistEntity record => PathMultiPiece (ViaPersistEntity record) where
+    fromPathMultiPiece pieces = do
+        Right key <- keyFromValues <$> mapM fromPathPiece pieces
+        pure $ ViaPersistEntity key
+    toPathMultiPiece (ViaPersistEntity key) = map toPathPiece $ keyToValues key
 
 -- | Construct an @'Entity' record@ by providing a value for each of the
 -- record's fields.
