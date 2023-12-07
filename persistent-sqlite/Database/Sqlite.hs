@@ -241,7 +241,9 @@ openError path' = do
 open :: Text -> IO Connection
 open path = open' (encodeUtf8 path)
 
--- @since 2.13.2.0
+-- |  Like 'open', but accepts a 'ByteString' instead of a 'Text'.
+--
+-- @since 2.13.3.0
 open' :: BS.ByteString -> IO Connection
 open' path = do
   databaseOrError <- openError path
