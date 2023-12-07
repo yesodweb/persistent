@@ -8,6 +8,8 @@
       Using ConnectionPoolConfig, it is possible to set the connection idle timeout.
 * [#1486](https://github.com/yesodweb/persistent/pull/1486)
     * Add Database.Sqlite.open' which takes a ByteString
+* [#1522](https://github.com/yesodweb/persistent/pull/1522)
+    * Update the sqlite amalgamation to 3.43.1
 
 ## 2.13.2.0
 
