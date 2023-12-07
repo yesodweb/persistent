@@ -137,7 +137,7 @@ runConn f = do
             }
     _ <- if not travis
       then withMySQLPool baseConnectInfo
-                        { connectHost     = "localhost"
+                        { connectHost     = "127.0.0.1"
                         , connectUser     = "test"
                         , connectPassword = "test"
                         , connectDatabase = "test"

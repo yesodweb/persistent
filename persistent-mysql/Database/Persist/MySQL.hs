@@ -827,14 +827,16 @@ data ColumnInfo = ColumnInfo
 -- @INFORMATION_SCHEMA@ tables.
 parseColumnType :: Text -> ColumnInfo -> ExceptT String IO (SqlType, Maybe Integer)
 -- Ints
--- The display width is deprecated and being removed in MySQL 8.X.  To be
--- consistent with earlier versions, which do report it, accept either
+-- The display width is deprecated and being removed in MySQL 8.X
+-- with [an exception of tinyint(1) which is used for boolean values](https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-19.html#mysqld-8-0-19-deprecation-removal).
+-- To be consistent with earlier versions, which do report it, accept either
 -- the bare type in `ciColumnType ci`, or the type adorned with the expected
 -- value for the display width (ie the defaults for int and bigint, or the
 -- value explicitly set in `showSqlType` for SqlBool).
 --
 parseColumnType "tinyint" ci
-    | ciColumnType ci == "tinyint" || ciColumnType ci == "tinyint(1)" = return (SqlBool, Nothing)
+    | ciColumnType ci == "tinyint(1)" = return (SqlBool, Nothing)
+    | otherwise = return (SqlOther "tinyint", Nothing)
 parseColumnType "int" ci
     | ciColumnType ci == "int"     || ciColumnType ci == "int(11)"    = return (SqlInt32, Nothing)
 parseColumnType "bigint" ci
@@ -1023,10 +1025,8 @@ showSqlType :: SqlType
             -> String
 showSqlType SqlBlob    Nothing    _     = "BLOB"
 showSqlType SqlBlob    (Just i)   _     = "VARBINARY(" ++ show i ++ ")"
--- "tinyint(1)" has been used historically here.  In MySQL 8, the display width
--- is deprecated, and in the future it may need to be removed here.  However,
--- "(1)" is not the default in older MySQL versions, so for them omitting it
--- would alter the exact form of the column type in the information_schema.
+-- While integer widths are deprecated in MySQL 8.0, "tinyint(1)" remains as an exception.
+-- cf. https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-19.html#mysqld-8-0-19-deprecation-removal
 showSqlType SqlBool    _          _     = "TINYINT(1)"
 showSqlType SqlDay     _          _     = "DATE"
 showSqlType SqlDayTime _          _     = "DATETIME"
