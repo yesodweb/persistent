@@ -1,6 +1,6 @@
 # Changelog for persistent-sqlite
 
-## 2.13.3.0 (unreleased)
+## 2.13.3.0
 
 * [#1524](https://github.com/yesodweb/persistent/pull/1524)
     * Add Database.Persist.Sqlite.createSqlitePoolWithConfig to create a SQLite
