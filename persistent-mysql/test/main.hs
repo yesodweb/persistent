@@ -18,6 +18,7 @@ import MyInit
 
 import qualified Data.ByteString as BS
 import Data.Fixed
+import Data.Int (Int8)
 import Data.IntMap (IntMap)
 import qualified Data.Text as T
 import Data.Time (Day, TimeOfDay, UTCTime(..), timeOfDayToTime, timeToTimeOfDay)
@@ -90,6 +91,8 @@ DataTypeTable no-json
     -- off for older servers by defining OLD_MYSQL.
     timeFrac TimeOfDay sqltype=TIME(6)
     utcFrac UTCTime sqltype=DATETIME(6)
+    tinyint Int8 sqltype=TINYINT
+    tinyint4 Int8 sqltype=TINYINT(4)
 |]
 
 instance Arbitrary (DataTypeTableGeneric backend) where
@@ -110,7 +113,8 @@ instance Arbitrary (DataTypeTableGeneric backend) where
      <*> (truncateUTCTime   =<< arbitrary) -- utc
      <*> (truncateTimeOfDay =<< arbitrary) -- timeFrac
      <*> (truncateUTCTime   =<< arbitrary) -- utcFrac
-
+     <*> arbitrary              -- tinyint
+     <*> choose (-8, 7)         -- tinyint4
 setup :: (HasCallStack, MonadUnliftIO m) => Migration -> ReaderT SqlBackend m ()
 setup migration = do
   printMigration migration
@@ -169,6 +173,8 @@ main = do
             , TestFn "utc" (roundUTCTime . dataTypeTableUtc)
             , TestFn "timeFrac" (dataTypeTableTimeFrac)
             , TestFn "utcFrac" (dataTypeTableUtcFrac)
+            , TestFn "tinyint" dataTypeTableTinyint
+            , TestFn "tinyint4" dataTypeTableTinyint4
             ]
             [ ("pico", dataTypeTablePico) ]
             dataTypeTableDouble

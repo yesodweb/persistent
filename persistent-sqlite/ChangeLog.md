@@ -1,14 +1,11 @@
 # Changelog for persistent-sqlite
 
-## 2.13.4.0
+## 2.13.3.0 (unreleased)
 
 * [#1524](https://github.com/yesodweb/persistent/pull/1524)
     * Add Database.Persist.Sqlite.createSqlitePoolWithConfig to create a SQLite
       connection pool with a connection string and ConnectionPoolConfig.
       Using ConnectionPoolConfig, it is possible to set the connection idle timeout.
-
-## 2.13.3.0
-
 * [#1486](https://github.com/yesodweb/persistent/pull/1486)
     * Add Database.Sqlite.open' which takes a ByteString
 
