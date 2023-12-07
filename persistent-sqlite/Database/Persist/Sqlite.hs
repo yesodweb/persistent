@@ -30,6 +30,7 @@ module Database.Persist.Sqlite
     , withSqliteConnInfo
     , createSqlitePool
     , createSqlitePoolFromInfo
+    , createSqlitePoolWithConfig
     , module Database.Persist.Sql
     , SqliteConf (..)
     , SqliteConnectionInfo
@@ -132,6 +133,15 @@ createSqlitePool = createSqlitePoolFromInfo . conStringToInfo
 createSqlitePoolFromInfo :: (MonadLoggerIO m, MonadUnliftIO m)
                          => SqliteConnectionInfo -> Int -> m (Pool SqlBackend)
 createSqlitePoolFromInfo connInfo = createSqlPool $ openWith const connInfo
+
+-- | Create a pool of SQLite connections.
+--
+-- @since 2.13.4.0
+createSqlitePoolWithConfig :: (MonadUnliftIO m, MonadLoggerIO m)
+                           => Text -- ^ connection string
+                           -> ConnectionPoolConfig -> m (Pool SqlBackend)
+createSqlitePoolWithConfig connString =
+    createSqlPoolWithConfig (openWith const (conStringToInfo connString))
 
 -- | Run the given action with a connection pool.
 --
