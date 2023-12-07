@@ -1,6 +1,6 @@
 # Changelog for persistent-sqlite
 
-## 2.13.3.0
+## 2.13.3.0 (unreleased)
 
 * [#1486](https://github.com/yesodweb/persistent/pull/1486)
     * Add Database.Sqlite.open' which takes a ByteString
