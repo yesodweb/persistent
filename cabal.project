@@ -9,7 +9,8 @@ packages:
   persistent-qq
 
 constraints:
-  mongoDB < 2.7.1.3 -- https://github.com/mongodb-haskell/mongodb/pull/152
+  -- https://github.com/mongodb-haskell/mongodb/pull/152
+  mongoDB < 2.7.1.3 
 
 -- GHC 9.4 shims for persistent
 
