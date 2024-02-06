@@ -33,6 +33,7 @@ import Numeric.Natural (Natural)
 import Text.Blaze.Html
 import Text.Blaze.Html.Renderer.Text (renderHtml)
 import GHC.TypeLits
+import Data.Ratio (numerator, denominator)
 
 import Database.Persist.Types.Base
 
@@ -135,49 +136,49 @@ instance PersistField Html where
 
 instance PersistField Int where
     toPersistValue = PersistInt64 . fromIntegral
-    fromPersistValue (PersistInt64 i)  = Right $ fromIntegral i
-    fromPersistValue (PersistDouble i) = Right (truncate i :: Int) -- oracle
-    fromPersistValue x = Left $ fromPersistValueError "Int" "integer" x
+    fromPersistValue = fromPersistValueIntegral "Int" "integer"
 
 instance PersistField Int8 where
     toPersistValue = PersistInt64 . fromIntegral
-    fromPersistValue (PersistInt64 i)  = Right $ fromIntegral i
-    fromPersistValue (PersistDouble i) = Right (truncate i :: Int8) -- oracle
-    fromPersistValue (PersistByteString bs) = case readInt bs of  -- oracle
-                                               Just (i,"") -> Right $ fromIntegral i
-                                               Just (i,extra) -> Left $ extraInputError "Int64" bs i extra
-                                               Nothing -> Left $ intParseError "Int64" bs
-    fromPersistValue x = Left $ fromPersistValueError "Int8" "integer" x
+    fromPersistValue = fromPersistValueIntegral "Int8" "integer"
 
 instance PersistField Int16 where
     toPersistValue = PersistInt64 . fromIntegral
-    fromPersistValue (PersistInt64 i)  = Right $ fromIntegral i
-    fromPersistValue (PersistDouble i) = Right (truncate i :: Int16) -- oracle
-    fromPersistValue (PersistByteString bs) = case readInt bs of  -- oracle
-                                               Just (i,"") -> Right $ fromIntegral i
-                                               Just (i,extra) -> Left $ extraInputError "Int64" bs i extra
-                                               Nothing -> Left $ intParseError "Int64" bs
-    fromPersistValue x = Left $ fromPersistValueError "Int16" "integer" x
+    fromPersistValue = fromPersistValueIntegral "Int16" "integer"
 
 instance PersistField Int32 where
     toPersistValue = PersistInt64 . fromIntegral
-    fromPersistValue (PersistInt64 i)  = Right $ fromIntegral i
-    fromPersistValue (PersistDouble i) = Right (truncate i :: Int32) -- oracle
-    fromPersistValue (PersistByteString bs) = case readInt bs of  -- oracle
-                                               Just (i,"") -> Right $ fromIntegral i
-                                               Just (i,extra) -> Left $ extraInputError "Int64" bs i extra
-                                               Nothing -> Left $ intParseError "Int64" bs
-    fromPersistValue x = Left $ fromPersistValueError "Int32" "integer" x
+    fromPersistValue = fromPersistValueIntegral "Int32" "integer"
 
 instance PersistField Int64 where
     toPersistValue = PersistInt64
-    fromPersistValue (PersistInt64 i)  = Right i
-    fromPersistValue (PersistDouble i) = Right (truncate i :: Int64) -- oracle
-    fromPersistValue (PersistByteString bs) = case readInt bs of  -- oracle
-                                               Just (i,"") -> Right $ fromIntegral i
-                                               Just (i,extra) -> Left $ extraInputError "Int64" bs i extra
-                                               Nothing -> Left $ intParseError "Int64" bs
-    fromPersistValue x = Left $ fromPersistValueError "Int64" "integer" x
+    fromPersistValue = fromPersistValueIntegral "Int64" "integer"
+
+fromPersistValueIntegral :: Integral a => Text -> Text -> PersistValue -> Either Text a
+fromPersistValueIntegral haskellType sqlType pv = case pv of
+    PersistInt64 i ->
+        Right (fromIntegral i)
+    PersistDouble i ->
+        Right $ truncate i -- oracle
+    PersistRational i ->
+        case denominator i of
+            1 ->
+                Right $ fromIntegral $ numerator i
+            _denom ->
+                boom
+    PersistByteString bs ->
+        case readInt bs of  -- oracle
+           Just (i,"") ->
+               Right $ fromIntegral i
+           Just (i,extra) ->
+               Left $ extraInputError haskellType bs i extra
+           Nothing ->
+               Left $ intParseError haskellType bs
+    _ ->
+        boom
+  where
+    boom =
+        Left $ fromPersistValueError haskellType sqlType pv
 
 extraInputError :: (Show result)
                 => Text -- ^ Haskell type
