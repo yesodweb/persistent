@@ -1,5 +1,12 @@
 # Changelog for persistent
 
+## 2.14.6.1
+
+* [#1528](https://github.com/yesodweb/persistent/pull/1528)
+    * The `PersistField Int{,8,16,32,64}` instances will now work with a
+      `PersistRational`, provided that the denominator is 1. This fixes the bug
+      where `SUM` in Postgres would change the type of a column being summed.
+
 ## 2.14.6.0
 
 * [#1477](https://github.com/yesodweb/persistent/pull/1477)
