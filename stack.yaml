@@ -9,3 +9,6 @@ packages:
   - ./persistent-postgresql
   - ./persistent-redis
   - ./persistent-qq
+
+extra-deps:
+  - attoparsec-aeson-2.1.0.0
