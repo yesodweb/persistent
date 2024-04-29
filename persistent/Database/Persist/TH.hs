@@ -1571,9 +1571,13 @@ mkToFieldNames pairs = do
                 names'
 
 mkUniqueToValues :: [UniqueDef] -> Q Dec
-mkUniqueToValues pairs = do
-    pairs' <- mapM go pairs
-    return $ FunD 'persistUniqueToValues $ degen pairs'
+mkUniqueToValues uniqs =
+    case uniqs of
+        [] ->
+            pure $ FunD 'persistUniqueToValues $ degen []
+        pairs -> do
+            pairs' <- mapM go pairs
+            return $ FunD 'persistUniqueToValues pairs'
   where
     go :: UniqueDef -> Q Clause
     go (UniqueDef constr _ names _) = do
@@ -2262,14 +2266,12 @@ mkUniqueKeyInstances :: MkPersistSettings -> UnboundEntityDef -> Q [Dec]
 mkUniqueKeyInstances mps entDef = do
     requirePersistentExtensions
     case entityUniques (unboundEntityDef entDef) of
-        [] -> mappend <$> typeErrorSingle <*> typeErrorAtLeastOne
+        [] -> mappend <$> mkOnlyUniqueError typeErrorNoneCtx <*> mkAtLeastOneUniqueError typeErrorNoneCtx
         [_] -> mappend <$> singleUniqueKey <*> atLeastOneKey
-        (_:_) -> mappend <$> typeErrorMultiple <*> atLeastOneKey
+        (_:_) -> mappend <$> mkOnlyUniqueError typeErrorMultipleCtx <*> atLeastOneKey
   where
     requireUniquesPName = 'requireUniquesP
     onlyUniquePName = 'onlyUniqueP
-    typeErrorSingle = mkOnlyUniqueError typeErrorNoneCtx
-    typeErrorMultiple = mkOnlyUniqueError typeErrorMultipleCtx
 
     withPersistStoreWriteCxt =
         if mpsGeneric mps
@@ -2293,6 +2295,12 @@ mkUniqueKeyInstances mps entDef = do
         let impl = mkImpossible onlyUniquePName
         pure [instanceD ctx onlyOneUniqueKeyClass impl]
 
+    mkAtLeastOneUniqueError :: Q Cxt -> Q [Dec]
+    mkAtLeastOneUniqueError mkCtx = do
+        let impl = mkImpossible requireUniquesPName
+        cxt <- mkCtx
+        pure [instanceD cxt atLeastOneUniqueKeyClass impl]
+
     mkImpossible name =
         [ FunD name
             [ Clause
@@ -2303,12 +2311,6 @@ mkUniqueKeyInstances mps entDef = do
                 []
             ]
         ]
-
-    typeErrorAtLeastOne :: Q [Dec]
-    typeErrorAtLeastOne = do
-        let impl = mkImpossible requireUniquesPName
-        cxt <- typeErrorMultipleCtx
-        pure [instanceD cxt atLeastOneUniqueKeyClass impl]
 
     singleUniqueKey :: Q [Dec]
     singleUniqueKey = do
