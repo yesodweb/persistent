@@ -352,6 +352,17 @@ userAttrs = do
 -- [["sad"],["sogood"]]
 @
 
+== @!no-migrate@
+
+To prevent @migrateModels@ from generating _any_ migrations for an entity, add
+the @!no-migrate@ attribute to it's definition:
+
+@
+User !no-migrate
+    field   String
+    good    Dog
+@
+
 == @MigrationOnly@
 
 Introduced with @persistent-template@ 1.2.0. The purpose of this attribute is
