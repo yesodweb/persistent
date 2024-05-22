@@ -36,6 +36,13 @@ Source1 sql=source
     field4 Target1Id
 |]
 
+share [mkPersist sqlSettings, mkMigrate "migrationWithDefaultMaybeText"] [persistLowerCase|
+TextMaybeDefault
+    field1 Int
+    field2 T.Text Maybe default=null
+    deriving Eq Show
+|]
+
 specsWith :: (MonadUnliftIO m) => RunDb SqlBackend m -> Spec
 specsWith runDb = describe "Migration" $ do
     it "is idempotent" $ runDb $ do
@@ -53,3 +60,7 @@ specsWith runDb = describe "Migration" $ do
       void $ runMigrationSilent migrationAddCol
       again <- getMigration migrationAddCol
       liftIO $ again @?= []
+    fit "is idempotent (default text example)" $ runDb $ do
+      void $ runMigrationSilent migrationWithDefaultMaybeText
+      again <- getMigration migrationWithDefaultMaybeText
+      liftIO $ again @?= ["ALTER TABLE \"text_maybe_default\" ALTER COLUMN \"field2\" SET DEFAULT null"]
