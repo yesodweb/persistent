@@ -1712,16 +1712,70 @@ upsertWhere
 upsertWhere record updates filts =
   upsertManyWhere [record] [] updates filts
 
--- | Postgres specific 'upsertManyWhere'. This method does the following:
--- It will insert a record if no matching unique key exists.
--- If a unique key exists, it will update the relevant field with a user-supplied value, however,
--- it will only do this update on a user-supplied condition.
--- For example, here's how this method could be called like such:
+-- | Postgres specific 'upsertManyWhere'.
 --
--- upsertManyWhere [record] [recordField =. newValue] [recordField !=. newValue]
+-- The first argument determines a list of new records to insert.
 --
--- Called thusly, this method will insert a new record (if none exists) OR update a recordField with a new value
--- assuming the condition in the last block is met.
+-- If there's unique key collisions for some or all of the proposed insertions,
+-- you can use the second argument to specify which fields, under which
+-- conditions (using 'HandleUpdateCollision' strategies,) will be copied from
+-- each proposed, conflicting new record onto its corresponding row already present
+-- in the database. Helpers such as 'copyField', 'copyUnlessEq',
+-- 'copyUnlessNull' and 'copyUnlessEmpty' are exported from this module to help
+-- with this, as well as the constructors for 'HandleUpdateCollision'.
+-- For example, you may have a patch of updates to apply, some of which are NULL
+-- to represent "no change"; you'd use 'copyUnlessNull' for each applicable
+-- field in this case so any new values in the patch which are NULL don't
+-- accidentally overwrite existing values in the database which are non-NULL.
+--
+-- Further updates to the matching records already in the database can be
+-- specified in the third argument, these are arbitrary updates independent of
+-- the new records proposed for insertion. For example, you can use this to
+-- update a timestamp or a counter for all conflicting rows.
+--
+-- You can use the fourth argument to provide arbitrary conditions to constrain
+-- the above updates. This way, you can choose to only alter a subset of the
+-- conflicting existing rows while leaving the others alone. For example, you
+-- may want to copy fields from new records and update a timestamp only when the
+-- corresponding existing row hasn't been soft-deleted.
+--
+--
+-- For example,
+--
+-- @
+--   upsertManyWhere
+--     [record] -- new records to insert if there's no conflicts
+--     [ copyField recordField1 -- for each conflicting existing row, replace the value of recordField1 with the one present in the conflicting new record
+--     , copyUnlessEq recordField2 -- only replace the existing value if it's different from the one present in the conflicting new record
+--     , copyUnlessNull recordField3 -- only replace the existing value if the new value is non-NULL (i.e. don't replace existing values with NULLs.)
+--     ]
+--     [recordField4 =. arbitraryValue] -- update recordField4 with an arbitrary new value
+--     [recordField4 !=. anotherValue] -- only apply the above updates for conflicting rows that meet this condition
+-- @
+--
+-- Called thusly, this method will insert a new record (if none exists) OR it
+-- will copy three fields (@recordField1@, @recordField2@, @recordField3@) from
+-- the record proposed from insertion onto the existing row in the database
+-- following three different 'HandleUpdateCollision' strategies, it will /also/
+-- update @recordField4@ with an arbitrary @arbitraryValue@. Both sets of updates
+-- will only be applied if the row already present in the database has a
+-- @recordField4@ whose value is not @arbitraryValue@. The corresponding SQL might
+-- look like this:
+--
+-- @
+--   INSERT INTO table(recordField1, recordField2, recordField3, recordField4, recordField5)
+--   VALUES
+--     (newValue1, newValue2, newValue3, newValue4, newValue5)
+--   ON CONFLICT (recordField2, recordField3) -- let's imagine these two columns define a unique constraint
+--   DO UPDATE
+--     SET
+--       recordField1 = EXCLUDED.newValue1, -- EXCLUDED points to the new, conflicting, record; so we're always replacing the old value.
+--       recordField2 = COALESCE(NULLIF(EXCLUDED.newValue2, table.recordField2), table.recordField2), -- if the values are the same, the NULLIF returns NULL and we coalesce into setting the column to the value it already had (i.e. no change)
+--       recordField3 = COALESCE(NULLIF(EXCLUDED.newValue3, NULL), table.recordField3), -- if the new value is not null, it will be set; if it's null, we coalesce into not changing the existing value.
+--       recordField4 = arbitraryValue -- an arbitrary update independent of what's in the EXCLUDED (new) record
+--     WHERE
+--       recordField4 <> anotherValue -- only do the above updates if the value for the existing row's recordField4 is not "anotherValue"
+-- @
 --
 -- @since 2.12.1.0
 upsertManyWhere
