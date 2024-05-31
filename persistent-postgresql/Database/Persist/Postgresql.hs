@@ -1714,7 +1714,7 @@ upsertWhere record updates filts =
 
 -- | Postgres specific 'upsertManyWhere'.
 --
--- The first argument determines a list of new records to insert.
+-- The first argument is a list of new records to insert.
 --
 -- If there's unique key collisions for some or all of the proposed insertions,
 -- you can use the second argument to specify which fields, under which
@@ -1744,14 +1744,22 @@ upsertWhere record updates filts =
 --
 -- @
 --   upsertManyWhere
---     [record] -- new records to insert if there's no conflicts
---     [ copyField recordField1 -- for each conflicting existing row, replace the value of recordField1 with the one present in the conflicting new record
---     , copyUnlessEq recordField2 -- only replace the existing value if it's different from the one present in the conflicting new record
---     , copyUnlessNull recordField3 -- only replace the existing value if the new value is non-NULL (i.e. don't replace existing values with NULLs.)
+--     [record]                         -- (1) 
+--     [ copyField recordField1         -- (2) 
+--     , copyUnlessEq recordField2      -- (3) 
+--     , copyUnlessNull recordField3    -- (4) 
 --     ]
---     [recordField4 =. arbitraryValue] -- update recordField4 with an arbitrary new value
---     [recordField4 !=. anotherValue] -- only apply the above updates for conflicting rows that meet this condition
+--     [recordField4 =. arbitraryValue] -- (5) 
+--     [recordField4 !=. anotherValue]  -- (6) 
 -- @
+-- 
+-- 1. new records to insert if there's no conflicts
+-- 2. for each conflicting existing row, replace the value of recordField1 with the one present in the conflicting new record
+-- 3. only replace the existing value if it's different from the one present in the conflicting new record
+-- 4. only replace the existing value if the new value is non-NULL (i.e. don't replace existing values with NULLs.)
+-- 
+-- 5. update recordField4 with an arbitrary new value
+-- 6. only apply the above updates for conflicting rows that meet this condition
 --
 -- Called thusly, this method will insert a new record (if none exists) OR it
 -- will copy three fields (@recordField1@, @recordField2@, @recordField3@) from
