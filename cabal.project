@@ -26,3 +26,8 @@ allow-newer:
 --     type: git
 --     location: https://github.com/ysangkok/hedis
 --     tag: 6f36989836b49974f51a6ee8edaf156490590980
+
+-- These should be removed before this PR is merged.
+allow-newer:
+  , postgresql-libpq:base
+  , bytestring-lexing:base
