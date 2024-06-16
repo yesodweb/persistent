@@ -36,7 +36,7 @@ library
       , resourcet                >= 1.1.10
       , scientific
       , silently
-      , template-haskell         >= 2.13 && < 2.22
+      , template-haskell         >= 2.13 && < 2.23
       , text                     >= 1.2
       , th-lift-instances        >= 0.1.14    && < 0.2
       , time                     >= 1.6
