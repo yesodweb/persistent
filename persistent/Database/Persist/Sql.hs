@@ -53,6 +53,7 @@ module Database.Persist.Sql
     , getBackendSpecificForeignKeyName
     , setBackendSpecificForeignKeyName
     , defaultAttribute
+    , collation
       -- * Internal
     , IsolationLevel(..)
     , decorateSQLWithLimitOffset
