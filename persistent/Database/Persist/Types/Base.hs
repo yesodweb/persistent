@@ -1,4 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveLift #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE PatternSynonyms #-}
@@ -16,6 +17,7 @@ module Database.Persist.Types.Base
     ) where
 
 import Control.Exception (Exception)
+import Data.Aeson (FromJSON, ToJSON)
 import Data.Char (isSpace)
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NEL
@@ -24,6 +26,7 @@ import Data.Maybe (isNothing)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Word (Word32)
+import GHC.Generics (Generic)
 import Language.Haskell.TH.Syntax (Lift(..))
 import Web.HttpApiData
        ( FromHttpApiData(..)
@@ -156,7 +159,11 @@ data EntityDef = EntityDef
     --
     -- @since 2.10.0
     }
-    deriving (Show, Eq, Read, Ord, Lift)
+    deriving (Show, Eq, Read, Ord, Lift, Generic)
+
+instance FromJSON EntityDef
+
+instance ToJSON EntityDef
 
 -- | The definition for the entity's primary key ID.
 --
@@ -174,7 +181,11 @@ data EntityIdDef
     -- A natural key can have one or more columns.
     --
     -- @since 2.13.0.0
-    deriving (Show, Eq, Read, Ord, Lift)
+    deriving (Show, Eq, Read, Ord, Lift, Generic)
+
+instance FromJSON EntityIdDef
+
+instance ToJSON EntityIdDef
 
 -- | Return the @['FieldDef']@ for the entity keys.
 entitiesPrimary :: EntityDef -> NonEmpty FieldDef
@@ -389,7 +400,11 @@ data FieldAttr
     -- another column over time.
     | FieldAttrOther Text
     -- ^ A grab bag of random attributes that were unrecognized by the parser.
-    deriving (Show, Eq, Read, Ord, Lift)
+    deriving (Show, Eq, Read, Ord, Lift, Generic)
+
+instance FromJSON FieldAttr
+
+instance ToJSON FieldAttr
 
 -- | Parse raw field attributes into structured form. Any unrecognized
 -- attributes will be preserved, identically as they are encountered,
@@ -434,12 +449,20 @@ data FieldType
     | FTTypePromoted Text
     | FTApp FieldType FieldType
     | FTList FieldType
-    deriving (Show, Eq, Read, Ord, Lift)
+    deriving (Show, Eq, Read, Ord, Lift, Generic)
+
+instance FromJSON FieldType
+
+instance ToJSON FieldType
 
 data FieldTypeLit
     = IntTypeLit Integer
     | TextTypeLit Text
-    deriving (Show, Eq, Read, Ord, Lift)
+    deriving (Show, Eq, Read, Ord, Lift, Generic)
+
+instance FromJSON FieldTypeLit
+
+instance ToJSON FieldTypeLit
 
 isFieldNotGenerated :: FieldDef -> Bool
 isFieldNotGenerated = isNothing . fieldGenerated
@@ -456,7 +479,11 @@ data ReferenceDef
     | EmbedRef EntityNameHS
     | SelfReference
     -- ^ A SelfReference stops an immediate cycle which causes non-termination at compile-time (issue #311).
-    deriving (Show, Eq, Read, Ord, Lift)
+    deriving (Show, Eq, Read, Ord, Lift, Generic)
+
+instance FromJSON ReferenceDef
+
+instance ToJSON ReferenceDef
 
 -- | An EmbedEntityDef is the same as an EntityDef
 -- But it is only used for fieldReference
@@ -537,13 +564,21 @@ data UniqueDef = UniqueDef
     , uniqueFields  :: !(NonEmpty (FieldNameHS, FieldNameDB))
     , uniqueAttrs   :: ![Attr]
     }
-    deriving (Show, Eq, Read, Ord, Lift)
+    deriving (Show, Eq, Read, Ord, Lift, Generic)
+
+instance FromJSON UniqueDef
+
+instance ToJSON UniqueDef
 
 data CompositeDef = CompositeDef
     { compositeFields  :: !(NonEmpty FieldDef)
     , compositeAttrs   :: ![Attr]
     }
-    deriving (Show, Eq, Read, Ord, Lift)
+    deriving (Show, Eq, Read, Ord, Lift, Generic)
+
+instance FromJSON CompositeDef
+
+instance ToJSON CompositeDef
 
 -- | Used instead of FieldDef
 -- to generate a smaller amount of code
@@ -566,7 +601,11 @@ data ForeignDef = ForeignDef
     --
     -- @since 2.11.0
     }
-    deriving (Show, Eq, Read, Ord, Lift)
+    deriving (Show, Eq, Read, Ord, Lift, Generic)
+
+instance FromJSON ForeignDef
+
+instance ToJSON ForeignDef
 
 -- | This datatype describes how a foreign reference field cascades deletes
 -- or updates.
@@ -581,7 +620,11 @@ data FieldCascade = FieldCascade
     { fcOnUpdate :: !(Maybe CascadeAction)
     , fcOnDelete :: !(Maybe CascadeAction)
     }
-    deriving (Show, Eq, Read, Ord, Lift)
+    deriving (Show, Eq, Read, Ord, Lift, Generic)
+
+instance FromJSON FieldCascade
+
+instance ToJSON FieldCascade
 
 -- | A 'FieldCascade' that does nothing.
 --
@@ -605,7 +648,11 @@ renderFieldCascade (FieldCascade onUpdate onDelete) =
 --
 -- @since 2.11.0
 data CascadeAction = Cascade | Restrict | SetNull | SetDefault
-    deriving (Show, Eq, Read, Ord, Lift)
+    deriving (Show, Eq, Read, Ord, Lift, Generic)
+
+instance FromJSON CascadeAction
+
+instance ToJSON CascadeAction
 
 -- | Render a 'CascadeAction' to 'Text' such that it can be used in a SQL
 -- command.
@@ -643,7 +690,11 @@ data SqlType = SqlString
              | SqlDayTime -- ^ Always uses UTC timezone
              | SqlBlob
              | SqlOther T.Text -- ^ a backend-specific name
-    deriving (Show, Read, Eq, Ord, Lift)
+    deriving (Show, Read, Eq, Ord, Lift, Generic)
+
+instance FromJSON SqlType
+
+instance ToJSON SqlType
 
 data PersistFilter = Eq | Ne | Gt | Lt | Ge | Le | In | NotIn
                    | BackendSpecificFilter T.Text
@@ -713,4 +764,8 @@ data FieldDef = FieldDef
     --
     -- @since 2.13.0.0
     }
-    deriving (Show, Eq, Read, Ord, Lift)
+    deriving (Show, Eq, Read, Ord, Lift, Generic)
+
+instance FromJSON FieldDef
+
+instance ToJSON FieldDef

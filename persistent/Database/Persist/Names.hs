@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveLift #-}
 
 -- | This module contains types and functions for working with and
@@ -6,7 +7,9 @@
 -- @since 2.13.0.0
 module Database.Persist.Names where
 
+import Data.Aeson (FromJSON, ToJSON)
 import Data.Text (Text)
+import GHC.Generics (Generic)
 import Language.Haskell.TH.Syntax (Lift)
 -- Bring `Lift (Map k v)` instance into scope, as well as `Lift Text`
 -- instance on pre-1.2.4 versions of `text`
@@ -23,7 +26,11 @@ class DatabaseName a where
 --
 -- @since 2.12.0.0
 newtype FieldNameDB = FieldNameDB { unFieldNameDB :: Text }
-    deriving (Show, Eq, Read, Ord, Lift)
+    deriving (Show, Eq, Read, Ord, Lift, Generic)
+
+instance FromJSON FieldNameDB
+
+instance ToJSON FieldNameDB
 
 -- | @since 2.12.0.0
 instance DatabaseName FieldNameDB where
@@ -34,21 +41,33 @@ instance DatabaseName FieldNameDB where
 --
 -- @since 2.12.0.0
 newtype FieldNameHS = FieldNameHS { unFieldNameHS :: Text }
-    deriving (Show, Eq, Read, Ord, Lift)
+    deriving (Show, Eq, Read, Ord, Lift, Generic)
+
+instance FromJSON FieldNameHS
+
+instance ToJSON FieldNameHS
 
 -- | An 'EntityNameHS' represents the Haskell-side name that @persistent@
 -- will use for an entity.
 --
 -- @since 2.12.0.0
 newtype EntityNameHS = EntityNameHS { unEntityNameHS :: Text }
-    deriving (Show, Eq, Read, Ord, Lift)
+    deriving (Show, Eq, Read, Ord, Lift, Generic)
+
+instance FromJSON EntityNameHS
+
+instance ToJSON EntityNameHS
 
 -- | An 'EntityNameDB' represents the datastore-side name that @persistent@
 -- will use for an entity.
 --
 -- @since 2.12.0.0
 newtype EntityNameDB = EntityNameDB { unEntityNameDB :: Text }
-    deriving (Show, Eq, Read, Ord, Lift)
+    deriving (Show, Eq, Read, Ord, Lift, Generic)
+
+instance FromJSON EntityNameDB
+
+instance ToJSON EntityNameDB
 
 instance DatabaseName EntityNameDB where
     escapeWith f (EntityNameDB n) = f n
@@ -58,7 +77,11 @@ instance DatabaseName EntityNameDB where
 --
 -- @since 2.12.0.0
 newtype ConstraintNameDB = ConstraintNameDB { unConstraintNameDB :: Text }
-  deriving (Show, Eq, Read, Ord, Lift)
+  deriving (Show, Eq, Read, Ord, Lift, Generic)
+
+instance FromJSON ConstraintNameDB
+
+instance ToJSON ConstraintNameDB
 
 -- | @since 2.12.0.0
 instance DatabaseName ConstraintNameDB where
@@ -69,4 +92,8 @@ instance DatabaseName ConstraintNameDB where
 --
 -- @since 2.12.0.0
 newtype ConstraintNameHS = ConstraintNameHS { unConstraintNameHS :: Text }
-  deriving (Show, Eq, Read, Ord, Lift)
+  deriving (Show, Eq, Read, Ord, Lift, Generic)
+
+instance FromJSON ConstraintNameHS
+
+instance ToJSON ConstraintNameHS
