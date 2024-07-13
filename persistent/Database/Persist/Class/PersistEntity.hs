@@ -53,9 +53,10 @@ import Data.Aeson
        , (.=)
        )
 import qualified Data.Aeson.Parser as AP
-import Data.Aeson.Text (encodeToTextBuilder)
+import Data.Aeson.Encoding (encodingToLazyByteString)
 import Data.Aeson.Types (Parser, Result(Error, Success))
 import Data.Attoparsec.ByteString (parseOnly)
+import qualified Data.ByteString as B
 import Data.Functor.Identity
 import Web.PathPieces (PathMultiPiece(..), PathPiece(..))
 
@@ -71,8 +72,6 @@ import Data.Maybe (isJust)
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
-import qualified Data.Text.Lazy as LT
-import qualified Data.Text.Lazy.Builder as TB
 import GHC.Generics
 import GHC.OverloadedLabels
 import GHC.TypeLits
@@ -452,7 +451,7 @@ idField = "_id"
 --   toPersistValue = toPersistValueJSON
 -- @
 toPersistValueJSON :: ToJSON a => a -> PersistValue
-toPersistValueJSON = PersistText . LT.toStrict . TB.toLazyText . encodeToTextBuilder . toJSON
+toPersistValueJSON = PersistText . LT.toStrict . encodeToLazyText
 
 -- | Convenience function for getting a free 'PersistField' instance
 -- from a type with JSON instances. The JSON parser used will accept JSON

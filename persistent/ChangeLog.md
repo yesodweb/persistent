@@ -1,5 +1,12 @@
 # Changelog for persistent
 
+## Unreleased
+
+* [#1541](https://github.com/yesodweb/persistent/pull/1541)
+    * `toPersistValueJSON` now uses `ToJSON`’s `toEncoding` instead of
+      `toJSON`. This provides a performance benefit because Aeson no
+      longer needs to construct intermediate `Value`s.
+
 ## 2.14.6.1
 
 * [#1528](https://github.com/yesodweb/persistent/pull/1528)
