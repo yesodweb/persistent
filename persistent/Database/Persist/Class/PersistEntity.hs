@@ -451,7 +451,7 @@ idField = "_id"
 --   toPersistValue = toPersistValueJSON
 -- @
 toPersistValueJSON :: ToJSON a => a -> PersistValue
-toPersistValueJSON = PersistByteString . B.toStrict . encodingToLazyByteString . toEncoding
+toPersistValueJSON = PersistText . LT.toStrict . encodeToLazyText
 
 -- | Convenience function for getting a free 'PersistField' instance
 -- from a type with JSON instances. The JSON parser used will accept JSON
