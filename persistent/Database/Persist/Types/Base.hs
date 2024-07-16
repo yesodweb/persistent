@@ -161,10 +161,16 @@ data EntityDef = EntityDef
     }
     deriving (Show, Eq, Read, Ord, Lift, Generic)
 
--- | @since 2.14.7.0
+-- | Note: JSON representations not considered part of the public API; breaking
+-- changes will not be reflected in the package version!
+--
+-- @since 2.14.7.0
 instance FromJSON EntityDef
 
--- | @since 2.14.7.0
+-- | Note: JSON representations not considered part of the public API; breaking
+-- changes will not be reflected in the package version!
+--
+-- @since 2.14.7.0
 instance ToJSON EntityDef
 
 -- | The definition for the entity's primary key ID.
@@ -185,10 +191,16 @@ data EntityIdDef
     -- @since 2.13.0.0
     deriving (Show, Eq, Read, Ord, Lift, Generic)
 
--- | @since 2.14.7.0
+-- | Note: JSON representations not considered part of the public API; breaking
+-- changes will not be reflected in the package version!
+--
+-- @since 2.14.7.0
 instance FromJSON EntityIdDef
 
--- | @since 2.14.7.0
+-- | Note: JSON representations not considered part of the public API; breaking
+-- changes will not be reflected in the package version!
+--
+-- @since 2.14.7.0
 instance ToJSON EntityIdDef
 
 -- | Return the @['FieldDef']@ for the entity keys.
@@ -406,10 +418,16 @@ data FieldAttr
     -- ^ A grab bag of random attributes that were unrecognized by the parser.
     deriving (Show, Eq, Read, Ord, Lift, Generic)
 
--- | @since 2.14.7.0
+-- | Note: JSON representations not considered part of the public API; breaking
+-- changes will not be reflected in the package version!
+--
+-- @since 2.14.7.0
 instance FromJSON FieldAttr
 
--- | @since 2.14.7.0
+-- | Note: JSON representations not considered part of the public API; breaking
+-- changes will not be reflected in the package version!
+--
+-- @since 2.14.7.0
 instance ToJSON FieldAttr
 
 -- | Parse raw field attributes into structured form. Any unrecognized
@@ -457,10 +475,16 @@ data FieldType
     | FTList FieldType
     deriving (Show, Eq, Read, Ord, Lift, Generic)
 
--- | @since 2.14.7.0
+-- | Note: JSON representations not considered part of the public API; breaking
+-- changes will not be reflected in the package version!
+--
+-- @since 2.14.7.0
 instance FromJSON FieldType
 
--- | @since 2.14.7.0
+-- | Note: JSON representations not considered part of the public API; breaking
+-- changes will not be reflected in the package version!
+--
+-- @since 2.14.7.0
 instance ToJSON FieldType
 
 data FieldTypeLit
@@ -468,10 +492,16 @@ data FieldTypeLit
     | TextTypeLit Text
     deriving (Show, Eq, Read, Ord, Lift, Generic)
 
--- | @since 2.14.7.0
+-- | Note: JSON representations not considered part of the public API; breaking
+-- changes will not be reflected in the package version!
+--
+-- @since 2.14.7.0
 instance FromJSON FieldTypeLit
 
--- | @since 2.14.7.0
+-- | Note: JSON representations not considered part of the public API; breaking
+-- changes will not be reflected in the package version!
+--
+-- @since 2.14.7.0
 instance ToJSON FieldTypeLit
 
 isFieldNotGenerated :: FieldDef -> Bool
@@ -491,10 +521,16 @@ data ReferenceDef
     -- ^ A SelfReference stops an immediate cycle which causes non-termination at compile-time (issue #311).
     deriving (Show, Eq, Read, Ord, Lift, Generic)
 
--- | @since 2.14.7.0
+-- | Note: JSON representations not considered part of the public API; breaking
+-- changes will not be reflected in the package version!
+--
+-- @since 2.14.7.0
 instance FromJSON ReferenceDef
 
--- | @since 2.14.7.0
+-- | Note: JSON representations not considered part of the public API; breaking
+-- changes will not be reflected in the package version!
+--
+-- @since 2.14.7.0
 instance ToJSON ReferenceDef
 
 -- | An EmbedEntityDef is the same as an EntityDef
@@ -578,10 +614,16 @@ data UniqueDef = UniqueDef
     }
     deriving (Show, Eq, Read, Ord, Lift, Generic)
 
--- | @since 2.14.7.0
+-- | Note: JSON representations not considered part of the public API; breaking
+-- changes will not be reflected in the package version!
+--
+-- @since 2.14.7.0
 instance FromJSON UniqueDef
 
--- | @since 2.14.7.0
+-- | Note: JSON representations not considered part of the public API; breaking
+-- changes will not be reflected in the package version!
+--
+-- @since 2.14.7.0
 instance ToJSON UniqueDef
 
 data CompositeDef = CompositeDef
@@ -590,10 +632,16 @@ data CompositeDef = CompositeDef
     }
     deriving (Show, Eq, Read, Ord, Lift, Generic)
 
--- | @since 2.14.7.0
+-- | Note: JSON representations not considered part of the public API; breaking
+-- changes will not be reflected in the package version!
+--
+-- @since 2.14.7.0
 instance FromJSON CompositeDef
 
--- | @since 2.14.7.0
+-- | Note: JSON representations not considered part of the public API; breaking
+-- changes will not be reflected in the package version!
+--
+-- @since 2.14.7.0
 instance ToJSON CompositeDef
 
 -- | Used instead of FieldDef
@@ -619,10 +667,16 @@ data ForeignDef = ForeignDef
     }
     deriving (Show, Eq, Read, Ord, Lift, Generic)
 
--- | @since 2.14.7.0
+-- | Note: JSON representations not considered part of the public API; breaking
+-- changes will not be reflected in the package version!
+--
+-- @since 2.14.7.0
 instance FromJSON ForeignDef
 
--- | @since 2.14.7.0
+-- | Note: JSON representations not considered part of the public API; breaking
+-- changes will not be reflected in the package version!
+--
+-- @since 2.14.7.0
 instance ToJSON ForeignDef
 
 -- | This datatype describes how a foreign reference field cascades deletes
@@ -640,10 +694,16 @@ data FieldCascade = FieldCascade
     }
     deriving (Show, Eq, Read, Ord, Lift, Generic)
 
--- | @since 2.14.7.0
+-- | Note: JSON representations not considered part of the public API; breaking
+-- changes will not be reflected in the package version!
+--
+-- @since 2.14.7.0
 instance FromJSON FieldCascade
 
--- | @since 2.14.7.0
+-- | Note: JSON representations not considered part of the public API; breaking
+-- changes will not be reflected in the package version!
+--
+-- @since 2.14.7.0
 instance ToJSON FieldCascade
 
 -- | A 'FieldCascade' that does nothing.
@@ -670,10 +730,16 @@ renderFieldCascade (FieldCascade onUpdate onDelete) =
 data CascadeAction = Cascade | Restrict | SetNull | SetDefault
     deriving (Show, Eq, Read, Ord, Lift, Generic)
 
--- | @since 2.14.7.0
+-- | Note: JSON representations not considered part of the public API; breaking
+-- changes will not be reflected in the package version!
+--
+-- @since 2.14.7.0
 instance FromJSON CascadeAction
 
--- | @since 2.14.7.0
+-- | Note: JSON representations not considered part of the public API; breaking
+-- changes will not be reflected in the package version!
+--
+-- @since 2.14.7.0
 instance ToJSON CascadeAction
 
 -- | Render a 'CascadeAction' to 'Text' such that it can be used in a SQL
@@ -714,10 +780,16 @@ data SqlType = SqlString
              | SqlOther T.Text -- ^ a backend-specific name
     deriving (Show, Read, Eq, Ord, Lift, Generic)
 
--- | @since 2.14.7.0
+-- | Note: JSON representations not considered part of the public API; breaking
+-- changes will not be reflected in the package version!
+--
+-- @since 2.14.7.0
 instance FromJSON SqlType
 
--- | @since 2.14.7.0
+-- | Note: JSON representations not considered part of the public API; breaking
+-- changes will not be reflected in the package version!
+--
+-- @since 2.14.7.0
 instance ToJSON SqlType
 
 data PersistFilter = Eq | Ne | Gt | Lt | Ge | Le | In | NotIn
@@ -790,8 +862,14 @@ data FieldDef = FieldDef
     }
     deriving (Show, Eq, Read, Ord, Lift, Generic)
 
--- | @since 2.14.7.0
+-- | Note: JSON representations not considered part of the public API; breaking
+-- changes will not be reflected in the package version!
+--
+-- @since 2.14.7.0
 instance FromJSON FieldDef
 
--- | @since 2.14.7.0
+-- | Note: JSON representations not considered part of the public API; breaking
+-- changes will not be reflected in the package version!
+--
+-- @since 2.14.7.0
 instance ToJSON FieldDef

@@ -28,10 +28,16 @@ class DatabaseName a where
 newtype FieldNameDB = FieldNameDB { unFieldNameDB :: Text }
     deriving (Show, Eq, Read, Ord, Lift, Generic)
 
--- | @since 2.14.7.0
+-- | Note: JSON representations not considered part of the public API; breaking
+-- changes will not be reflected in the package version!
+--
+-- @since 2.14.7.0
 instance FromJSON FieldNameDB
 
--- | @since 2.14.7.0
+-- | Note: JSON representations not considered part of the public API; breaking
+-- changes will not be reflected in the package version!
+--
+-- @since 2.14.7.0
 instance ToJSON FieldNameDB
 
 -- | @since 2.12.0.0
@@ -45,10 +51,16 @@ instance DatabaseName FieldNameDB where
 newtype FieldNameHS = FieldNameHS { unFieldNameHS :: Text }
     deriving (Show, Eq, Read, Ord, Lift, Generic)
 
--- | @since 2.14.7.0
+-- | Note: JSON representations not considered part of the public API; breaking
+-- changes will not be reflected in the package version!
+--
+-- @since 2.14.7.0
 instance FromJSON FieldNameHS
 
--- | @since 2.14.7.0
+-- | Note: JSON representations not considered part of the public API; breaking
+-- changes will not be reflected in the package version!
+--
+-- @since 2.14.7.0
 instance ToJSON FieldNameHS
 
 -- | An 'EntityNameHS' represents the Haskell-side name that @persistent@
@@ -58,10 +70,16 @@ instance ToJSON FieldNameHS
 newtype EntityNameHS = EntityNameHS { unEntityNameHS :: Text }
     deriving (Show, Eq, Read, Ord, Lift, Generic)
 
--- | @since 2.14.7.0
+-- | Note: JSON representations not considered part of the public API; breaking
+-- changes will not be reflected in the package version!
+--
+-- @since 2.14.7.0
 instance FromJSON EntityNameHS
 
--- | @since 2.14.7.0
+-- | Note: JSON representations not considered part of the public API; breaking
+-- changes will not be reflected in the package version!
+--
+-- @since 2.14.7.0
 instance ToJSON EntityNameHS
 
 -- | An 'EntityNameDB' represents the datastore-side name that @persistent@
@@ -71,10 +89,16 @@ instance ToJSON EntityNameHS
 newtype EntityNameDB = EntityNameDB { unEntityNameDB :: Text }
     deriving (Show, Eq, Read, Ord, Lift, Generic)
 
--- | @since 2.14.7.0
+-- | Note: JSON representations not considered part of the public API; breaking
+-- changes will not be reflected in the package version!
+--
+-- @since 2.14.7.0
 instance FromJSON EntityNameDB
 
--- | @since 2.14.7.0
+-- | Note: JSON representations not considered part of the public API; breaking
+-- changes will not be reflected in the package version!
+--
+-- @since 2.14.7.0
 instance ToJSON EntityNameDB
 
 instance DatabaseName EntityNameDB where
@@ -87,10 +111,16 @@ instance DatabaseName EntityNameDB where
 newtype ConstraintNameDB = ConstraintNameDB { unConstraintNameDB :: Text }
   deriving (Show, Eq, Read, Ord, Lift, Generic)
 
--- | @since 2.14.7.0
+-- | Note: JSON representations not considered part of the public API; breaking
+-- changes will not be reflected in the package version!
+--
+-- @since 2.14.7.0
 instance FromJSON ConstraintNameDB
 
--- | @since 2.14.7.0
+-- | Note: JSON representations not considered part of the public API; breaking
+-- changes will not be reflected in the package version!
+--
+-- @since 2.14.7.0
 instance ToJSON ConstraintNameDB
 
 -- | @since 2.12.0.0
@@ -104,8 +134,14 @@ instance DatabaseName ConstraintNameDB where
 newtype ConstraintNameHS = ConstraintNameHS { unConstraintNameHS :: Text }
   deriving (Show, Eq, Read, Ord, Lift, Generic)
 
--- | @since 2.14.7.0
+-- | Note: JSON representations not considered part of the public API; breaking
+-- changes will not be reflected in the package version!
+--
+-- @since 2.14.7.0
 instance FromJSON ConstraintNameHS
 
--- | @since 2.14.7.0
+-- | Note: JSON representations not considered part of the public API; breaking
+-- changes will not be reflected in the package version!
+--
+-- @since 2.14.7.0
 instance ToJSON ConstraintNameHS
