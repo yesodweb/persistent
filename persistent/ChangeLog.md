@@ -1,6 +1,6 @@
 # Changelog for persistent
 
-## 2.14.7.0 (unreleased)
+## 2.14.7.0
 
 * [#1540](https://github.com/yesodweb/persistent/pull/1540)
     * Derive `FromJSON`, `ToJSON`, and `Generic` for `EntityDef` and its dependencies.
