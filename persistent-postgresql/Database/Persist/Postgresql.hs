@@ -13,6 +13,7 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE ViewPatterns #-}
 
 #if MIN_VERSION_base(4,12,0)
@@ -107,7 +108,7 @@ import Data.Either (partitionEithers)
 import Data.Function (on)
 import Data.Int (Int64)
 import Data.IORef
-import Data.List (find, foldl', groupBy, sort)
+import Data.List as List (find, foldl', groupBy, sort)
 import qualified Data.List as List
 import Data.List.NonEmpty (NonEmpty)
 import qualified Data.Map as Map
@@ -845,7 +846,7 @@ getColumns getter def cols = do
     refMap =
         fmap (\cr -> (crTableName cr, crConstraintName cr))
         $ Map.fromList
-        $ foldl' ref [] cols
+        $ List.foldl' ref [] cols
       where
         ref rs c =
             maybe rs (\r -> (unFieldNameDB $ cName c, r) : rs) (cReference c)

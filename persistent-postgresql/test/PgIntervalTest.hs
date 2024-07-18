@@ -11,6 +11,7 @@
 {-# LANGUAGE DerivingStrategies         #-}
 {-# LANGUAGE StandaloneDeriving         #-}
 {-# LANGUAGE DeriveAnyClass             #-}
+{-# LANGUAGE TypeOperators              #-}
 
 module PgIntervalTest where
 

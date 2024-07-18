@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds, UndecidableInstances #-}
+{-# LANGUAGE TypeOperators #-}
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 module HtmlTest (specsWith, cleanDB, htmlMigrate) where
 

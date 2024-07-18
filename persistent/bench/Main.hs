@@ -129,7 +129,11 @@ instance NFData DerivStrategy where
 
 
 instance NFData DerivClause where
+#endif
 
+#if MIN_VERSION_template_haskell(2,22,0)
+instance NFData BndrVis where
+instance NFData NamespaceSpecifier where
 #endif
 
 instance NFData Con where

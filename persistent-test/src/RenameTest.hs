@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeApplications, UndecidableInstances #-}
+{-# LANGUAGE TypeApplications, TypeOperators, UndecidableInstances #-}
 
 module RenameTest where
 

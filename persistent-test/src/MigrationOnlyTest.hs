@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeApplications, UndecidableInstances #-}
+{-# LANGUAGE TypeApplications, TypeOperators, UndecidableInstances #-}
 
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 

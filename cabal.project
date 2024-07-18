@@ -17,6 +17,7 @@ constraints:
 -- These need hackage revisions but otherwise test fine in the repo
 allow-newer:
     -- https://github.com/haskellari/postgresql-simple/pull/95
+    -- https://github.com/haskellari/postgresql-simple/issues/139
    , postgresql-simple:base
    , postgresql-simple:template-haskell
 

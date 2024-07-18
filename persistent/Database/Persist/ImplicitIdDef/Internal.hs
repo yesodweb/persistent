@@ -4,7 +4,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StrictData #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE TypeInType #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE TypeOperators #-}
 
 -- | WARNING: This is an @Internal@ module. As such, breaking changes to the API
 -- of this module will not have a corresponding major version bump.

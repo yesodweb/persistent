@@ -1,5 +1,6 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE ExplicitForAll #-}
+{-# LANGUAGE TypeOperators #-}
 module Database.Persist.Class.PersistStore
     ( HasPersistBackend (..)
     , withBaseBackend

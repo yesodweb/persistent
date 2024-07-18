@@ -101,7 +101,6 @@ import Data.Either
 import qualified Data.HashMap.Strict as HM
 import Data.Int (Int64)
 import Data.Ix (Ix)
-import Data.List (foldl')
 import qualified Data.List as List
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NEL
@@ -1986,7 +1985,7 @@ fromValues entDef funName constructExpr fields = do
 
                 return $ normalClause
                     [ListP $ fmap VarP (x1:restNames)]
-                    (foldl' (\exp (name, fpv) -> applyFromPersistValue fpv exp name) conApp (zip restNames mkPersistValues))
+                    (List.foldl' (\exp (name, fpv) -> applyFromPersistValue fpv exp name) conApp (zip restNames mkPersistValues))
 
     infixFromPersistValue applyE fpv exp name =
         UInfixE exp applyE (fpv `AppE` VarE name)
@@ -2061,7 +2060,7 @@ mkEntity embedEntityMap entityMap mps preDef = do
 
                 let keyCon = keyConName entDef
                     constr =
-                        foldl'
+                        List.foldl'
                             AppE
                             (ConE keyCon)
                             (VarE . snd <$> keyFieldNames')
@@ -2475,7 +2474,7 @@ mkForeignKeysComposite mps entDef foreignDef
                    $ foreignFieldNames
                    $ unboundForeignFields foreignDef
             mkKeyE =
-                foldl' AppE (maybeExp fNullable $ ConE reftableKeyName) fldsE
+                List.foldl' AppE (maybeExp fNullable $ ConE reftableKeyName) fldsE
             fn =
                 FunD fname [normalClause [VarP recordVarName] mkKeyE]
 
@@ -2630,7 +2629,7 @@ mkUniqueKeys def = do
 
     go :: [(FieldNameHS, Name)] -> UniqueDef -> Exp
     go xs (UniqueDef name _ cols _) =
-        foldl' (go' xs) (ConE (mkConstraintName name)) (toList $ fmap fst cols)
+        List.foldl' (go' xs) (ConE (mkConstraintName name)) (toList $ fmap fst cols)
 
     go' :: [(FieldNameHS, Name)] -> Exp -> FieldNameHS -> Exp
     go' xs front col =
@@ -2953,7 +2952,7 @@ mkJSON mps (fixEntityDef -> def) = do
                 FunD 'parseJSON [ normalClause [] parseJSONBody ]
             decoderImpl =
                 LamE [VarP obj]
-                    (foldl'
+                    (List.foldl'
                         (\x y -> InfixE (Just x) apE' (Just y))
                         (pureE `AppE` ConE conName)
                         pulls
@@ -2986,10 +2985,10 @@ mkJSON mps (fixEntityDef -> def) = do
             return $ toJSONI : fromJSONI : entityJSONIs
 
 mkClassP :: Name -> [Type] -> Pred
-mkClassP cla tys = foldl AppT (ConT cla) tys
+mkClassP cla tys = List.foldl AppT (ConT cla) tys
 
 mkEqualP :: Type -> Type -> Pred
-mkEqualP tleft tright = foldl AppT EqualityT [tleft, tright]
+mkEqualP tleft tright = List.foldl AppT EqualityT [tleft, tright]
 
 notStrict :: Bang
 notStrict = Bang NoSourceUnpackedness NoSourceStrictness

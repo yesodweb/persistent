@@ -2,6 +2,7 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TypeOperators #-}
 
 -- | Breaking changes to this module are not reflected in the major version
 -- number. Prefer to import from "Database.Persist.Sql" instead. If you neeed

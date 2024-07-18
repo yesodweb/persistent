@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE AllowAmbiguousTypes, GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ScopedTypeVariables, TypeApplications, UndecidableInstances #-}
+{-# LANGUAGE TypeOperators #-}
 
 module ForeignKey where
 
