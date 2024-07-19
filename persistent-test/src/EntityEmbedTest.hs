@@ -1,4 +1,5 @@
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE TypeOperators #-}
 module EntityEmbedTest where
 
 -- because we are using a type alias we need to declare in a separate module

@@ -1,3 +1,4 @@
+{-# LANGUAGE TypeOperators #-}
 {-# language UndecidableInstances #-}
 
 -- | this just needs to compile

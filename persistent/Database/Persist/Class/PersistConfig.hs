@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Database.Persist.Class.PersistConfig
     ( PersistConfig (..)

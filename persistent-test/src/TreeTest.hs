@@ -1,5 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE RecordWildCards, UndecidableInstances #-}
+{-# LANGUAGE RecordWildCards, TypeOperators, UndecidableInstances #-}
 
 module TreeTest where
 

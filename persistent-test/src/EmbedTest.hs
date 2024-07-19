@@ -1,4 +1,5 @@
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE TypeOperators #-}
 {-# OPTIONS_GHC -Wno-orphans -O0 #-}
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 module EmbedTest (specsWith, cleanDB, embedMigrate) where

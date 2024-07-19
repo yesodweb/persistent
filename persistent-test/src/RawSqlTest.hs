@@ -1,4 +1,5 @@
 {-# language ScopedTypeVariables, DataKinds #-}
+{-# LANGUAGE TypeOperators #-}
 
 module RawSqlTest where
 
