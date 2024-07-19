@@ -1,5 +1,10 @@
 # Changelog for persistent
 
+## 2.14.6.2
+
+* [#1536](https://github.com/yesodweb/persistent/pull/1536/)
+    * Build with GHC 9.10
+
 ## 2.14.6.1
 
 * [#1528](https://github.com/yesodweb/persistent/pull/1528)
