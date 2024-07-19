@@ -1,5 +1,10 @@
 # Changelog for persistent-postgresql
 
+## 2.13.6.2
+
+* [#1536](https://github.com/yesodweb/persistent/pull/1536/)
+    * Build with GHC 9.10
+
 ## 2.13.6.1
 
 * [#1518](https://github.com/yesodweb/persistent/pull/1518)
