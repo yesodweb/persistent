@@ -722,7 +722,6 @@ instance PersistQueryRead DB.MongoContext where
         pure (cnt > 0)
 
     -- | uses cursor option NoCursorTimeout
-    -- If there is no sorting, it will turn the $snapshot option on
     -- and explicitly closes the cursor when done
     selectSourceRes filts opts = do
         context <- ask
@@ -732,9 +731,7 @@ instance PersistQueryRead DB.MongoContext where
         close context cursor = runReaderT (DB.closeCursor cursor) context
         open :: DB.MongoContext -> IO DB.Cursor
         open = runReaderT (DB.find (makeQuery filts opts)
-                   -- it is an error to apply $snapshot when sorting
-                   { DB.snapshot = noSort
-                   , DB.options = [DB.NoCursorTimeout]
+                   { DB.options = [DB.NoCursorTimeout]
                    })
         pullCursor context cursor = do
             mdoc <- liftIO $ runReaderT (DB.nextBatch cursor) context
@@ -744,8 +741,6 @@ instance PersistQueryRead DB.MongoContext where
                     forM_ docs $ fromPersistValuesThrow t >=> yield
                     pullCursor context cursor
         t = entityDef $ Just $ dummyFromFilts filts
-        (_, _, orders) = limitOffsetOrder opts
-        noSort = null orders
 
     selectFirst filts opts = DB.findOne (makeQuery filts opts)
                          >>= Traversable.mapM (fromPersistValuesThrow t)
