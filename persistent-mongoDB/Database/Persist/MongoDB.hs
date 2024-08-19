@@ -114,7 +114,7 @@ module Database.Persist.MongoDB
     ) where
 
 import Control.Exception (throw, throwIO)
-import Control.Monad (forM_, liftM, unless, (>=>))
+import Control.Monad (forM_, liftM, unless, (>=>), void)
 import Control.Monad.IO.Class (liftIO)
 import qualified Control.Monad.IO.Class as Trans
 import Control.Monad.IO.Unlift (MonadUnliftIO, withRunInIO)
@@ -562,10 +562,9 @@ instance PersistStoreWrite DB.MongoContext where
         return ()
 
     delete k =
-        DB.deleteOne DB.Select {
-          DB.coll = collectionNameFromKey k
-        , DB.selector = keyToMongoDoc k
-        }
+        void $ DB.deleteMany
+          (collectionNameFromKey k)
+          [(keyToMongoDoc k, [DB.SingleRemove])]
 
     update _ [] = return ()
     update key upds =
@@ -608,10 +607,9 @@ instance PersistUniqueRead DB.MongoContext where
 
 instance PersistUniqueWrite DB.MongoContext where
     deleteBy uniq =
-        DB.delete DB.Select {
-          DB.coll = collectionName $ dummyFromUnique uniq
-        , DB.selector = toUniquesDoc uniq
-        }
+        void $ DB.deleteMany
+          (collectionName $ dummyFromUnique uniq)
+          [(toUniquesDoc uniq, [DB.SingleRemove])]
 
     upsert newRecord upds = do
         uniq <- onlyUnique newRecord
@@ -703,11 +701,10 @@ instance PersistQueryWrite DB.MongoContext where
         , DB.selector = filtersToDoc filts
         } $ updatesToDoc upds
 
-    deleteWhere filts = do
-        DB.delete DB.Select {
-          DB.coll = collectionName $ dummyFromFilts filts
-        , DB.selector = filtersToDoc filts
-        }
+    deleteWhere filts =
+        void $ DB.deleteMany
+          (collectionName $ dummyFromFilts filts)
+          [ (filtersToDoc filts, [])]
 
 instance PersistQueryRead DB.MongoContext where
     count filts = do
