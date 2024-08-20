@@ -12,15 +12,6 @@ constraints:
   -- https://github.com/mongodb-haskell/mongodb/pull/152
   mongoDB < 2.7.1.3 
 
--- GHC 9.4 shims for persistent
-
--- These need hackage revisions but otherwise test fine in the repo
-allow-newer:
-    -- https://github.com/haskellari/postgresql-simple/pull/95
-    -- https://github.com/haskellari/postgresql-simple/issues/139
-   , postgresql-simple:base
-   , postgresql-simple:template-haskell
-
 -- Needed to test that `persistent-redis` works with mtl-2.3
 -- https://github.com/informatikr/hedis/pull/190
 -- source-repository-package
