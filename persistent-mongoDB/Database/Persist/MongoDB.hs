@@ -568,9 +568,9 @@ instance PersistStoreWrite DB.MongoContext where
 
     update _ [] = return ()
     update key upds =
-        DB.modify
-           (DB.Select (keyToMongoDoc key) (collectionNameFromKey key))
-           $ updatesToDoc upds
+        void $ DB.updateMany
+          (collectionNameFromKey key)
+          [(keyToMongoDoc key, updatesToDoc upds, [DB.MultiUpdate])]
 
     updateGet key upds = do
         context <- ask
@@ -628,12 +628,14 @@ instance PersistUniqueWrite DB.MongoContext where
     upsertBy uniq newRecord upds = do
         let uniqueDoc = toUniquesDoc uniq :: [DB.Field]
         let uniqKeys = map DB.label uniqueDoc :: [DB.Label]
-        let insDoc = DB.exclude uniqKeys $ toInsertDoc newRecord :: DB.Document
-        let selection = DB.select uniqueDoc $ collectionName newRecord :: DB.Selection
         mdoc <- getBy uniq
-        case mdoc of
-          Nothing -> unless (null upds) (DB.upsert selection ["$setOnInsert" DB.=: insDoc])
-          Just _ -> unless (null upds) (DB.modify selection $ DB.exclude uniqKeys $ updatesToDoc upds)
+        let updateOrUpsert = case mdoc of
+              Nothing ->
+                let insDoc = DB.exclude uniqKeys $ toInsertDoc newRecord :: DB.Document
+                 in [(uniqueDoc, ["$setOnInsert" DB.=: insDoc], [DB.Upsert])]
+              Just _ ->
+                [(uniqueDoc, DB.exclude uniqKeys $ updatesToDoc upds, [DB.MultiUpdate])]
+        unless (null upds) . void $ DB.updateMany (collectionName newRecord) updateOrUpsert
         newMdoc <- getBy uniq
         case newMdoc of
           Nothing -> err "possible race condition: getBy found Nothing"
@@ -696,10 +698,9 @@ projectionFromRecord = projectionFromEntityDef . entityDef . Just
 instance PersistQueryWrite DB.MongoContext where
     updateWhere _ [] = return ()
     updateWhere filts upds =
-        DB.modify DB.Select {
-          DB.coll = collectionName $ dummyFromFilts filts
-        , DB.selector = filtersToDoc filts
-        } $ updatesToDoc upds
+        void $ DB.updateMany
+          (collectionName $ dummyFromFilts filts)
+          [(filtersToDoc filts, updatesToDoc upds, [DB.MultiUpdate])]
 
     deleteWhere filts =
         void $ DB.deleteMany
