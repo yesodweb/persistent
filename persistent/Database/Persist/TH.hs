@@ -2306,7 +2306,7 @@ mkUniqueKeyInstances mps entDef = do
     typeErrorAtLeastOne :: Q [Dec]
     typeErrorAtLeastOne = do
         let impl = mkImpossible requireUniquesPName
-        cxt <- typeErrorMultipleCtx
+        cxt <- typeErrorNoneCtx
         pure [instanceD cxt atLeastOneUniqueKeyClass impl]
 
     singleUniqueKey :: Q [Dec]
