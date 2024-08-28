@@ -2,7 +2,7 @@
 
 ## 2.14.6.3
 
-* []()
+* [#1544](https://github.com/yesodweb/persistent/pull/1544)
     * Fix type error message when no unique keys are defined on a model and you
       use a function with constraint `AtLeastOneUniqueKey`.
 
