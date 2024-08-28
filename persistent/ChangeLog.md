@@ -1,5 +1,11 @@
 # Changelog for persistent
 
+## 2.14.6.3
+
+* []()
+    * Fix type error message when no unique keys are defined on a model and you
+      use a function with constraint `AtLeastOneUniqueKey`.
+
 ## 2.14.6.2
 
 * [#1536](https://github.com/yesodweb/persistent/pull/1536/)
