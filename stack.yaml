@@ -1,4 +1,4 @@
-resolver: nightly-2023-05-03 # GHC 9.4.5
+resolver: nightly-2024-05-03 # GHC 9.4.5
 
 packages:
   - ./persistent
@@ -11,4 +11,8 @@ packages:
   - ./persistent-qq
 
 extra-deps:
-  - attoparsec-aeson-2.1.0.0
+  # - attoparsec-aeson-2.1.0.0
+  - postgresql-libpq-0.11.0.0
+  - postgresql-libpq-configure-0.11
+  - postgresql-simple-0.7.0.0
+  - hashable-1.4.3.0

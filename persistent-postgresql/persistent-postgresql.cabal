@@ -26,7 +26,7 @@ library
                    , monad-logger          >= 0.3.25
                    , mtl
                    , postgresql-simple     >= 0.6.1    && < 0.8
-                   , postgresql-libpq      >= 0.9.4.2  && < 0.11
+                   , postgresql-libpq      >= 0.9.4.2  && < 0.12
                    , resourcet             >= 1.1.9
                    , resource-pool
                    , string-conversions
