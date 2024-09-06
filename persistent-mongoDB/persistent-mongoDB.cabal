@@ -1,5 +1,5 @@
 name:            persistent-mongoDB
-version:         2.13.0.1
+version:         2.13.0.2
 license:         MIT
 license-file:    LICENSE
 author:          Greg Weber <greg@gregweber.info>
@@ -27,7 +27,7 @@ library
                    , cereal             >= 0.5
                    , conduit            >= 1.2
                    , http-api-data      >= 0.3.7     && < 0.7
-                   , mongoDB            >= 2.3       && < 2.8
+                   , mongoDB            >= 2.7.1.2   && < 2.8
                    , network            >= 2.6
                    , path-pieces        >= 0.2
                    , resource-pool      >= 0.2       && < 0.5

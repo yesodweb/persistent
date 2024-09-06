@@ -1,5 +1,9 @@
 # Changelog for persistent-mongoDB
 
+## 2.13.0.2
+
+* Fix behavioral compatibility with MongoDB Driver for MongoDB >= 6.0 [#1545](https://github.com/yesodweb/persistent/pull/1545)
+
 ## 2.13.0.1
 
 * [#1367](https://github.com/yesodweb/persistent/pull/1367),
