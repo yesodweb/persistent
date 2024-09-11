@@ -371,10 +371,6 @@ queryByKey :: (PersistEntity record, PersistEntityBackend record ~ DB.MongoConte
            => Key record -> DB.Query
 queryByKey k = (DB.select (keyToMongoDoc k) (collectionNameFromKey k)) {DB.project = projectionFromKey k}
 
-selectByKey :: (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext)
-            => Key record -> DB.Selection
-selectByKey k = DB.select (keyToMongoDoc k) (collectionNameFromKey k)
-
 updatesToDoc :: (PersistEntity record, PersistEntityBackend record ~ DB.MongoContext)
              => [Update record] -> DB.Document
 updatesToDoc upds = map updateToMongoField upds
@@ -554,12 +550,16 @@ instance PersistStoreWrite DB.MongoContext where
     insertKey k record = DB.insert_ (collectionName record) $
                          entityToInsertDoc (Entity k record)
 
-    repsert   k record = DB.save (collectionName record) $
-                         documentFromEntity (Entity k record)
+    repsert k record =
+        void $ DB.updateMany
+          (collectionName record)
+          [(keyToMongoDoc k, documentFromEntity (Entity k record), [DB.Upsert])]
 
-    replace k record = do
-        DB.replace (selectByKey k) (recordToDocument record)
-        return ()
+    replace k record =
+        -- replace a single matching document
+        void $ DB.updateMany
+          (collectionNameFromKey k)
+          [(keyToMongoDoc k, recordToDocument record, [])]
 
     delete k =
         void $ DB.deleteMany
