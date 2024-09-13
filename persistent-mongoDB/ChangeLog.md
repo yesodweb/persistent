@@ -1,5 +1,9 @@
 # Changelog for persistent-mongoDB
 
+## 2.13.1.0
+
+* Restore update write concern behavior with MongoDB Driver for MongoDB >= 6.0 [#1550](https://github.com/yesodweb/persistent/pull/1550)
+
 ## 2.13.0.2
 
 * Fix behavioral compatibility with MongoDB Driver for MongoDB >= 6.0 [#1545](https://github.com/yesodweb/persistent/pull/1545)
