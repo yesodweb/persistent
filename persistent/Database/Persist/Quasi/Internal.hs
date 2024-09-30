@@ -712,6 +712,8 @@ mkUnboundEntityDef ps parsedEntDef =
                     case parsedEntityDefComments parsedEntDef of
                         [] -> Nothing
                         comments -> Just (T.unlines comments)
+                , -- TODO: start parsing the schema attribute and write it here.
+                  entitySchema = Nothing
                 }
         }
   where
