@@ -84,7 +84,9 @@ getEntityHaskellName = entityHaskell
 getEntityDBName
     :: EntityDef
     -> EntityNameDB
-getEntityDBName = entityDB
+getEntityDBName entityDef = case entitySchema entityDef of
+    Nothing -> entityDB entityDef
+    Just schema -> EntityNameDB $ schema <> "." <> unEntityNameDB (entityDB entityDef)
 
 getEntityExtra :: EntityDef -> Map Text [[Text]]
 getEntityExtra = entityExtra
