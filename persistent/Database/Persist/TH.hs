@@ -335,7 +335,7 @@ liftAndFixKeys mps emEntities entityMap unboundEnt =
             |]
           where
             fixForeignRefTableDBName =
-                entityDB (unboundEntityDef parentDef)
+                getEntityDBName (unboundEntityDef parentDef)
             foreignFieldNames =
                 case unboundForeignFields of
                     FieldListImpliedId ffns ->
@@ -1968,7 +1968,7 @@ fromValues entDef funName constructExpr fields = do
     return [ suc, normalClause [VarP x] patternMatchFailure ]
   where
     tableName =
-        unEntityNameDB (entityDB (unboundEntityDef entDef))
+        unEntityNameDB (getEntityDBName (unboundEntityDef entDef))
     patternSuccess =
         case fields of
             [] -> do
