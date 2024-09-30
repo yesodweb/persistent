@@ -371,6 +371,7 @@ spec = describe "THSpec" $ do
                             , entityExtra = mempty
                             , entitySum = False
                             , entityComments = Nothing
+                            , entitySchema = Nothing
                             }
         it "has the cascade on the field def" $ do
             fieldCascade subject `shouldBe` expected
