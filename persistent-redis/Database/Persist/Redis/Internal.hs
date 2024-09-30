@@ -23,10 +23,10 @@ toLabel :: FieldDef -> B.ByteString
 toLabel = U.fromString . unpack . unFieldNameDB . fieldDB
 
 toEntityString :: PersistEntity val => val -> Text
-toEntityString = unEntityNameDB . entityDB . entityDef . Just
+toEntityString = unEntityNameDB . getEntityDBName . entityDef . Just
 
 toEntityName :: EntityDef -> B.ByteString
-toEntityName = U.fromString . unpack . unEntityNameDB . entityDB
+toEntityName = U.fromString . unpack . unEntityNameDB . getEntityDBName
 
 mkEntity :: (MonadFail m, PersistEntity val) => Key val -> [(B.ByteString, B.ByteString)] -> m (Entity val)
 mkEntity key fields = do
