@@ -554,6 +554,7 @@ type ForeignFieldDef = (FieldNameHS, FieldNameDB)
 data ForeignDef = ForeignDef
     { foreignRefTableHaskell       :: !EntityNameHS
     , foreignRefTableDBName        :: !EntityNameDB
+    , foreignRefSchemaName         :: !SchemaNameDB
     , foreignConstraintNameHaskell :: !ConstraintNameHS
     , foreignConstraintNameDBName  :: !ConstraintNameDB
     , foreignFieldCascade          :: !FieldCascade

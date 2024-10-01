@@ -161,8 +161,8 @@ mkColumns allDefs t overrides =
     mkColumnReference :: FieldDef -> Maybe ColumnReference
     mkColumnReference fd =
         fmap
-            (\(tName, cName) ->
-                ColumnReference tName cName $ overrideNothings $ fieldCascade fd
+            (\(tName, sName, cName) ->
+                ColumnReference tName sName cName $ overrideNothings $ fieldCascade fd
             )
         $ ref (fieldDB fd) (fieldReference fd) (fieldAttrs fd)
 
@@ -178,20 +178,21 @@ mkColumns allDefs t overrides =
     ref :: FieldNameDB
         -> ReferenceDef
         -> [FieldAttr]
-        -> Maybe (EntityNameDB, ConstraintNameDB) -- table name, constraint name
-    ref c fe []
-        | ForeignRef f <- fe =
-            Just (resolveTableName allDefs f, refNameFn tableName c)
-        | otherwise = Nothing
-    ref _ _ (FieldAttrNoreference:_) = Nothing
-    ref c fe (a:as) = case a of
-        FieldAttrReference x -> do
-            (_, constraintName) <- ref c fe as
-            pure (EntityNameDB  x, constraintName)
-        FieldAttrConstraint x -> do
-            (tableName_, _) <- ref c fe as
-            pure (tableName_, ConstraintNameDB x)
-        _ -> ref c fe as
+        -> Maybe (EntityNameDB, Maybe SchemaNameDB, ConstraintNameDB) -- table name, schema name, constraint name
+    ref = undefined
+    -- ref c fe []
+    --     | ForeignRef f <- fe =
+    --         Just (resolveTableName allDefs f, refNameFn tableName c)
+    --     | otherwise = Nothing
+    -- ref _ _ (FieldAttrNoreference:_) = Nothing
+    -- ref c fe (a:as) = case a of
+    --     FieldAttrReference x -> do
+    --         (_, constraintName) <- ref c fe as
+    --         pure (EntityNameDB  x, constraintName)
+    --     FieldAttrConstraint x -> do
+    --         (tableName_, _) <- ref c fe as
+    --         pure (tableName_, ConstraintNameDB x)
+    --     _ -> ref c fe as
 
 refName :: EntityNameDB -> FieldNameDB -> ConstraintNameDB
 refName (EntityNameDB table) (FieldNameDB column) =

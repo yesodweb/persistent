@@ -1392,6 +1392,8 @@ takeForeign ps entityName = takeRefTable
                                 EntityNameHS refTableName
                             , foreignRefTableDBName =
                                 EntityNameDB $ psToDBName ps refTableName
+                            , foreignRefSchemaName =
+                                SchemaNameDB $ psToDBName ps refSchemaName
                             , foreignConstraintNameHaskell =
                                 constraintName
                             , foreignConstraintNameDBName =

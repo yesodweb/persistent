@@ -469,7 +469,7 @@ createBackend logFunc serverVersion smap conn =
         , connCommit     = const $ PG.commit   conn
         , connRollback   = const $ PG.rollback conn
         , connEscapeFieldName = escapeF
-        , connEscapeTableName = escapeE . getEntityDBName
+        , connEscapeTableName = entityIdentifier
         , connEscapeRawName = escape
         , connNoLimit    = "LIMIT ALL"
         , connRDBMS      = "postgresql"
@@ -498,7 +498,7 @@ insertSql' ent vals =
     (fieldNames, placeholders) = unzip (Util.mkInsertPlaceholders ent escapeF)
     sql = T.concat
         [ "INSERT INTO "
-        , escapeE $ getEntityDBName ent
+        , entityIdentifier ent
         , if null (getEntityFields ent)
             then " DEFAULT VALUES"
             else T.concat
@@ -514,7 +514,7 @@ upsertSql' :: EntityDef -> NonEmpty (FieldNameHS, FieldNameDB) -> Text -> Text
 upsertSql' ent uniqs updateVal =
     T.concat
         [ "INSERT INTO "
-        , escapeE (getEntityDBName ent)
+        , entityIdentifier ent
         , "("
         , T.intercalate "," fieldNames
         , ") VALUES ("
@@ -543,7 +543,7 @@ insertManySql' ent valss =
     (fieldNames, placeholders)= unzip (Util.mkInsertPlaceholders ent escapeF)
     sql = T.concat
         [ "INSERT INTO "
-        , escapeE (getEntityDBName ent)
+        , entityIdentifier ent
         , "("
         , T.intercalate "," fieldNames
         , ") VALUES ("
@@ -657,6 +657,7 @@ migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
         (errs, _) -> return $ Left errs
   where
     name = getEntityDBName entity
+    schema = getEntitySchema entity
     (newcols', udefs, fdefs) = postgresMkColumns allDefs entity
     migrationText exists' old''
         | not exists' =
@@ -664,8 +665,8 @@ migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
         | otherwise =
             let (acs, ats) =
                     getAlters allDefs entity (newcols, udspair) old'
-                acs' = map (AlterColumn name) acs
-                ats' = map (AlterTable name) ats
+                acs' = map (AlterColumn name schema) acs
+                ats' = map (AlterTable name schema) ats
             in
                 acs' ++ ats'
        where
@@ -679,7 +680,7 @@ migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
         (addTable newcols entity) : uniques ++ references ++ foreignsAlt
       where
         uniques = flip concatMap udspair $ \(uname, ucols) ->
-                [AlterTable name $ AddUniqueConstraint uname ucols]
+                [AlterTable name schema $ AddUniqueConstraint uname ucols]
         references =
             mapMaybe
                 (\Column { cName, cReference } ->
@@ -692,12 +693,14 @@ mkForeignAlt
     :: EntityDef
     -> ForeignDef
     -> Maybe AlterDB
-mkForeignAlt entity fdef = pure $ AlterColumn tableName_ addReference
+mkForeignAlt entity fdef = pure $ AlterColumn tableName_ schemaName_ addReference
   where
     tableName_ = getEntityDBName entity
+    schemaName_ = getEntitySchema entity
     addReference =
         AddReference
             (foreignRefTableDBName fdef)
+            (foreignRefSchemaName fdef)
             constraintName
             childfields
             escapedParentFields
@@ -714,7 +717,7 @@ addTable cols entity =
     AddTable $ T.concat
         -- Lower case e: see Database.Persist.Sql.Migration
         [ "CREATe TABLE " -- DO NOT FIX THE CAPITALIZATION!
-        , escapeE name
+        , entityIdentifier entity
         , "("
         , idtxt
         , if null nonIdCols then "" else ","
@@ -773,7 +776,7 @@ data AlterColumn
     | Default Column Text
     | NoDefault Column
     | Update' Column Text
-    | AddReference EntityNameDB ConstraintNameDB [FieldNameDB] [Text] FieldCascade
+    | AddReference EntityNameDB (Maybe SchemaNameDB) ConstraintNameDB [FieldNameDB] [Text] FieldCascade
     | DropReference ConstraintNameDB
     deriving Show
 
@@ -783,8 +786,8 @@ data AlterTable
     deriving Show
 
 data AlterDB = AddTable Text
-             | AlterColumn EntityNameDB AlterColumn
-             | AlterTable EntityNameDB AlterTable
+             | AlterColumn EntityNameDB (Maybe SchemaNameDB) AlterColumn
+             | AlterTable EntityNameDB (Maybe SchemaNameDB) AlterTable
              deriving Show
 
 -- | Returns all of the columns in the given table currently in the database.
@@ -1140,6 +1143,7 @@ findAlters defs edef col@(Column name isNull sqltype def _gen _defConstraintName
                             ->
                             [AddReference
                                 (crTableName colRef)
+                                (crSchemaName colRef)
                                 (crConstraintName colRef)
                                 [name]
                                 (NEL.toList $ Util.dbIdColumnsEsc escapeF refdef)
@@ -1217,14 +1221,16 @@ getAddReference
     -> FieldNameDB
     -> ColumnReference
     -> Maybe AlterDB
-getAddReference allDefs entity cname cr@ColumnReference {crTableName = s, crConstraintName=constraintName} = do
+getAddReference allDefs entity cname cr@ColumnReference {crTableName = s, crSchemaName = refschema, crConstraintName=constraintName} = do
     guard $ Just cname /= fmap fieldDB (getEntityIdField entity)
     pure $ AlterColumn
         table
-        (AddReference s constraintName [cname] id_ (crFieldCascade cr)
+        schema
+        (AddReference s refschema constraintName [cname] id_ (crFieldCascade cr)
         )
   where
     table = getEntityDBName entity
+    schema = getEntitySchema entity
     id_ =
         fromMaybe
             (error $ "Could not find ID of entity " ++ show s)
@@ -1266,90 +1272,90 @@ showSqlType (SqlOther t) = t
 
 showAlterDb :: AlterDB -> (Bool, Text)
 showAlterDb (AddTable s) = (False, s)
-showAlterDb (AlterColumn t ac) =
-    (isUnsafe ac, showAlter t ac)
+showAlterDb (AlterColumn t s ac) =
+    (isUnsafe ac, showAlter t s ac)
   where
     isUnsafe (Drop _ safeRemove) = not safeRemove
     isUnsafe _ = False
-showAlterDb (AlterTable t at) = (False, showAlterTable t at)
+showAlterDb (AlterTable t s at) = (False, showAlterTable t s at)
 
-showAlterTable :: EntityNameDB -> AlterTable -> Text
-showAlterTable table (AddUniqueConstraint cname cols) = T.concat
+showAlterTable :: EntityNameDB -> Maybe SchemaNameDB -> AlterTable -> Text
+showAlterTable table schema (AddUniqueConstraint cname cols) = T.concat
     [ "ALTER TABLE "
-    , escapeE table
+    , escapeES table schema
     , " ADD CONSTRAINT "
     , escapeC cname
     , " UNIQUE("
     , T.intercalate "," $ map escapeF cols
     , ")"
     ]
-showAlterTable table (DropConstraint cname) = T.concat
+showAlterTable table schema (DropConstraint cname) = T.concat
     [ "ALTER TABLE "
-    , escapeE table
+    , escapeES table schema
     , " DROP CONSTRAINT "
     , escapeC cname
     ]
 
-showAlter :: EntityNameDB -> AlterColumn -> Text
-showAlter table (ChangeType c t extra) =
+showAlter :: EntityNameDB -> Maybe SchemaNameDB -> AlterColumn -> Text
+showAlter table schema (ChangeType c t extra) =
     T.concat
         [ "ALTER TABLE "
-        , escapeE table
+        , escapeES table schema
         , " ALTER COLUMN "
         , escapeF (cName c)
         , " TYPE "
         , showSqlType t
         , extra
         ]
-showAlter table (IsNull c) =
+showAlter table schema (IsNull c) =
     T.concat
         [ "ALTER TABLE "
-        , escapeE table
+        , escapeES table schema
         , " ALTER COLUMN "
         , escapeF (cName c)
         , " DROP NOT NULL"
         ]
-showAlter table (NotNull c) =
+showAlter table schema (NotNull c) =
     T.concat
         [ "ALTER TABLE "
-        , escapeE table
+        , escapeES table schema
         , " ALTER COLUMN "
         , escapeF (cName c)
         , " SET NOT NULL"
         ]
-showAlter table (Add' col) =
+showAlter table schema (Add' col) =
     T.concat
         [ "ALTER TABLE "
-        , escapeE table
+        , escapeES table schema
         , " ADD COLUMN "
         , showColumn col
         ]
-showAlter table (Drop c _) =
+showAlter table schema (Drop c _) =
     T.concat
         [ "ALTER TABLE "
-        , escapeE table
+        , escapeES table schema
         , " DROP COLUMN "
         , escapeF (cName c)
         ]
-showAlter table (Default c s) =
+showAlter table schema (Default c s) =
     T.concat
         [ "ALTER TABLE "
-        , escapeE table
+        , escapeES table schema
         , " ALTER COLUMN "
         , escapeF (cName c)
         , " SET DEFAULT "
         , s
         ]
-showAlter table (NoDefault c) = T.concat
+showAlter table schema (NoDefault c) = T.concat
     [ "ALTER TABLE "
-    , escapeE table
+    , escapeES table schema
     , " ALTER COLUMN "
     , escapeF (cName c)
     , " DROP DEFAULT"
     ]
-showAlter table (Update' c s) = T.concat
+showAlter table schema (Update' c s) = T.concat
     [ "UPDATE "
-    , escapeE table
+    , escapeES table schema
     , " SET "
     , escapeF (cName c)
     , "="
@@ -1358,22 +1364,22 @@ showAlter table (Update' c s) = T.concat
     , escapeF (cName c)
     , " IS NULL"
     ]
-showAlter table (AddReference reftable fkeyname t2 id2 cascade) = T.concat
+showAlter table schema (AddReference reftable refschema fkeyname t2 id2 cascade) = T.concat
     [ "ALTER TABLE "
-    , escapeE table
+    , escapeES table schema
     , " ADD CONSTRAINT "
     , escapeC fkeyname
     , " FOREIGN KEY("
     , T.intercalate "," $ map escapeF t2
     , ") REFERENCES "
-    , escapeE reftable
+    , escapeES reftable refschema
     , "("
     , T.intercalate "," id2
     , ")"
     ] <> renderFieldCascade cascade
-showAlter table (DropReference cname) = T.concat
+showAlter table schema (DropReference cname) = T.concat
     [ "ALTER TABLE "
-    , escapeE table
+    , escapeES table schema
     , " DROP CONSTRAINT "
     , escapeC cname
     ]
@@ -1397,6 +1403,8 @@ escapeE = escapeWith escape
 escapeF :: FieldNameDB -> Text
 escapeF = escapeWith escape
 
+escapeS :: SchemaNameDB -> Text
+escapeS = escapeWith escape
 
 escape :: Text -> Text
 escape s =
@@ -1405,6 +1413,14 @@ escape s =
     go "" = ""
     go ('"':xs) = "\"\"" ++ go xs
     go (x:xs) = x : go xs
+
+entityIdentifier :: EntityDef -> Text
+entityIdentifier ed = escapeES (getEntityDBName ed) (getEntitySchema ed)
+
+escapeES :: EntityNameDB -> Maybe SchemaNameDB -> Text
+escapeES entityName schemaName = case schemaName of
+    Nothing -> escapeE entityName
+    Just schema -> escapeS schema <> "." <> escapeE entityName
 
 -- | Information required to connect to a PostgreSQL database
 -- using @persistent@'s generic facilities.  These values are the
@@ -1563,12 +1579,13 @@ mockMigrate allDefs _ entity = fmap (fmap $ map showAlterDb) $ do
         (errs, _) -> return $ Left errs
   where
     name = getEntityDBName entity
+    schema = getEntitySchema entity
     migrationText exists' old'' =
         if not exists'
             then createText newcols fdefs udspair
             else let (acs, ats) = getAlters allDefs entity (newcols, udspair) old'
-                     acs' = map (AlterColumn name) acs
-                     ats' = map (AlterTable name) ats
+                     acs' = map (AlterColumn name schema) acs
+                     ats' = map (AlterTable name schema) ats
                  in  acs' ++ ats'
        where
          old' = partitionEithers old''
@@ -1582,7 +1599,7 @@ mockMigrate allDefs _ entity = fmap (fmap $ map showAlterDb) $ do
         (addTable newcols entity) : uniques ++ references ++ foreignsAlt
       where
         uniques = flip concatMap udspair $ \(uname, ucols) ->
-                [AlterTable name $ AddUniqueConstraint uname ucols]
+                [AlterTable name schema $ AddUniqueConstraint uname ucols]
         references =
             mapMaybe
                 (\Column { cName, cReference } ->
@@ -2065,4 +2082,3 @@ instance (PersistUniqueWrite b) => PersistUniqueWrite (RawPostgresql b) where
     upsertBy uniq rec = withReaderT persistentBackend . upsertBy uniq rec
     putMany = withReaderT persistentBackend . putMany
 #endif
-
