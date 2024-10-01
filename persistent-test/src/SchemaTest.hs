@@ -8,7 +8,7 @@ import Database.Persist.TH
 import Init
 
 share [mkPersist sqlSettings { mpsGeneric = True }, mkMigrate "migration"] [persistLowerCase|
-SchemaEntity schema="foo"
+SchemaEntity schema=foo
     foo Int
     Primary foo
 |]
