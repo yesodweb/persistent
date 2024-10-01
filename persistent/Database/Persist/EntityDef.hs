@@ -89,6 +89,9 @@ getEntityDBName = entityDB
 getEntityExtra :: EntityDef -> Map Text [[Text]]
 getEntityExtra = entityExtra
 
+getEntitySchema :: EntityDef -> Maybe SchemaNameDB
+getEntitySchema = entitySchema
+
 -- |
 --
 -- @since 2.13.0.0
@@ -194,6 +197,9 @@ getEntityKeyFields = entityKeyFields
 -- @since 2.13.0.0
 setEntityFields :: [FieldDef] -> EntityDef -> EntityDef
 setEntityFields fd ed = ed { entityFields = fd }
+
+setEntitySchema :: Maybe SchemaNameDB -> EntityDef -> EntityDef
+setEntitySchema sn ed = ed { entitySchema = sn }
 
 -- | Perform a mapping function over all of the entity fields, as determined by
 -- 'getEntityFieldsDatabase'.
