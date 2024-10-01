@@ -19,6 +19,7 @@ module Database.Persist.EntityDef
     , getEntityKeyFields
     , getEntityComments
     , getEntityExtra
+    , getEntitySchema
     , isEntitySum
     , entityPrimary
     , entitiesPrimary
@@ -27,6 +28,7 @@ module Database.Persist.EntityDef
     , setEntityId
     , setEntityIdDef
     , setEntityDBName
+    , setEntitySchema
     , overEntityFields
       -- * Related Types
     , EntityIdDef(..)
