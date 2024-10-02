@@ -179,27 +179,27 @@ mkColumns allDefs t overrides =
         -> ReferenceDef
         -> [FieldAttr]
         -> Maybe (EntityNameDB, Maybe SchemaNameDB, ConstraintNameDB) -- table name, schema name, constraint name
-    ref = undefined
-    -- ref c fe []
-    --     | ForeignRef f <- fe =
-    --         Just (resolveTableName allDefs f, refNameFn tableName c)
-    --     | otherwise = Nothing
-    -- ref _ _ (FieldAttrNoreference:_) = Nothing
-    -- ref c fe (a:as) = case a of
-    --     FieldAttrReference x -> do
-    --         (_, constraintName) <- ref c fe as
-    --         pure (EntityNameDB  x, constraintName)
-    --     FieldAttrConstraint x -> do
-    --         (tableName_, _) <- ref c fe as
-    --         pure (tableName_, ConstraintNameDB x)
-    --     _ -> ref c fe as
+    ref c fe []
+        | ForeignRef f <- fe =
+            let (table, schema) = resolveTableName allDefs f
+             in Just (table, schema, refNameFn tableName c)
+        | otherwise = Nothing
+    ref _ _ (FieldAttrNoreference:_) = Nothing
+    ref c fe (a:as) = case a of
+        FieldAttrReference x -> do
+            (_, schema, constraintName) <- ref c fe as
+            pure (EntityNameDB x, schema, constraintName)
+        FieldAttrConstraint x -> do
+            (tableName_, schema, _) <- ref c fe as
+            pure (tableName_, schema, ConstraintNameDB x)
+        _ -> ref c fe as
 
 refName :: EntityNameDB -> FieldNameDB -> ConstraintNameDB
 refName (EntityNameDB table) (FieldNameDB column) =
     ConstraintNameDB $ Data.Monoid.mconcat [table, "_", column, "_fkey"]
 
-resolveTableName :: [EntityDef] -> EntityNameHS -> EntityNameDB
+resolveTableName :: [EntityDef] -> EntityNameHS -> (EntityNameDB, Maybe SchemaNameDB)
 resolveTableName [] (EntityNameHS t) = error $ "Table not found: " `Data.Monoid.mappend` T.unpack t
 resolveTableName (e:es) hn
-    | getEntityHaskellName e == hn = getEntityDBName e
+    | getEntityHaskellName e == hn = (getEntityDBName e, getEntitySchema e)
     | otherwise = resolveTableName es hn
