@@ -700,7 +700,7 @@ mkForeignAlt entity fdef = pure $ AlterColumn tableName_ schemaName_ addReferenc
     addReference =
         AddReference
             (foreignRefTableDBName fdef)
-            (foreignRefSchemaName fdef)
+            (foreignRefSchemaDBName fdef)
             constraintName
             childfields
             escapedParentFields
@@ -977,7 +977,7 @@ getColumn getter tableName' [ PersistText columnName
         , cGenerated = fmap stripSuffixes generationExpression'
         , cDefaultConstraintName = Nothing
         , cMaxLen = Nothing
-        , cReference = fmap (\(a,b,c,d) -> ColumnReference a b (mkCascade c d)) ref
+        , cReference = fmap (\(a,b,c,d,e) -> ColumnReference a b c (mkCascade d e)) ref
         }
 
   where
@@ -1015,8 +1015,13 @@ getColumn getter tableName' [ PersistText columnName
                 Nothing -> loop' ps
                 Just t' -> t'
 
+    getRef
+        :: FieldNameDB
+        -> (a, ConstraintNameDB)
+        -> IO (Maybe (EntityNameDB, Maybe SchemaNameDB, ConstraintNameDB, Text, Text))
     getRef cname (_, refName') = do
         let sql = T.concat
+                -- TODO @curran: select table schema
                 [ "SELECT DISTINCT "
                 , "ccu.table_name, "
                 , "tc.constraint_name, "
@@ -1048,8 +1053,10 @@ getColumn getter tableName' [ PersistText columnName
         case cntrs of
           [] ->
               return Nothing
-          [[PersistText table, PersistText constraint, PersistText updRule, PersistText delRule]] ->
-              return $ Just (EntityNameDB table, ConstraintNameDB constraint, updRule, delRule)
+          [[PersistText table, PersistText schema, PersistText constraint, PersistText updRule, PersistText delRule]] ->
+              return . Just $ if schema == "public"
+                  then (EntityNameDB table, Nothing, ConstraintNameDB constraint, updRule, delRule)
+                  else (EntityNameDB table, Just (SchemaNameDB schema), ConstraintNameDB constraint, updRule, delRule)
           xs ->
               error $ mconcat
                   [ "Postgresql.getColumn: error fetching constraints. Expected a single result for foreign key query for table: "
