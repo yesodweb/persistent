@@ -70,3 +70,9 @@ instance DatabaseName ConstraintNameDB where
 -- @since 2.12.0.0
 newtype ConstraintNameHS = ConstraintNameHS { unConstraintNameHS :: Text }
   deriving (Show, Eq, Read, Ord, Lift)
+
+newtype SchemaNameDB = SchemaNameDB { unSchemaNameDB :: Text }
+  deriving (Show, Eq, Read, Ord, Lift)
+
+instance DatabaseName SchemaNameDB where
+  escapeWith f (SchemaNameDB n) = f n
