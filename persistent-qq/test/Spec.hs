@@ -120,12 +120,15 @@ spec = describe "persistent-qq" $ do
         personKey <- insert person
         let pet = PetAnimal personKey "Fluffy"
         petKey <- insert pet
-        let runQuery
+        let runQueryQuoted, runQueryRaw
               :: (RawSql a, Functor m, MonadIO m)
               => ReaderT SqlBackend m [a]
-            runQuery = [sqlQQ| SELECT ?? FROM ^{PetAnimal} |]
-        ret <- runQuery
-        liftIO $ ret @?= [Entity petKey pet]
+            runQueryQuoted = [sqlQQ| SELECT ?? FROM ^{PetAnimal} |]
+            runQueryRaw = [sqlQQ| SELECT ?? FROM animals.pet_animal |]
+        retQuoted <- runQueryQuoted
+        retRaw <- runQueryRaw
+        liftIO $ retQuoted @?= [Entity petKey pet]
+        liftIO $ retRaw @?= [Entity petKey pet]
 
     it "sqlQQ/OUTER JOIN" $ db $ do
         let insert' :: (PersistStore backend, PersistEntity val, PersistEntityBackend val ~ BaseBackend backend, MonadIO m, SafeToInsert val)
