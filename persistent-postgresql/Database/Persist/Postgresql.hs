@@ -981,7 +981,11 @@ getColumn getter
         , cGenerated = fmap stripSuffixes generationExpression'
         , cDefaultConstraintName = Nothing
         , cMaxLen = Nothing
-        , cReference = fmap (\(a,b,c,d,e) -> ColumnReference a b c (mkCascade d e)) ref
+        , -- The ColumnReference always has a non-null SchemaNameDB. The default schema name
+          -- in Postgres is "public", but Postgres doesn't know whether a table with
+          -- schema "public" was explicitly given that schema by the Persistent
+          -- app developer.
+          cReference = fmap (\(a,b,c,d,e) -> ColumnReference a (Just b) c (mkCascade d e)) ref
         }
 
   where
@@ -1022,7 +1026,7 @@ getColumn getter
     getRef
         :: FieldNameDB
         -> (a, ConstraintNameDB)
-        -> IO (Maybe (EntityNameDB, Maybe SchemaNameDB, ConstraintNameDB, Text, Text))
+        -> IO (Maybe (EntityNameDB, SchemaNameDB, ConstraintNameDB, Text, Text))
     getRef cname (_, refName') = do
         let sql = T.concat
                 [ "SELECT DISTINCT "
@@ -1060,9 +1064,7 @@ getColumn getter
           [] ->
               return Nothing
           [[PersistText table, PersistText schema, PersistText constraint, PersistText updRule, PersistText delRule]] ->
-              return . Just $ if schema == "public"
-                  then (EntityNameDB table, Nothing, ConstraintNameDB constraint, updRule, delRule)
-                  else (EntityNameDB table, Just (SchemaNameDB schema), ConstraintNameDB constraint, updRule, delRule)
+              return $ Just (EntityNameDB table, SchemaNameDB schema, ConstraintNameDB constraint, updRule, delRule)
           xs ->
               error $ mconcat
                   [ "Postgresql.getColumn: error fetching constraints. Expected a single result for foreign key query for table: "
