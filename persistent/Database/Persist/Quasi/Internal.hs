@@ -1392,8 +1392,14 @@ takeForeign ps entityName = takeRefTable
                                 EntityNameHS refTableName
                             , foreignRefTableDBName =
                                 EntityNameDB $ psToDBName ps refTableName
-                            , -- TODO: verify that this is correct.
-                              foreignRefSchemaDBName = Nothing
+                            , -- TODO: The existing foreign key syntax for
+                              -- UnboundForeignDef is not sufficiently rich to
+                              -- allow specifying the schema of the foreign
+                              -- relation. We need to add the ability to parse
+                              -- schema=foo directives inline for foreign keys
+                              -- and insert those values here.
+                              foreignRefSchemaDBName =
+                                Nothing
                             , foreignConstraintNameHaskell =
                                 constraintName
                             , foreignConstraintNameDBName =
