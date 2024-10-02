@@ -868,7 +868,7 @@ getColumns getter def cols = do
                $ groupBy ((==) `on` fst) rows
     processColumns =
         CL.mapM $ \x'@((PersistText cname) : _) -> do
-            col <- liftIO $ getColumn getter (getEntityDBName def) x' (Map.lookup cname refMap)
+            col <- liftIO $ getColumn getter (getEntityDBName def) (getEntitySchema def) x' (Map.lookup cname refMap)
             pure $ case col of
                 Left e -> Left e
                 Right c -> Right $ Left c
@@ -926,18 +926,22 @@ getAlters defs def (c1, u1) (c2, u2) =
 getColumn
     :: (Text -> IO Statement)
     -> EntityNameDB
+    -> Maybe SchemaNameDB
     -> [PersistValue]
     -> Maybe (EntityNameDB, ConstraintNameDB)
     -> IO (Either Text Column)
-getColumn getter tableName' [ PersistText columnName
-                            , PersistText isNullable
-                            , PersistText typeName
-                            , defaultValue
-                            , generationExpression
-                            , numericPrecision
-                            , numericScale
-                            , maxlen
-                            ] refName_ = runExceptT $ do
+getColumn getter
+          tableName'
+          schemaName'
+          [ PersistText columnName
+          , PersistText isNullable
+          , PersistText typeName
+          , defaultValue
+          , generationExpression
+          , numericPrecision
+          , numericScale
+          , maxlen
+          ] refName_ = runExceptT $ do
     defaultValue' <-
         case defaultValue of
             PersistNull ->
@@ -1021,9 +1025,9 @@ getColumn getter tableName' [ PersistText columnName
         -> IO (Maybe (EntityNameDB, Maybe SchemaNameDB, ConstraintNameDB, Text, Text))
     getRef cname (_, refName') = do
         let sql = T.concat
-                -- TODO @curran: select table schema
                 [ "SELECT DISTINCT "
                 , "ccu.table_name, "
+                , "ccu.table_schema, "
                 , "tc.constraint_name, "
                 , "rc.update_rule, "
                 , "rc.delete_rule "
@@ -1037,6 +1041,7 @@ getColumn getter tableName' [ PersistText columnName
                 , "WHERE tc.constraint_type='FOREIGN KEY' "
                 , "AND kcu.ordinal_position=1 "
                 , "AND kcu.table_name=? "
+                , "AND kcu.table_schema=? "
                 , "AND kcu.column_name=? "
                 , "AND tc.constraint_name=?"
                 ]
@@ -1045,6 +1050,7 @@ getColumn getter tableName' [ PersistText columnName
             with
                 (stmtQuery stmt
                     [ PersistText $ unEntityNameDB tableName'
+                    , PersistText $ fromMaybe "public" $ unSchemaNameDB <$> schemaName'
                     , PersistText $ unFieldNameDB cname
                     , PersistText $ unConstraintNameDB refName'
                     ]
@@ -1108,7 +1114,7 @@ getColumn getter tableName' [ PersistText columnName
         , " Specify the values as numeric(total_digits, digits_after_decimal_place)."
         ]
 
-getColumn _ _ columnName _ =
+getColumn _ _ _ columnName _ =
     return $ Left $ T.pack $ "Invalid result from information_schema: " ++ show columnName
 
 -- | Intelligent comparison of SQL types, to account for SqlInt32 vs SqlOther integer
