@@ -258,7 +258,7 @@ Bicycle -- | this is a bike
         baz
     deriving Eq
 -- | This is a Car
-Car
+Car schema=transportation
     -- | the make of the Car
     make String
     -- | the model of the Car
@@ -284,8 +284,13 @@ Car
 
         it "should parse the `entityAttrs` field" $ do
             entityAttrs (unboundEntityDef bicycle) `shouldBe` ["-- | this is a bike"]
-            entityAttrs (unboundEntityDef car) `shouldBe` []
+            entityAttrs (unboundEntityDef car) `shouldBe` ["schema=transportation"]
             entityAttrs (unboundEntityDef vehicle) `shouldBe` []
+
+        it "should parse the `entitySchema` field" $ do
+            entitySchema (unboundEntityDef bicycle) `shouldBe` Nothing
+            entitySchema (unboundEntityDef car) `shouldBe` (Just $ SchemaNameDB "transportation")
+            entitySchema (unboundEntityDef vehicle) `shouldBe` Nothing
 
         it "should parse the `unboundEntityFields` field" $ do
             let simplifyField field =
@@ -332,6 +337,7 @@ Notification
                 [ ForeignDef
                     { foreignRefTableHaskell = EntityNameHS "User"
                     , foreignRefTableDBName = EntityNameDB "user"
+                    , foreignRefSchemaDBName = Nothing
                     , foreignConstraintNameHaskell = ConstraintNameHS "fk_noti_user"
                     , foreignConstraintNameDBName = ConstraintNameDB "notificationfk_noti_user"
                     , foreignFieldCascade = FieldCascade Nothing Nothing
