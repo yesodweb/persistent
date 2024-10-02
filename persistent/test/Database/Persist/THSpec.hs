@@ -85,7 +85,7 @@ Person json
     address Address
     deriving Show Eq
 
-HasSimpleCascadeRef
+HasSimpleCascadeRef schema=cascade
     person PersonId OnDeleteCascade
     deriving Show Eq
 
@@ -346,7 +346,7 @@ spec = describe "THSpec" $ do
                                     , fieldGenerated = Nothing
                                     , fieldIsImplicitIdColumn = True
                                     }
-                            , entityAttrs = []
+                            , entityAttrs = ["schema=cascade"]
                             , entityFields =
                                 [ FieldDef
                                     { fieldHaskell = FieldNameHS "person"
@@ -371,7 +371,7 @@ spec = describe "THSpec" $ do
                             , entityExtra = mempty
                             , entitySum = False
                             , entityComments = Nothing
-                            , entitySchema = Nothing
+                            , entitySchema = Just $ SchemaNameDB "cascade"
                             }
         it "has the cascade on the field def" $ do
             fieldCascade subject `shouldBe` expected
