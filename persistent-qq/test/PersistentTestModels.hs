@@ -110,10 +110,16 @@ share
     ~no Int
     def Int
 
+  PetAnimal schema=animals
+    ownerId PersonId
+    name Text
 |]
 
 deriving instance Show (BackendKey backend) => Show (PetGeneric backend)
 deriving instance Eq (BackendKey backend) => Eq (PetGeneric backend)
+
+deriving instance Show (BackendKey backend) => Show (PetAnimalGeneric backend)
+deriving instance Eq (BackendKey backend) => Eq (PetAnimalGeneric backend)
 
 share [ mkPersist sqlSettings { mpsPrefixFields = False, mpsGeneric = True }
       , mkMigrate "noPrefixMigrate"
@@ -178,3 +184,4 @@ cleanDB = do
   deleteWhere ([] :: [Filter (OutdoorPetGeneric backend)])
   deleteWhere ([] :: [Filter (UserPTGeneric backend)])
   deleteWhere ([] :: [Filter (EmailPTGeneric backend)])
+  deleteWhere ([] :: [Filter (PetAnimalGeneric backend)])
