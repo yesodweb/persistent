@@ -85,7 +85,7 @@ ParentExplicit
 
 ChildExplicit
     name Text
-    Foreign ParentExplicit OnDeleteCascade OnUpdateCascade fkparent name
+    Foreign ParentExplicit schema=kids OnDeleteCascade OnUpdateCascade fkparent name
 |]
 
 spec :: Spec
@@ -101,6 +101,15 @@ spec = describe "ForeignRefSpec" $ do
 
     it "should compile" $ do
         True `shouldBe` True
+
+    describe "ForeignSchemaName" $ do
+        let
+            [childForeignDef] =
+                entityForeigns $ entityDef $ Proxy @ChildExplicit
+        it "should have a schema name defined" $ do
+            (foreignRefSchemaDBName childForeignDef)
+                `shouldBe`
+                    (Just $ SchemaNameDB "kids")
 
     describe "ForeignPrimarySource" $ do
         let
