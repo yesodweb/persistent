@@ -49,6 +49,7 @@ mkPersist sqlSettings [persistLowerCase|
 
 HasCustomName sql=custom_name
     name Text
+    Primary name
 
 ForeignTarget
     name Text
@@ -79,13 +80,13 @@ ChildImplicit
     name Text
     parent ParentImplicitId OnDeleteCascade OnUpdateCascade
 
-ParentExplicit
+ParentExplicit schema=adult
     name Text
     Primary name
 
 ChildExplicit
     name Text
-    Foreign ParentExplicit schema=kids OnDeleteCascade OnUpdateCascade fkparent name
+    Foreign ParentExplicit OnDeleteCascade OnUpdateCascade fkparent name
 |]
 
 spec :: Spec
@@ -101,15 +102,6 @@ spec = describe "ForeignRefSpec" $ do
 
     it "should compile" $ do
         True `shouldBe` True
-
-    describe "ForeignSchemaName" $ do
-        let
-            [childForeignDef] =
-                entityForeigns $ entityDef $ Proxy @ChildExplicit
-        it "should have a schema name defined" $ do
-            (foreignRefSchemaDBName childForeignDef)
-                `shouldBe`
-                    (Just $ SchemaNameDB "kids")
 
     describe "ForeignPrimarySource" $ do
         let
@@ -185,3 +177,12 @@ spec = describe "ForeignRefSpec" $ do
                             , "got: "
                             , show as
                             ]
+
+    describe "Foreign Schema Name" $ do
+        let
+            [childForeignDef] =
+                entityForeigns $ entityDef $ Proxy @ChildExplicit
+        it "should have the correct schema name" $ do
+            (foreignRefSchemaDBName childForeignDef)
+                `shouldBe`
+                    (Just $ SchemaNameDB "adult")

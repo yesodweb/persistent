@@ -508,7 +508,7 @@ The above example is a "simple" foreign key. It refers directly to the Id column
 A pseudo formal syntax for @Foreign@ is:
 
 @
-Foreign $(TargetEntity) $(schema name) [$(cascade-actions)] $(constraint-name) $(columns) [ $(references) ]
+Foreign $(TargetEntity) [$(cascade-actions)] $(constraint-name) $(columns) [ $(references) ]
 
 columns := column0 [column1 column2 .. columnX]
 references := References $(target-columns)
@@ -553,12 +553,6 @@ We can specify delete/cascade behavior directly after the target table.
 @
 
 Now, if the email is deleted or updated, the user will be deleted or updated to match.
-
-Schema names can be specified between the target table and the constraint name.
-
-@
-    Foreign Email schema=some_schema OnDeleteCascade fk_user_email emailFirstPart emailSecondPart
-@
 
 === Non-Primary Key References
 
