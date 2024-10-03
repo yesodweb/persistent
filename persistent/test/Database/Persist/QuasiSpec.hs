@@ -251,14 +251,14 @@ spec = describe "Quasi" $ do
     describe "parse" $ do
         let subject =
                 [st|
-Bicycle -- | this is a bike
+Bicycle schema=transportation -- | this is a bike
     brand String -- | the brand of the bike
     ExtraBike
         foo bar  -- | this is a foo bar
         baz
     deriving Eq
 -- | This is a Car
-Car schema=transportation
+Car sql=auto schema=transportation 
     -- | the make of the Car
     make String
     -- | the model of the Car
@@ -279,16 +279,16 @@ Car schema=transportation
 
         it "should parse the `entityDB` field" $ do
             entityDB (unboundEntityDef bicycle) `shouldBe` EntityNameDB "bicycle"
-            entityDB (unboundEntityDef car) `shouldBe` EntityNameDB "car"
+            entityDB (unboundEntityDef car) `shouldBe` EntityNameDB "auto"
             entityDB (unboundEntityDef vehicle) `shouldBe` EntityNameDB "vehicle"
 
         it "should parse the `entityAttrs` field" $ do
-            entityAttrs (unboundEntityDef bicycle) `shouldBe` ["-- | this is a bike"]
-            entityAttrs (unboundEntityDef car) `shouldBe` ["schema=transportation"]
+            entityAttrs (unboundEntityDef bicycle) `shouldBe` ["schema=transportation", "-- | this is a bike"]
+            entityAttrs (unboundEntityDef car) `shouldBe` ["sql=auto", "schema=transportation"]
             entityAttrs (unboundEntityDef vehicle) `shouldBe` []
 
         it "should parse the `entitySchema` field" $ do
-            entitySchema (unboundEntityDef bicycle) `shouldBe` Nothing
+            entitySchema (unboundEntityDef bicycle) `shouldBe` (Just $ SchemaNameDB "transportation")
             entitySchema (unboundEntityDef car) `shouldBe` (Just $ SchemaNameDB "transportation")
             entitySchema (unboundEntityDef vehicle) `shouldBe` Nothing
 
@@ -330,17 +330,17 @@ Notification
     sentToFirst     Text
     sentToSecond    Text
 
-    Foreign User fk_noti_user sentToFirst sentToSecond References emailFirst emailSecond
+    Foreign User schema=some_schema OnDeleteCascade fk_noti_user sentToFirst sentToSecond References emailFirst emailSecond
 |]
             unboundForeignDefs user `shouldBe` []
             map unboundForeignDef (unboundForeignDefs notification) `shouldBe`
                 [ ForeignDef
                     { foreignRefTableHaskell = EntityNameHS "User"
                     , foreignRefTableDBName = EntityNameDB "user"
-                    , foreignRefSchemaDBName = Nothing
+                    , foreignRefSchemaDBName = Just $ SchemaNameDB "some_schema"
                     , foreignConstraintNameHaskell = ConstraintNameHS "fk_noti_user"
                     , foreignConstraintNameDBName = ConstraintNameDB "notificationfk_noti_user"
-                    , foreignFieldCascade = FieldCascade Nothing Nothing
+                    , foreignFieldCascade = FieldCascade {fcOnUpdate = Nothing, fcOnDelete = Just Cascade}
                     , foreignFields =
                         []
                         -- the foreign fields are not set yet in an unbound
@@ -587,7 +587,7 @@ Notification
                 let [_user, notification] = parse (setPsUseSnakeCaseForiegnKeys lowerCaseSettings) definitions
                 mapM (evaluate . unboundForeignFields) (unboundForeignDefs notification)
                     `shouldErrorWithMessage`
-                        "invalid foreign key constraint on table[\"Notification\"] expecting a lower case constraint name or a cascading action xs=[]"
+                        "invalid foreign key constraint on table[\"Notification\"] expecting a lower case constraint name, schema name, or a cascading action xs=[]"
 
             it "should error when foreign fields not provided" $ do
                 let definitions = [st|

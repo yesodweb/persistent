@@ -59,7 +59,7 @@ import Data.List (find, foldl')
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NEL
 import qualified Data.Map as M
-import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
+import Data.Maybe (fromMaybe, isNothing, isJust, listToMaybe, mapMaybe)
 import Data.Monoid (mappend)
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -1382,11 +1382,11 @@ takeForeign ps entityName = takeRefTable
     takeRefTable [] =
         error $ errorPrefix ++ " expecting foreign table name"
     takeRefTable (refTableName:restLine) =
-        go restLine Nothing Nothing
+        go restLine Nothing Nothing Nothing
       where
-        go :: [Text] -> Maybe CascadeAction -> Maybe CascadeAction -> UnboundForeignDef
-        go (constraintNameText:rest) onDelete onUpdate
-            | not (T.null constraintNameText) && isLower (T.head constraintNameText) =
+        go :: [Text] -> Maybe SchemaNameDB -> Maybe CascadeAction -> Maybe CascadeAction -> UnboundForeignDef
+        go (constraintNameText:rest) schemaName onDelete onUpdate
+            | isConstraintName =
                 UnboundForeignDef
                     { unboundForeignFields =
                         either error id $ mkUnboundForeignFieldList foreignFields parentFields
@@ -1418,6 +1418,10 @@ takeForeign ps entityName = takeRefTable
                             }
                     }
           where
+            isConstraintName = not (T.null constraintNameText)
+              && isLower (T.head constraintNameText)
+              && isNothing (parseSchemaName constraintNameText)
+
             constraintName =
                 ConstraintNameHS constraintNameText
 
@@ -1439,21 +1443,30 @@ takeForeign ps entityName = takeRefTable
                                     , show plen, " parent fields"
                                     ]
 
-        go ((parseCascadeAction CascadeDelete -> Just cascadingAction) : rest) onDelete' onUpdate =
+        go ((parseSchemaName -> Just schemaName) : rest) schemaName' onDelete onUpdate
+            | isJust schemaName' = error $ errorPrefix ++ "found more than one schema definition"
+            | otherwise = go rest (Just schemaName) onDelete onUpdate
+
+        go ((parseCascadeAction CascadeDelete -> Just cascadingAction) : rest) schemaName onDelete' onUpdate =
             case onDelete' of
                 Nothing ->
-                    go rest (Just cascadingAction) onUpdate
+                    go rest schemaName (Just cascadingAction) onUpdate
                 Just _ ->
                     error $ errorPrefix ++ "found more than one OnDelete actions"
 
-        go ((parseCascadeAction CascadeUpdate -> Just cascadingAction) : rest) onDelete onUpdate' =
+        go ((parseCascadeAction CascadeUpdate -> Just cascadingAction) : rest) schemaName onDelete onUpdate' =
             case onUpdate' of
                 Nothing ->
-                    go rest onDelete (Just cascadingAction)
+                    go rest schemaName onDelete (Just cascadingAction)
                 Just _ ->
                     error $ errorPrefix ++ "found more than one OnUpdate actions"
 
-        go xs _ _ = error $ errorPrefix ++ "expecting a lower case constraint name or a cascading action xs=" ++ show xs
+        go xs _ _ _ = error $ errorPrefix ++ "expecting a lower case constraint name, schema name, or a cascading action xs=" ++ show xs
+
+parseSchemaName :: Text -> Maybe SchemaNameDB
+parseSchemaName schemaNameText
+  | ["", schemaName] <- T.splitOn "schema=" schemaNameText = Just $ SchemaNameDB schemaName
+  | otherwise = Nothing
 
 toFKConstraintNameDB :: PersistSettings -> EntityNameHS -> ConstraintNameHS -> ConstraintNameDB
 toFKConstraintNameDB ps entityName constraintName =
