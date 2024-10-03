@@ -39,6 +39,7 @@ data ColumnReference = ColumnReference
     -- ^ The table name that the
     --
     -- @since 2.11.0.0
+    , crSchemaName :: !(Maybe SchemaNameDB)
     , crConstraintName :: !ConstraintNameDB
     -- ^ The name of the foreign key constraint.
     --
@@ -137,4 +138,3 @@ defaultConnectionPoolConfig = ConnectionPoolConfig 1 600 10
 -- processing).
 newtype Single a = Single {unSingle :: a}
     deriving (Eq, Ord, Show, Read)
-
