@@ -186,11 +186,21 @@ User sql=big_user_table
 This will alter the generated SQL to be:
 
 @
-CREATE TABEL big_user_table (
+CREATE TABLE big_user_table (
     id      SERIAL PRIMARY KEY,
     name    VARCHAR,
     age     INT
 );
+@
+
+= Table Schema
+
+You can use a @schema=some_schema@ annotation to specify the table's schema name.
+This can be placed before or after the entity's @sql=custom@ annotation, if it has one.
+
+@
+Foo schema=bar
+    baz        Int
 @
 
 = Customizing Types/Tables
