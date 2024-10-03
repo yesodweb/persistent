@@ -626,14 +626,16 @@ withStmt' conn query vals =
 
 doesTableExist :: (Text -> IO Statement)
                -> EntityNameDB
+               -> (Maybe SchemaNameDB)
                -> IO Bool
-doesTableExist getter (EntityNameDB name) = do
+doesTableExist getter (EntityNameDB name) mSchema = do
     stmt <- getter sql
     with (stmtQuery stmt vals) (\src -> runConduit $ src .| start)
   where
-    sql = "SELECT COUNT(*) FROM pg_catalog.pg_tables WHERE schemaname != 'pg_catalog'"
-          <> " AND schemaname != 'information_schema' AND tablename=?"
-    vals = [PersistText name]
+    schema = maybe "public" escapeS mSchema
+    sql = "SELECT COUNT(*) FROM pg_catalog.pg_tables "
+          <> "WHERE tablename=? AND schemaname=?"
+    vals = [PersistText name, PersistText schema]
 
     start = await >>= maybe (error "No results when checking doesTableExist") start'
     start' [PersistInt64 0] = finish False
@@ -651,7 +653,7 @@ migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ do
         ([], old'') -> do
             exists' <-
                 if null old
-                    then doesTableExist getter name
+                    then doesTableExist getter name schema
                     else return True
             return $ Right $ migrationText exists' old''
         (errs, _) -> return $ Left errs
@@ -714,7 +716,13 @@ mkForeignAlt entity fdef = pure $ AlterColumn tableName_ schemaName_ addReferenc
 
 addTable :: [Column] -> EntityDef -> AlterDB
 addTable cols entity =
-    AddTable $ T.concat
+    AddTable $ T.concat $
+        case schema of
+            Nothing -> stmt
+            -- Lower case e: see Database.Persist.Sql.Migration
+            Just s -> "CREATe SCHEMA IF NOT EXISTS " <> s <> ";\n" : stmt
+  where
+    stmt =
         -- Lower case e: see Database.Persist.Sql.Migration
         [ "CREATe TABLE " -- DO NOT FIX THE CAPITALIZATION!
         , entityIdentifier entity
@@ -724,7 +732,6 @@ addTable cols entity =
         , T.intercalate "," $ map showColumn nonIdCols
         , ")"
         ]
-  where
     nonIdCols =
         case entityPrimary entity of
             Just _ ->
@@ -738,6 +745,8 @@ addTable cols entity =
 
     name =
         getEntityDBName entity
+    schema =
+        escapeS <$> getEntitySchema entity
     idtxt =
         case getEntityId entity of
             EntityIdNaturalKey pdef ->
