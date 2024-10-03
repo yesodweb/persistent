@@ -36,4 +36,5 @@ specsWith runConn = describe "entity with non-null schema" $
         Just schemaEntity <- get x
         rawFoo  <- rawSql "SELECT foo FROM foo.schema_entity" []
         liftIO $ rawFoo @?= [Single (42 :: Int)]
+        liftIO $ schemaEntityFoo schemaEntity @== 42
         return ()
