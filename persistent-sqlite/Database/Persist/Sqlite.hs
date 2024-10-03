@@ -881,8 +881,9 @@ checkForeignKeys = rawQuery query [] .| C.mapM parse
 
     query = T.unlines
         [ "SELECT origin.rowid, origin.\"table\", group_concat(foreignkeys.\"from\")"
-        , "FROM pragma_foreign_key_check() AS origin"
-        , "INNER JOIN pragma_foreign_key_list(origin.\"table\") AS foreignkeys"
+        , "FROM pragma_database_list() as databases"
+        , "INNER JOIN pragma_foreign_key_check(null, databases.name) AS origin"
+        , "INNER JOIN pragma_foreign_key_list(origin.\"table\", databases.name) AS foreignkeys"
         , "ON origin.fkid = foreignkeys.id AND origin.parent = foreignkeys.\"table\""
         , "GROUP BY origin.rowid"
         ]
