@@ -44,6 +44,7 @@ import qualified RawSqlTest
 import qualified ReadWriteTest
 import qualified Recursive
 import qualified RenameTest
+import qualified SchemaTest
 import qualified SumTypeTest
 import qualified TransactionLevelTest
 import qualified TypeLitFieldDefsTest
@@ -176,6 +177,7 @@ main = do
             , MigrationColumnLengthTest.migration
             , TransactionLevelTest.migration
             , LongIdentifierTest.migration
+            , SchemaTest.migration
             ]
         PersistentTest.cleanDB
         ForeignKey.cleanDB
@@ -244,6 +246,7 @@ main = do
         MigrationTest.specsWith db
         LongIdentifierTest.specsWith db
         GeneratedColumnTestSQL.specsWith db
+        SchemaTest.specsWith db
 
         it "issue #328" $ asIO $ runSqliteInfo (mkSqliteConnectionInfo ":memory:") $ do
             void $ runMigrationSilent migrateAll
