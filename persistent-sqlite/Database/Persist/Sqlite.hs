@@ -659,8 +659,15 @@ sqlColumn noRef (Column name isNull typ def gen _cn _maxLen ref) = T.concat
     , mayGenerated gen
     , case ref of
         Nothing -> ""
-        Just ColumnReference {crTableName=table, crSchemaName=schema, crFieldCascade=cascadeOpts} ->
-          if noRef then "" else " REFERENCES " <> escapeES table schema
+        -- This foreign key constraint is only legitimate if it is a reference
+        -- within the same schema.
+        Just ColumnReference {crTableName=table, crFieldCascade=cascadeOpts} ->
+            if noRef
+                then ""
+                -- This foreign key constraint is only legitimate if it is a reference
+                -- within the same schema. It's a syntax error in SQLite to use a
+                -- dot-qualified name here, so we just escape the table name.
+                else " REFERENCES " <> escapeE table
             <> onDelete cascadeOpts <> onUpdate cascadeOpts
     ]
   where
@@ -850,6 +857,7 @@ data ForeignKeyViolation = ForeignKeyViolation
     , foreignKeyRowId :: Int64 -- ^ The ROWID of the row with the violated foreign key constraint
     } deriving (Eq, Ord, Show)
 
+-- TODO: add database qualifier here
 -- | Outputs all (if any) the violated foreign key constraints in the database.
 --
 -- The main use is to validate that no foreign key constraints were
