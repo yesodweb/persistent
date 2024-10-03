@@ -310,7 +310,7 @@ wrapConnectionInfo connInfo conn logFunc = do
             , connCommit = helper "COMMIT"
             , connRollback = ignoreExceptions . helper "ROLLBACK"
             , connEscapeFieldName = escape . unFieldNameDB
-            , connEscapeTableName = escape . unEntityNameDB . getEntityDBName
+            , connEscapeTableName = entityIdentifier
             , connEscapeRawName = escape
             , connNoLimit = "LIMIT -1"
             , connRDBMS = "sqlite"
@@ -456,7 +456,7 @@ migrate'
 migrate' allDefs getter val = do
     let (cols, uniqs, fdefs) = sqliteMkColumns allDefs val
     let newSql = mkCreateTable False def (filter (not . safeToRemove val . cName) cols, uniqs, fdefs)
-    stmt <- getter "SELECT sql FROM sqlite_master WHERE type='table' AND name=?"
+    stmt <- getter $ "SELECT sql FROM " <> sqliteMaster <> " WHERE type='table' AND name=?"
     oldSql' <- with (stmtQuery stmt [PersistText $ unEntityNameDB table])
       (\src -> runConduit $ src .| go)
     case oldSql' of
@@ -470,6 +470,8 @@ migrate' allDefs getter val = do
   where
     def = val
     table = getEntityDBName def
+    schema = getEntitySchema def
+    sqliteMaster = maybe "sqlite_master" (\schema' -> escapeS schema' <> ".sqlite_master") schema
     go = do
         x <- CL.head
         case x of
@@ -501,7 +503,7 @@ mockMigration mig = do
                 , connCommit = helper "COMMIT"
                 , connRollback = ignoreExceptions . helper "ROLLBACK"
                 , connEscapeFieldName = escape . unFieldNameDB
-                , connEscapeTableName = escape . unEntityNameDB . getEntityDBName
+                , connEscapeTableName = entityIdentifier
                 , connEscapeRawName = escape
                 , connNoLimit = "LIMIT -1"
                 , connRDBMS = "sqlite"

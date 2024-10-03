@@ -11,6 +11,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -152,6 +153,9 @@ main :: IO ()
 main = do
     handle (\(_ :: IOException) -> return ())
         $ removeFile $ fromText sqlite_database_file
+    handle (\(_ :: IOException) -> return ())
+        $ removeFile $ fromText sqlite_foo_database_file
+    runConn $ rawSql @(Single Int64) ("attach '" <> sqlite_foo_database_file <> "' as foo") []
 
     runConn $ do
         mapM_ setup
@@ -177,6 +181,7 @@ main = do
             , MigrationColumnLengthTest.migration
             , TransactionLevelTest.migration
             , LongIdentifierTest.migration
+            , SchemaTest.migration
             , SchemaTest.migration
             ]
         PersistentTest.cleanDB

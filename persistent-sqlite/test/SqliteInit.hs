@@ -16,6 +16,7 @@ module SqliteInit (
   , db
   , sqlite_database
   , sqlite_database_file
+  , sqlite_foo_database_file
   , BackendKey(..)
   , GenerateKey(..)
 
@@ -90,6 +91,9 @@ type BackendMonad = SqlBackend
 sqlite_database_file :: Text
 sqlite_database_file = "testdb.sqlite3"
 
+sqlite_foo_database_file :: Text
+sqlite_foo_database_file = "testdb-foo.sqlite3"
+
 sqlite_database :: SqliteConnectionInfo
 sqlite_database = mkSqliteConnectionInfo sqlite_database_file
 
@@ -104,4 +108,3 @@ runConn f = do
 db :: SqlPersistT (LoggingT (ResourceT IO)) () -> Assertion
 db actions = do
     runResourceT $ runConn $ actions >> transactionUndo
-

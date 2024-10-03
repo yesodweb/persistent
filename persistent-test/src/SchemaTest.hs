@@ -23,8 +23,8 @@ cleanDB
 cleanDB = deleteWhere ([] :: [Filter (SchemaEntityGeneric backend)])
 
 specsWith
-    :: Runner backend m
-    => RunDb backend m
+    :: Runner SqlBackend m
+    => RunDb SqlBackend m
     -> Spec
 specsWith runConn = describe "entity with non-null schema" $
     it "inserts and selects work as expected" $ asIO $ runConn $ do
@@ -33,5 +33,7 @@ specsWith runConn = describe "entity with non-null schema" $
             SchemaEntity
                 { schemaEntityFoo = 42
                 }
-        Just _ <- get x
+        Just schemaEntity <- get x
+        rawFoo  <- rawSql "SELECT foo FROM foo.schema_entity" []
+        liftIO $ rawFoo @?= [Single (42 :: Int)]
         return ()
