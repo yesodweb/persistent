@@ -681,7 +681,11 @@ sqlForeign fdef = T.concat $
     , " FOREIGN KEY("
     , T.intercalate "," $ map (escapeF . snd. fst) $ foreignFields fdef
     , ") REFERENCES "
-    , escapeES (foreignRefTableDBName fdef) (foreignRefSchemaDBName fdef)
+    , -- It's a syntax error in SQLite to use a dot-qualified table name.
+      -- In general, it's not possible for SQLite to maintain foreign key
+      -- constraints across databases (which Persistent calls "schemas").
+      -- So we omit the schema here.
+      escapeE (foreignRefTableDBName fdef)
     , "("
     , T.intercalate "," $ map (escapeF . snd . snd) $ foreignFields fdef
     , ")"
