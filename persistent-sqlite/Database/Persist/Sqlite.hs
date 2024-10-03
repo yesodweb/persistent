@@ -369,7 +369,7 @@ insertSql' ent vals =
           ISRManyKeys sql vals
             where sql = T.concat
                     [ "INSERT INTO "
-                    , escapeE $ getEntityDBName ent
+                    , entityIdentifier ent
                     , "("
                     , T.intercalate "," $ map (escapeF . fieldDB) cols
                     , ") VALUES("
@@ -383,12 +383,12 @@ insertSql' ent vals =
                   [ "SELECT "
                   , escapeF $ fieldDB fd
                   , " FROM "
-                  , escapeE $ getEntityDBName ent
+                  , entityIdentifier ent
                   , " WHERE _ROWID_=last_insert_rowid()"
                   ]
               ins = T.concat
                   [ "INSERT INTO "
-                  , escapeE $ getEntityDBName ent
+                  , entityIdentifier ent
                   , if null cols
                         then " VALUES(null)"
                         else T.concat
@@ -539,7 +539,7 @@ getCopyTable :: [EntityDef]
              -> EntityDef
              -> IO [(Bool, Text)]
 getCopyTable allDefs getter def = do
-    stmt <- getter $ T.concat [ "PRAGMA table_info(", escapeE table, ")" ]
+    stmt <- getter $ T.concat [ "PRAGMA table_info(", entityIdentifier def, ")" ]
     oldCols' <- with (stmtQuery stmt []) (\src -> runConduit $ src .| getCols)
     let oldCols = map FieldNameDB oldCols'
     let newCols = filter (not . safeToRemove def) $ map cName cols
@@ -561,30 +561,32 @@ getCopyTable allDefs getter def = do
                 return $ name : names
             Just y -> error $ "Invalid result from PRAGMA table_info: " ++ show y
     table = getEntityDBName def
+    tableIdentifier = entityIdentifier def
     tableTmp = EntityNameDB $ unEntityNameDB table <> "_backup"
+    tableTmpIdentifier = escapeES tableTmp (getEntitySchema def)
     (cols, uniqs, fdef) = sqliteMkColumns allDefs def
     cols' = filter (not . safeToRemove def . cName) cols
     newSql = mkCreateTable False def (cols', uniqs, fdef)
     tmpSql = mkCreateTable True (setEntityDBName tableTmp def) (cols', uniqs, [])
-    dropTmp = "DROP TABLE " <> escapeE tableTmp
-    dropOld = "DROP TABLE " <> escapeE table
+    dropTmp = "DROP TABLE " <> tableTmpIdentifier
+    dropOld = "DROP TABLE " <> tableIdentifier
     copyToTemp common = T.concat
         [ "INSERT INTO "
-        , escapeE tableTmp
+        , tableTmpIdentifier
         , "("
         , T.intercalate "," $ map escapeF common
         , ") SELECT "
         , T.intercalate "," $ map escapeF common
         , " FROM "
-        , escapeE table
+        , tableIdentifier
         ]
     copyToFinal newCols = T.concat
         [ "INSERT INTO "
-        , escapeE table
+        , tableIdentifier
         , " SELECT "
         , T.intercalate "," $ map escapeF newCols
         , " FROM "
-        , escapeE tableTmp
+        , tableTmpIdentifier
         ]
 
 mkCreateTable :: Bool -> EntityDef -> ([Column], [UniqueDef], [ForeignDef]) -> Text
@@ -595,7 +597,7 @@ mkCreateTable isTemp entity (cols, uniqs, fdefs) =
         [ "CREATE"
         , if isTemp then " TEMP" else ""
         , " TABLE "
-        , escapeE $ getEntityDBName entity
+        , entityIdentifier entity
         , "("
         ]
 
@@ -646,8 +648,8 @@ sqlColumn noRef (Column name isNull typ def gen _cn _maxLen ref) = T.concat
     , mayGenerated gen
     , case ref of
         Nothing -> ""
-        Just ColumnReference {crTableName=table, crFieldCascade=cascadeOpts} ->
-          if noRef then "" else " REFERENCES " <> escapeE table
+        Just ColumnReference {crTableName=table, crSchemaName=schema, crFieldCascade=cascadeOpts} ->
+          if noRef then "" else " REFERENCES " <> escapeES table schema
             <> onDelete cascadeOpts <> onUpdate cascadeOpts
     ]
   where
@@ -661,7 +663,7 @@ sqlForeign fdef = T.concat $
     , " FOREIGN KEY("
     , T.intercalate "," $ map (escapeF . snd. fst) $ foreignFields fdef
     , ") REFERENCES "
-    , escapeE $ foreignRefTableDBName fdef
+    , escapeES (foreignRefTableDBName fdef) (foreignRefSchemaDBName fdef)
     , "("
     , T.intercalate "," $ map (escapeF . snd . snd) $ foreignFields fdef
     , ")"
@@ -695,6 +697,13 @@ escapeC = escapeWith escape
 escapeE :: EntityNameDB -> Text
 escapeE = escapeWith escape
 
+escapeS :: SchemaNameDB -> Text
+escapeS = escapeWith escape
+
+escapeES :: EntityNameDB -> Maybe SchemaNameDB -> Text
+escapeES entity Nothing = escapeE entity
+escapeES entity (Just schema) = escapeS schema <> "." <> escapeE entity
+
 escapeF :: FieldNameDB -> Text
 escapeF = escapeWith escape
 
@@ -705,6 +714,9 @@ escape s =
     q = T.singleton '"'
     go '"' = "\"\""
     go c = T.singleton c
+
+entityIdentifier :: EntityDef -> Text
+entityIdentifier entity = escapeES (getEntityDBName entity) (getEntitySchema entity)
 
 putManySql :: EntityDef -> Int -> Text
 putManySql ent n = putManySql' conflictColumns (toList fields) ent n
@@ -724,14 +736,13 @@ putManySql' conflictColumns fields ent n = q
     fieldDbToText = escapeF . fieldDB
     mkAssignment f = T.concat [f, "=EXCLUDED.", f]
 
-    table = escapeE . getEntityDBName $ ent
     columns = Util.commaSeparated $ map fieldDbToText fields
     placeholders = map (const "?") fields
     updates = map (mkAssignment . fieldDbToText) fields
 
     q = T.concat
         [ "INSERT INTO "
-        , table
+        , entityIdentifier ent
         , Util.parenWrapped columns
         , " VALUES "
         , Util.commaSeparated . replicate n
