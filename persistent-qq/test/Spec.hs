@@ -115,6 +115,21 @@ spec = describe "persistent-qq" $ do
         liftIO $ ret1 @?= [Entity p1k p1]
         liftIO $ ret2 @?= [Entity (RFOKey $ unPersonKey p1k) (RFO p1)]
 
+    it "sqlQQ/entity in schema" $ db $ do
+        let person = Person "Zacarias" 93 Nothing
+        personKey <- insert person
+        let pet = PetAnimal personKey "Fluffy"
+        petKey <- insert pet
+        let runQueryQuoted, runQueryRaw
+              :: (RawSql a, Functor m, MonadIO m)
+              => ReaderT SqlBackend m [a]
+            runQueryQuoted = [sqlQQ| SELECT ?? FROM ^{PetAnimal} |]
+            runQueryRaw = [sqlQQ| SELECT ?? FROM animals.pet_animal |]
+        retQuoted <- runQueryQuoted
+        retRaw <- runQueryRaw
+        liftIO $ retQuoted @?= [Entity petKey pet]
+        liftIO $ retRaw @?= [Entity petKey pet]
+
     it "sqlQQ/OUTER JOIN" $ db $ do
         let insert' :: (PersistStore backend, PersistEntity val, PersistEntityBackend val ~ BaseBackend backend, MonadIO m, SafeToInsert val)
                     => val -> ReaderT backend m (Key val, val)
