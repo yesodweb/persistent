@@ -857,7 +857,6 @@ data ForeignKeyViolation = ForeignKeyViolation
     , foreignKeyRowId :: Int64 -- ^ The ROWID of the row with the violated foreign key constraint
     } deriving (Eq, Ord, Show)
 
--- TODO: add database qualifier here
 -- | Outputs all (if any) the violated foreign key constraints in the database.
 --
 -- The main use is to validate that no foreign key constraints were
