@@ -541,7 +541,7 @@ getCopyTable :: [EntityDef]
              -> EntityDef
              -> IO [(Bool, Text)]
 getCopyTable allDefs getter def = do
-    stmt <- getter $ T.concat [ "PRAGMA table_info(", entityIdentifier def, ")" ]
+    stmt <- getter $ T.concat [ "PRAGMA ", tableInfo, "(", escapeE table, ")" ]
     oldCols' <- with (stmtQuery stmt []) (\src -> runConduit $ src .| getCols)
     let oldCols = map FieldNameDB oldCols'
     let newCols = filter (not . safeToRemove def) $ map cName cols
@@ -554,6 +554,9 @@ getCopyTable allDefs getter def = do
            , (False, dropTmp)
            ]
   where
+    tableInfo = case schema of
+        Nothing -> "table_info"
+        Just schema' -> escapeS schema' <> ".table_info"
     getCols = do
         x <- CL.head
         case x of
@@ -563,13 +566,19 @@ getCopyTable allDefs getter def = do
                 return $ name : names
             Just y -> error $ "Invalid result from PRAGMA table_info: " ++ show y
     table = getEntityDBName def
+    schema = getEntitySchema def
     tableIdentifier = entityIdentifier def
-    tableTmp = EntityNameDB $ unEntityNameDB table <> "_backup"
-    tableTmpIdentifier = escapeES tableTmp (getEntitySchema def)
+    -- Temporary tables cannot have qualified names, so we prepend
+    -- the name with the intended schema to provide namespacing.
+    tableTmp =
+        EntityNameDB $ T.intercalate "_" $ catMaybes [unSchemaNameDB <$> schema, Just $ unEntityNameDB table, Just "backup"]
+    tableTmpIdentifier = escapeE tableTmp
     (cols, uniqs, fdef) = sqliteMkColumns allDefs def
     cols' = filter (not . safeToRemove def . cName) cols
     newSql = mkCreateTable False def (cols', uniqs, fdef)
-    tmpSql = mkCreateTable True (setEntityDBName tableTmp def) (cols', uniqs, [])
+    -- Temporary tables cannot have qualified names, so we override
+    -- the schema to 'Nothing' here.
+    tmpSql = mkCreateTable True (setEntitySchema Nothing $ setEntityDBName tableTmp def) (cols', uniqs, [])
     dropTmp = "DROP TABLE " <> tableTmpIdentifier
     dropOld = "DROP TABLE " <> tableIdentifier
     copyToTemp common = T.concat
