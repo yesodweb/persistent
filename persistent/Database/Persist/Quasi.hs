@@ -186,11 +186,21 @@ User sql=big_user_table
 This will alter the generated SQL to be:
 
 @
-CREATE TABEL big_user_table (
+CREATE TABLE big_user_table (
     id      SERIAL PRIMARY KEY,
     name    VARCHAR,
     age     INT
 );
+@
+
+= Table Schema
+
+You can use a @schema=some_schema@ annotation to specify the table's schema name.
+This can be placed before or after the entity's @sql=custom@ annotation, if it has one.
+
+@
+Foo schema=bar
+    baz        Int
 @
 
 = Customizing Types/Tables
@@ -498,7 +508,7 @@ The above example is a "simple" foreign key. It refers directly to the Id column
 A pseudo formal syntax for @Foreign@ is:
 
 @
-Foreign $(TargetEntity) [$(cascade-actions)] $(constraint-name) $(columns) [ $(references) ]
+Foreign $(TargetEntity) $(schema name) [$(cascade-actions)] $(constraint-name) $(columns) [ $(references) ]
 
 columns := column0 [column1 column2 .. columnX]
 references := References $(target-columns)
@@ -543,6 +553,12 @@ We can specify delete/cascade behavior directly after the target table.
 @
 
 Now, if the email is deleted or updated, the user will be deleted or updated to match.
+
+Schema names can be specified between the target table and the constraint name.
+
+@
+    Foreign Email schema=some_schema OnDeleteCascade fk_user_email emailFirstPart emailSecondPart
+@
 
 === Non-Primary Key References
 
