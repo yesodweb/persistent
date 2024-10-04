@@ -71,14 +71,13 @@ import qualified Database.Persist.TH.SharedPrimaryKeySpec as SharedPrimaryKeySpe
 import qualified Database.Persist.TH.SumSpec as SumSpec
 import qualified Database.Persist.TH.ToFromPersistValuesSpec as ToFromPersistValuesSpec
 import qualified Database.Persist.TH.TypeLitFieldDefsSpec as TypeLitFieldDefsSpec
-
 -- test to ensure we can have types ending in Id that don't trash the TH
 -- machinery
 type TextId = Text
 
 share [mkPersistWith  sqlSettings { mpsGeneric = False, mpsDeriveInstances = [''Generic] } [entityDef @JsonEncodingSpec.JsonEncoding Proxy]] [persistUpperCase|
 
-Person json
+Person json schema=some_schema
     name Text
     age Int Maybe
     foo Foo
@@ -507,6 +506,13 @@ spec = describe "THSpec" $ do
         it "has a good safe to insert class instance" $ do
             let proxy = Proxy :: SafeToInsert CustomIdName => Proxy CustomIdName
             proxy `shouldBe` Proxy
+    describe "Entity Schema" $ do
+        let personDef =
+                entityDef (Proxy :: Proxy Person)
+        it "reads the entity schema" $ do
+            (entitySchema personDef)
+                `shouldBe`
+                    (Just $ SchemaNameDB "some_schema")
 
 (&) :: a -> (a -> b) -> b
 x & f = f x

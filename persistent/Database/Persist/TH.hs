@@ -331,11 +331,15 @@ liftAndFixKeys mps emEntities entityMap unboundEnt =
                     $(lift fixForeignNullable)
                 , foreignRefTableDBName =
                     $(lift fixForeignRefTableDBName)
+                , foreignRefSchemaDBName =
+                    $(lift fixForeignRefSchemaDBName)
                 }
             |]
           where
             fixForeignRefTableDBName =
                 getEntityDBName (unboundEntityDef parentDef)
+            fixForeignRefSchemaDBName = 
+                getEntitySchema (unboundEntityDef parentDef)
             foreignFieldNames =
                 case unboundForeignFields of
                     FieldListImpliedId ffns ->
