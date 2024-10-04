@@ -9,8 +9,8 @@ import Init
 
 share [mkPersist sqlSettings { mpsGeneric = True }, mkMigrate "migration"] [persistLowerCase|
 SchemaEntity schema=foo
-    foo Int
-    Primary foo
+    bar Int
+    Primary bar
 |]
 
 cleanDB
@@ -31,10 +31,10 @@ specsWith runConn = describe "entity with non-null schema" $
         -- Ensure we can write to the database
         x <- insert $
             SchemaEntity
-                { schemaEntityFoo = 42
+                { schemaEntityBar = 42
                 }
         Just schemaEntity <- get x
-        rawFoo  <- rawSql "SELECT foo FROM foo.schema_entity" []
-        liftIO $ rawFoo @?= [Single (42 :: Int)]
-        liftIO $ schemaEntityFoo schemaEntity @== 42
+        rawBar  <- rawSql "SELECT bar FROM foo.schema_entity" []
+        liftIO $ rawBar @?= [Single (42 :: Int)]
+        liftIO $ schemaEntityBar schemaEntity @== 42
         return ()
