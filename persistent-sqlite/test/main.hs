@@ -44,6 +44,7 @@ import qualified RawSqlTest
 import qualified ReadWriteTest
 import qualified Recursive
 import qualified RenameTest
+import qualified SchemaTest
 import qualified SumTypeTest
 import qualified TransactionLevelTest
 import qualified TypeLitFieldDefsTest
@@ -151,6 +152,8 @@ main :: IO ()
 main = do
     handle (\(_ :: IOException) -> return ())
         $ removeFile $ fromText sqlite_database_file
+    handle (\(_ :: IOException) -> return ())
+        $ removeFile $ fromText sqlite_foo_database_file
 
     runConn $ do
         mapM_ setup
@@ -176,6 +179,8 @@ main = do
             , MigrationColumnLengthTest.migration
             , TransactionLevelTest.migration
             , LongIdentifierTest.migration
+            , SchemaTest.migration
+            , SchemaTest.migration
             ]
         PersistentTest.cleanDB
         ForeignKey.cleanDB
@@ -244,6 +249,7 @@ main = do
         MigrationTest.specsWith db
         LongIdentifierTest.specsWith db
         GeneratedColumnTestSQL.specsWith db
+        SchemaTest.specsWith db
 
         it "issue #328" $ asIO $ runSqliteInfo (mkSqliteConnectionInfo ":memory:") $ do
             void $ runMigrationSilent migrateAll
