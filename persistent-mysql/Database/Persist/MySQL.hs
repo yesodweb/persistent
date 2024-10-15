@@ -761,6 +761,7 @@ getColumn connectInfo getter tname [ PersistText cname
         -- Foreign key (if any)
         stmt <- lift . getter $ T.concat
             [ "SELECT KCU.REFERENCED_TABLE_NAME, "
+            ,   "KCU.TABLE_SCHEMA, "
             ,   "KCU.CONSTRAINT_NAME, "
             ,   "KCU.ORDINAL_POSITION, "
             ,   "DELETE_RULE, "
@@ -795,14 +796,18 @@ getColumn connectInfo getter tname [ PersistText cname
 
         cntrs <- liftIO $ with (stmtQuery stmt vars) (\src -> runConduit $ src .| CL.consume)
         pure $ case cntrs of
-            [] ->
-                Nothing
-            [[PersistText tab, PersistText ref, PersistInt64 pos, PersistText onDel, PersistText onUpd]] ->
+            [] -> Nothing
+            [[PersistText tab, PersistText schema, PersistText ref, PersistInt64 pos, PersistText onDel, PersistText onUpd]] ->
                 if pos == 1
-                then Just $ ColumnReference (EntityNameDB tab) (ConstraintNameDB ref) FieldCascade
-                    { fcOnUpdate = parseCascadeAction onUpd
-                    , fcOnDelete = parseCascadeAction onDel
-                    }
+                then Just $
+                      ColumnReference
+                        (EntityNameDB tab)
+                        (if T.null schema then Nothing else Just $ SchemaNameDB schema)
+                        (ConstraintNameDB ref)
+                        FieldCascade
+                          { fcOnUpdate = parseCascadeAction onUpd
+                          , fcOnDelete = parseCascadeAction onDel
+                          }
                 else Nothing
             xs -> error $ mconcat
               [ "MySQL.getColumn/getRef: error fetching constraints. Expected a single result for foreign key query for table: "
