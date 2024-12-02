@@ -5,6 +5,7 @@ module MigrationTest where
 
 import Database.Persist.TH
 import qualified Data.Text as T
+import Data.Time
 
 import Init
 
@@ -37,6 +38,13 @@ Source1 sql=source
     field4 Target1Id
 |]
 
+share [mkPersist sqlSettings, mkMigrate "migrationWithDefaultTime"] [persistLowerCase|
+TimeDefault
+    field3 Int
+    extra  UTCTime default=current_timestamp
+    field4 Target1Id
+|]
+
 specsWith :: (MonadUnliftIO m) => RunDb SqlBackend m -> Spec
 specsWith runDb = describe "Migration" $ do
     it "is idempotent" $ runDb $ do
@@ -54,3 +62,7 @@ specsWith runDb = describe "Migration" $ do
       void $ runMigrationSilent migrationAddCol
       again <- getMigration migrationAddCol
       liftIO $ again @?= []
+    it "is idempotent (default time example)" $ runDb $ do
+      void $ runMigrationSilent migrationWithDefaultTime
+      again <- getMigration migrationWithDefaultTime
+      liftIO $ again @?= ["ALTER TABLE \"time_default\" ALTER COLUMN \"extra\" SET DEFAULT current_timestamp"]
