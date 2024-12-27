@@ -48,6 +48,7 @@ import qualified MpsCustomPrefixTest
 import qualified MpsNoPrefixTest
 import qualified PersistUniqueTest
 import qualified PersistentTest
+import qualified SchemaTest
 import qualified TypeLitFieldDefsTest
 -- FIXME: Not used... should it be?
 -- import qualified PrimaryTest
@@ -149,6 +150,7 @@ main = do
             , TransactionLevelTest.migration
             -- , LongIdentifierTest.migration
             , ForeignKey.compositeMigrate
+            , SchemaTest.migration
             ]
         PersistentTest.cleanDB
         ForeignKey.cleanDB
@@ -228,6 +230,7 @@ main = do
             LongIdentifierTest.specsWith db
         GeneratedColumnTestSQL.specsWith db
         JSONTest.specs
+        SchemaTest.specsWith db
 
 roundFn :: RealFrac a => a -> Integer
 roundFn = round
