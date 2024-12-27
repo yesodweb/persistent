@@ -9,8 +9,8 @@ import Init
 
 share [mkPersist sqlSettings { mpsGeneric = True }, mkMigrate "migration"] [persistLowerCase|
 SchemaEntity schema=foo
-    foo Int
-    Primary foo
+    bar Int
+    Primary bar
 |]
 
 cleanDB
@@ -23,15 +23,18 @@ cleanDB
 cleanDB = deleteWhere ([] :: [Filter (SchemaEntityGeneric backend)])
 
 specsWith
-    :: Runner backend m
-    => RunDb backend m
+    :: Runner SqlBackend m
+    => RunDb SqlBackend m
     -> Spec
 specsWith runConn = describe "entity with non-null schema" $
     it "inserts and selects work as expected" $ asIO $ runConn $ do
         -- Ensure we can write to the database
         x <- insert $
             SchemaEntity
-                { schemaEntityFoo = 42
+                { schemaEntityBar = 42
                 }
-        Just _ <- get x
+        Just schemaEntity <- get x
+        rawBar  <- rawSql "SELECT bar FROM foo.schema_entity" []
+        liftIO $ rawBar @?= [Single (42 :: Int)]
+        liftIO $ schemaEntityBar schemaEntity @== 42
         return ()

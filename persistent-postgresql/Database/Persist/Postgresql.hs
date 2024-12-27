@@ -533,7 +533,7 @@ upsertSql' ent uniqs updateVal =
     wher = T.intercalate " AND " $ map (singleClause . snd) $ NEL.toList uniqs
 
     singleClause :: FieldNameDB -> Text
-    singleClause field = escapeE (getEntityDBName ent) <> "." <> (escapeF field) <> " =?"
+    singleClause field = entityIdentifier ent <> "." <> (escapeF field) <> " =?"
 
 -- | SQL for inserting multiple rows at once and returning their primary keys.
 insertManySql' :: EntityDef -> [[PersistValue]] -> InsertSqlResult
@@ -632,9 +632,11 @@ doesTableExist getter (EntityNameDB name) mSchema = do
     stmt <- getter sql
     with (stmtQuery stmt vals) (\src -> runConduit $ src .| start)
   where
-    schema = maybe "public" escapeS mSchema
     sql = "SELECT COUNT(*) FROM pg_catalog.pg_tables "
           <> "WHERE tablename=? AND schemaname=?"
+    -- Escaping the schema name would be a mistake here because the "schemaname"
+    -- column contains *strings*, not *names*.
+    schema = maybe "public" unSchemaNameDB mSchema
     vals = [PersistText name, PersistText schema]
 
     start = await >>= maybe (error "No results when checking doesTableExist") start'
@@ -742,9 +744,6 @@ addTable cols entity =
         keepField c =
             Just (cName c) /= fmap fieldDB (getEntityIdField entity)
             && not (safeToRemove entity (cName c))
-
-    name =
-        getEntityDBName entity
     schema =
         escapeS <$> getEntitySchema entity
     idtxt =
@@ -816,8 +815,8 @@ getColumns getter def cols = do
             , ",character_maximum_length "
             , "FROM information_schema.columns "
             , "WHERE table_catalog=current_database() "
-            , "AND table_schema=current_schema() "
             , "AND table_name=? "
+            , "AND table_schema=? "
             ]
 
 -- DOMAINS Postgres supports the concept of domains, which are data types
@@ -831,6 +830,7 @@ getColumns getter def cols = do
     stmt <- getter sqlv
     let vals =
             [ PersistText $ unEntityNameDB $ getEntityDBName def
+            , PersistText $ maybe "public" unSchemaNameDB $ getEntitySchema def
             ]
     columns <- with (stmtQuery stmt vals) (\src -> runConduit $ src .| processColumns .| CL.consume)
     let sqlc = T.concat
@@ -845,6 +845,8 @@ getColumns getter def cols = do
             , "AND c.table_schema=k.table_schema "
             , "AND c.table_name=? "
             , "AND c.table_name=k.table_name "
+            , "AND c.table_schema=? "
+            , "AND c.table_schema=k.table_schema "
             , "AND c.constraint_name=k.constraint_name "
             , "AND NOT k.constraint_type IN ('PRIMARY KEY', 'FOREIGN KEY') "
             , "ORDER BY c.constraint_name, c.column_name"
@@ -1063,7 +1065,7 @@ getColumn getter
             with
                 (stmtQuery stmt
                     [ PersistText $ unEntityNameDB tableName'
-                    , PersistText $ fromMaybe "public" $ unSchemaNameDB <$> schemaName'
+                    , PersistText $ maybe "public" unSchemaNameDB schemaName'
                     , PersistText $ unFieldNameDB cname
                     , PersistText $ unConstraintNameDB refName'
                     ]
@@ -1655,7 +1657,7 @@ mockMigration mig = do
                 , connCommit = undefined
                 , connRollback = undefined
                 , connEscapeFieldName = escapeF
-                , connEscapeTableName = escapeE . getEntityDBName
+                , connEscapeTableName = entityIdentifier
                 , connEscapeRawName = escape
                 , connNoLimit = undefined
                 , connRDBMS = undefined
@@ -1856,7 +1858,7 @@ mkBulkUpsertQuery records conn fieldValues updates filters uniqDef =
         [] -> error "The entity you're trying to insert does not have any fields."
         (field:_) -> field
     entityFieldNames = map fieldDbToText (getEntityFields entityDef')
-    nameOfTable = escapeE . getEntityDBName $ entityDef'
+    nameOfTable = entityIdentifier entityDef'
     copyUnlessValues = map snd fieldsToMaybeCopy
     recordValues = concatMap (map toPersistValue . toPersistFields) records
     recordPlaceholders =
@@ -1918,7 +1920,7 @@ putManySql' conflictColumns (filter isFieldNotGenerated -> fields) ent n = q
     fieldDbToText = escapeF . fieldDB
     mkAssignment f = T.concat [f, "=EXCLUDED.", f]
 
-    table = escapeE . getEntityDBName $ ent
+    table = entityIdentifier ent
     columns = Util.commaSeparated $ map fieldDbToText fields
     placeholders = map (const "?") fields
     updates = map (mkAssignment . fieldDbToText) fields

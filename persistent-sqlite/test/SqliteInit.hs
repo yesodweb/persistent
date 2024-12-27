@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 
 module SqliteInit (
   (@/=), (@==), (==@)
@@ -16,6 +17,7 @@ module SqliteInit (
   , db
   , sqlite_database
   , sqlite_database_file
+  , sqlite_foo_database_file
   , BackendKey(..)
   , GenerateKey(..)
 
@@ -90,6 +92,9 @@ type BackendMonad = SqlBackend
 sqlite_database_file :: Text
 sqlite_database_file = "testdb.sqlite3"
 
+sqlite_foo_database_file :: Text
+sqlite_foo_database_file = "testdb-foo.sqlite3"
+
 sqlite_database :: SqliteConnectionInfo
 sqlite_database = mkSqliteConnectionInfo sqlite_database_file
 
@@ -99,9 +104,10 @@ runConn f = do
     let debugPrint = not travis && _debugOn
     let printDebug = if debugPrint then print . fromLogStr else void . return
     void $ flip runLoggingT (\_ _ _ s -> printDebug s) $ do
-        withSqlitePoolInfo sqlite_database 1 $ runSqlPool f
+        withSqlitePoolInfo sqlite_database 1 $ runSqlPool $ do
+          rawSql @(Single Int64) ("attach '" <> sqlite_foo_database_file <> "' as foo") []
+          f
 
 db :: SqlPersistT (LoggingT (ResourceT IO)) () -> Assertion
 db actions = do
     runResourceT $ runConn $ actions >> transactionUndo
-
