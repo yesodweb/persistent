@@ -775,7 +775,8 @@ getColumn connectInfo getter tname [ PersistText cname
             ,   "KCU.CONSTRAINT_NAME, "
             ,   "KCU.ORDINAL_POSITION, "
             ,   "DELETE_RULE, "
-            ,   "UPDATE_RULE "
+            ,   "UPDATE_RULE, "
+            ,   "DATABASE() "
             , "FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE AS KCU "
             , "INNER JOIN INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS AS RC "
             , "  USING (CONSTRAINT_SCHEMA, CONSTRAINT_NAME) "
@@ -807,13 +808,12 @@ getColumn connectInfo getter tname [ PersistText cname
         cntrs <- liftIO $ with (stmtQuery stmt vars) (\src -> runConduit $ src .| CL.consume)
         pure $ case cntrs of
             [] -> Nothing
-            [[PersistText tab, PersistText schema, PersistText ref, PersistInt64 pos, PersistText onDel, PersistText onUpd]] ->
+            [[PersistText tab, PersistText schema, PersistText ref, PersistInt64 pos, PersistText onDel, PersistText onUpd, PersistText defaultSchema]] ->
                 if pos == 1
                 then Just $
                       ColumnReference
                         (EntityNameDB tab)
-                        -- breaks MigrationTest.hs:56
-                        (if T.null schema then Nothing else Just $ SchemaNameDB schema)
+                        (if T.null schema || schema == defaultSchema then Nothing else Just $ SchemaNameDB schema)
                         (ConstraintNameDB ref)
                         FieldCascade
                           { fcOnUpdate = parseCascadeAction onUpd
