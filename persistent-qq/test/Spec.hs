@@ -4,23 +4,23 @@
 
 import Control.Monad (when)
 import Control.Monad.Logger (LoggingT, runLoggingT)
-import Control.Monad.Trans.Resource
 import Control.Monad.Reader
+import Control.Monad.Trans.Resource
 import qualified Data.ByteString.Char8 as B
-import Data.List.NonEmpty (NonEmpty(..))
 import Data.List (sort)
+import Data.List.NonEmpty (NonEmpty(..))
 import Data.Text (Text)
 import System.Log.FastLogger (fromLogStr)
 import Test.Hspec
 import Test.HUnit ((@?=))
 
+import qualified CodeGenTest
 import Database.Persist.Class.PersistEntity
 import Database.Persist.Sql
 import Database.Persist.Sql.Raw.QQ
 import Database.Persist.Sqlite
-import PersistTestPetType
 import PersistentTestModels
-import qualified CodeGenTest
+import PersistTestPetType
 
 main :: IO ()
 main = hspec spec

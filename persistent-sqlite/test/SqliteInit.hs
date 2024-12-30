@@ -45,22 +45,42 @@ module SqliteInit (
   ) where
 
 import Init
-    ( TestFn(..), truncateTimeOfDay, truncateUTCTime
-    , truncateToMicro, arbText, liftA2, GenerateKey(..)
-    , (@/=), (@==), (==@), MonadFail
-    , assertNotEqual, assertNotEmpty, assertEmpty, asIO
-    , isTravis, RunDb
-    )
+       ( GenerateKey(..)
+       , MonadFail
+       , RunDb
+       , TestFn(..)
+       , arbText
+       , asIO
+       , assertEmpty
+       , assertNotEmpty
+       , assertNotEqual
+       , isTravis
+       , liftA2
+       , truncateTimeOfDay
+       , truncateToMicro
+       , truncateUTCTime
+       , (==@)
+       , (@/=)
+       , (@==)
+       )
 
 -- re-exports
 import Control.Exception (SomeException)
-import Control.Monad (void, replicateM, liftM, when, forM_)
+import Control.Monad (forM_, liftM, replicateM, void, when)
 import Control.Monad.Trans.Reader
-import Database.Persist.TH (mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase, MkPersistSettings(..))
+import Database.Persist.TH
+       ( MkPersistSettings(..)
+       , mkMigrate
+       , mkPersist
+       , persistLowerCase
+       , persistUpperCase
+       , share
+       , sqlSettings
+       )
 import Test.Hspec
 
 -- testing
-import Test.HUnit ((@?=),(@=?), Assertion, assertFailure, assertBool)
+import Test.HUnit (Assertion, assertBool, assertFailure, (@=?), (@?=))
 
 import Control.Monad (unless, (>=>))
 import Control.Monad.IO.Unlift (MonadUnliftIO)

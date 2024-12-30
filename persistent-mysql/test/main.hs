@@ -46,8 +46,8 @@ import qualified MigrationOnlyTest
 import qualified MigrationTest
 import qualified MpsCustomPrefixTest
 import qualified MpsNoPrefixTest
-import qualified PersistUniqueTest
 import qualified PersistentTest
+import qualified PersistUniqueTest
 import qualified SchemaTest
 import qualified TypeLitFieldDefsTest
 -- FIXME: Not used... should it be?

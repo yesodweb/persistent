@@ -48,8 +48,8 @@ import qualified MigrationReferenceSpec
 import qualified MigrationTest
 import qualified MpsCustomPrefixTest
 import qualified MpsNoPrefixTest
-import qualified PersistUniqueTest
 import qualified PersistentTest
+import qualified PersistUniqueTest
 import qualified PgIntervalTest
 import qualified PrimaryTest
 import qualified RawSqlTest

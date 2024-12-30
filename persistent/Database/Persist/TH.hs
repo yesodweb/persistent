@@ -338,7 +338,7 @@ liftAndFixKeys mps emEntities entityMap unboundEnt =
           where
             fixForeignRefTableDBName =
                 getEntityDBName (unboundEntityDef parentDef)
-            fixForeignRefSchemaDBName = 
+            fixForeignRefSchemaDBName =
                 getEntitySchema (unboundEntityDef parentDef)
             foreignFieldNames =
                 case unboundForeignFields of

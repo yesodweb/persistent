@@ -64,7 +64,6 @@ import Data.List (find, groupBy, intercalate, sort)
 import qualified Data.List.NonEmpty as NEL
 import qualified Data.Map as Map
 import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
-import qualified Data.Map as Map
 import Data.Monoid ((<>))
 import qualified Data.Monoid as Monoid
 import Data.Pool (Pool)

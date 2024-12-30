@@ -37,8 +37,8 @@ import qualified MigrationColumnLengthTest
 import qualified MigrationOnlyTest
 import qualified MpsCustomPrefixTest
 import qualified MpsNoPrefixTest
-import qualified PersistUniqueTest
 import qualified PersistentTest
+import qualified PersistUniqueTest
 import qualified PrimaryTest
 import qualified RawSqlTest
 import qualified ReadWriteTest
