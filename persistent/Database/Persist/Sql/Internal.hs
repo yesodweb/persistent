@@ -167,12 +167,12 @@ mkColumns allDefs t overrides =
         $ ref (fieldDB fd) (fieldReference fd) (fieldAttrs fd)
 
     -- a 'Nothing' in the definition means that the QQ migration doesn't
-    -- specify behavior. the default is RESTRICT. setting this here
+    -- specify behavior. the default is NO ACTION. setting this here
     -- explicitly makes migrations run smoother.
     overrideNothings (FieldCascade { fcOnUpdate = upd, fcOnDelete = del }) =
         FieldCascade
-            { fcOnUpdate = upd <|> Just Restrict
-            , fcOnDelete = del <|> Just Restrict
+            { fcOnUpdate = upd <|> Just NoAction
+            , fcOnDelete = del <|> Just NoAction
             }
 
     ref :: FieldNameDB
