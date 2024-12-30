@@ -1,5 +1,11 @@
 # Changelog for persistent
 
+## 2.14.7
+
+* [#1561](https://github.com/yesodweb/persistent/pull/1561)
+    * Add schema support to Persistent using a new `schema=` annotation for
+      Persistent models.
+
 ## 2.14.6.3
 
 * [#1544](https://github.com/yesodweb/persistent/pull/1544)

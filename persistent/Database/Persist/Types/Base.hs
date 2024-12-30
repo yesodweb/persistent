@@ -555,6 +555,9 @@ data ForeignDef = ForeignDef
     { foreignRefTableHaskell       :: !EntityNameHS
     , foreignRefTableDBName        :: !EntityNameDB
     , foreignRefSchemaDBName       :: !(Maybe SchemaNameDB)
+    -- ^ Determines which schema the target table belongs to.
+    --
+    -- @since 2.14.7
     , foreignConstraintNameHaskell :: !ConstraintNameHS
     , foreignConstraintNameDBName  :: !ConstraintNameDB
     , foreignFieldCascade          :: !FieldCascade
