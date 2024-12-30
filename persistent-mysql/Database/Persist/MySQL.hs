@@ -54,7 +54,6 @@ import Data.Aeson
 import Data.Aeson.Types (modifyFailure)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as BSL
-import Data.Coerce (coerce)
 import Data.Conduit
 import qualified Data.Conduit.List as CL
 import Data.Either (partitionEithers)
