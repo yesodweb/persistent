@@ -4,6 +4,8 @@
 
 * [#1547](https://github.com/yesodweb/persistent/pull/1547)
     * Bump `libpq` bounds
+* [#1560](https://github.com/yesodweb/persistent/pull/1560)
+    * Treat `NO ACTION` as the default action, rather than `RESTRICT`.
 
 ## 2.13.6.2
 
