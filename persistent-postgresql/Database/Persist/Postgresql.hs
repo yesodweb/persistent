@@ -719,12 +719,6 @@ mkForeignAlt entity fdef = pure $ AlterColumn tableName_ schemaName_ addReferenc
 addTable :: [Column] -> EntityDef -> AlterDB
 addTable cols entity =
     AddTable $ T.concat $
-        case schema of
-            Nothing -> stmt
-            -- Lower case e: see Database.Persist.Sql.Migration
-            Just s -> "CREATe SCHEMA IF NOT EXISTS " <> s <> ";\n" : stmt
-  where
-    stmt =
         -- Lower case e: see Database.Persist.Sql.Migration
         [ "CREATe TABLE " -- DO NOT FIX THE CAPITALIZATION!
         , entityIdentifier entity
@@ -734,6 +728,7 @@ addTable cols entity =
         , T.intercalate "," $ map showColumn nonIdCols
         , ")"
         ]
+  where
     nonIdCols =
         case entityPrimary entity of
             Just _ ->
