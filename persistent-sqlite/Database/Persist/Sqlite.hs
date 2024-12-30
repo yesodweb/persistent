@@ -719,9 +719,15 @@ escapeC = escapeWith escape
 escapeE :: EntityNameDB -> Text
 escapeE = escapeWith escape
 
+-- | Escapes a schema name.
+--
+-- @since 2.13.4
 escapeS :: SchemaNameDB -> Text
 escapeS = escapeWith escape
 
+-- | Escapes a table name, optionally namespaced by a schema.
+--
+-- @since 2.13.4
 escapeES :: EntityNameDB -> Maybe SchemaNameDB -> Text
 escapeES entity Nothing = escapeE entity
 escapeES entity (Just schema) = escapeS schema <> "." <> escapeE entity
@@ -737,6 +743,9 @@ escape s =
     go '"' = "\"\""
     go c = T.singleton c
 
+-- | Escapes the identifier for an entity.
+--
+-- @since 2.13.4
 entityIdentifier :: EntityDef -> Text
 entityIdentifier entity = escapeES (getEntityDBName entity) (getEntitySchema entity)
 
