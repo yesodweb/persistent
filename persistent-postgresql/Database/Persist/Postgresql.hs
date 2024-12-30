@@ -627,6 +627,7 @@ withStmt' conn query vals =
 doesTableExist :: (Text -> IO Statement)
                -> EntityNameDB
                -> (Maybe SchemaNameDB)
+               -- ^ @since 2.13.7
                -> IO Bool
 doesTableExist getter (EntityNameDB name) mSchema = do
     stmt <- getter sql
@@ -933,6 +934,7 @@ getColumn
     :: (Text -> IO Statement)
     -> EntityNameDB
     -> Maybe SchemaNameDB
+    -- ^ @since 2.13.7
     -> [PersistValue]
     -> Maybe (EntityNameDB, ConstraintNameDB)
     -> IO (Either Text Column)
@@ -991,7 +993,7 @@ getColumn getter
           -- in Postgres is "public", but Postgres doesn't know whether a table with
           -- schema "public" was explicitly given that schema by the Persistent
           -- app developer.
-          cReference = fmap (\(a,b,c,d,e) -> ColumnReference a (Just b) c (mkCascade d e)) ref
+          cReference = fmap (\(a,schemaName,c,d,e) -> ColumnReference a (Just schemaName) c (mkCascade d e)) ref
         }
 
   where
@@ -1300,7 +1302,12 @@ showAlterDb (AlterColumn t s ac) =
     isUnsafe _ = False
 showAlterDb (AlterTable t s at) = (False, showAlterTable t s at)
 
-showAlterTable :: EntityNameDB -> Maybe SchemaNameDB -> AlterTable -> Text
+showAlterTable
+    :: EntityNameDB
+    -> Maybe SchemaNameDB
+    -- ^ @since 2.13.7
+    -> AlterTable
+    -> Text
 showAlterTable table schema (AddUniqueConstraint cname cols) = T.concat
     [ "ALTER TABLE "
     , escapeES table schema
@@ -1317,7 +1324,12 @@ showAlterTable table schema (DropConstraint cname) = T.concat
     , escapeC cname
     ]
 
-showAlter :: EntityNameDB -> Maybe SchemaNameDB -> AlterColumn -> Text
+showAlter
+    :: EntityNameDB
+    -> Maybe SchemaNameDB
+    -- ^ @since 2.13.7
+    -> AlterColumn
+    -> Text
 showAlter table schema (ChangeType c t extra) =
     T.concat
         [ "ALTER TABLE "
@@ -1435,9 +1447,15 @@ escape s =
     go ('"':xs) = "\"\"" ++ go xs
     go (x:xs) = x : go xs
 
+-- | Escapes the SQL identifier of an entity.
+--
+-- @since 2.13.7
 entityIdentifier :: EntityDef -> Text
 entityIdentifier ed = escapeES (getEntityDBName ed) (getEntitySchema ed)
 
+-- | Escapes a table name, optionally namespaced by a schema.
+--
+-- @since 2.13.7
 escapeES :: EntityNameDB -> Maybe SchemaNameDB -> Text
 escapeES entityName schemaName = case schemaName of
     Nothing -> escapeE entityName
