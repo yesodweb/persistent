@@ -660,7 +660,7 @@ getColumns connectInfo getter def cols = do
       where ref rs c = case cReference c of
                 Nothing -> rs
                 (Just r) -> (unFieldNameDB $ cName c, r) : rs
-    vals = [ PersistText $ pack $ MySQL.connectDatabase connectInfo
+    vals = [ PersistText $ fromMaybe (pack $ MySQL.connectDatabase connectInfo) $ fmap unSchemaNameDB $ getEntitySchema def
            , PersistText $ unEntityNameDB $ getEntityDBName def
         --   , PersistText $ unDBName $ fieldDB $ getEntityId def
            ]
@@ -669,7 +669,7 @@ getColumns connectInfo getter def cols = do
         where
           getIt row = fmap (either Left (Right . Left)) .
                       liftIO .
-                      getColumn connectInfo getter (getEntityDBName def) row $ ref
+                      getColumn connectInfo getter (getEntityDBName def) (getEntitySchema def) row $ ref
             where ref = case row of
                     (PersistText cname : _) -> (Map.lookup cname refMap)
                     _ -> Nothing
@@ -689,19 +689,20 @@ getColumn
     => MySQL.ConnectInfo
     -> (Text -> IO Statement)
     -> EntityNameDB
+    -> Maybe SchemaNameDB
     -> [PersistValue]
     -> Maybe ColumnReference
     -> IO (Either Text Column)
-getColumn connectInfo getter tname [ PersistText cname
-                                   , PersistText null_
-                                   , PersistText dataType
-                                   , PersistText colType
-                                   , colMaxLen
-                                   , colPrecision
-                                   , colScale
-                                   , default'
-                                   , generated
-                                   ] cRef =
+getColumn connectInfo getter tname tschema [ PersistText cname
+                                           , PersistText null_
+                                           , PersistText dataType
+                                           , PersistText colType
+                                           , colMaxLen
+                                           , colPrecision
+                                           , colScale
+                                           , default'
+                                           , generated
+                                           ] cRef =
     fmap (either (Left . pack) Right) $
     runExceptT $ do
         -- Default value
@@ -775,8 +776,7 @@ getColumn connectInfo getter tname [ PersistText cname
             ,   "KCU.CONSTRAINT_NAME, "
             ,   "KCU.ORDINAL_POSITION, "
             ,   "DELETE_RULE, "
-            ,   "UPDATE_RULE, "
-            ,   "DATABASE() "
+            ,   "UPDATE_RULE "
             , "FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE AS KCU "
             , "INNER JOIN INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS AS RC "
             , "  USING (CONSTRAINT_SCHEMA, CONSTRAINT_NAME) "
@@ -789,7 +789,7 @@ getColumn connectInfo getter tname [ PersistText cname
             ,   "KCU.COLUMN_NAME"
             ]
         let vars =
-                [ PersistText $ pack $ MySQL.connectDatabase connectInfo
+                [ PersistText $ fromMaybe (pack $ MySQL.connectDatabase connectInfo) $ fmap unSchemaNameDB tschema
                 , PersistText $ unEntityNameDB tname
                 , PersistText cname
                 , PersistText $ pack $ MySQL.connectDatabase connectInfo
@@ -808,12 +808,16 @@ getColumn connectInfo getter tname [ PersistText cname
         cntrs <- liftIO $ with (stmtQuery stmt vars) (\src -> runConduit $ src .| CL.consume)
         pure $ case cntrs of
             [] -> Nothing
-            [[PersistText tab, PersistText schema, PersistText ref, PersistInt64 pos, PersistText onDel, PersistText onUpd, PersistText defaultSchema]] ->
+            [[PersistText tab, PersistText schema, PersistText ref, PersistInt64 pos, PersistText onDel, PersistText onUpd]] ->
                 if pos == 1
                 then Just $
-                      ColumnReference
+                  let colSchema =
+                        if T.null schema || schema == (pack $ MySQL.connectDatabase connectInfo)
+                          then Nothing
+                          else Just $ SchemaNameDB schema
+                   in ColumnReference
                         (EntityNameDB tab)
-                        (if T.null schema || schema == defaultSchema then Nothing else Just $ SchemaNameDB schema)
+                        colSchema
                         (ConstraintNameDB ref)
                         FieldCascade
                           { fcOnUpdate = parseCascadeAction onUpd
@@ -829,7 +833,7 @@ getColumn connectInfo getter tname [ PersistText cname
               , show xs
               ]
 
-getColumn _ _ _ x  _ =
+getColumn _ _ _ _ x _ =
     return $ Left $ pack $ "Invalid result from INFORMATION_SCHEMA: " ++ show x
 
 -- | Extra column information from MySQL schema
