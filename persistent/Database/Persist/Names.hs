@@ -71,6 +71,10 @@ instance DatabaseName ConstraintNameDB where
 newtype ConstraintNameHS = ConstraintNameHS { unConstraintNameHS :: Text }
   deriving (Show, Eq, Read, Ord, Lift)
 
+-- | The name of a database schema. Different backends vary in their
+-- interpretation of this concept.
+--
+-- @since 2.14.7
 newtype SchemaNameDB = SchemaNameDB { unSchemaNameDB :: Text }
   deriving (Show, Eq, Read, Ord, Lift)
 

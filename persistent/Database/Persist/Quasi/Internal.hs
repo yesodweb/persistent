@@ -311,6 +311,7 @@ data ParsedEntityDef = ParsedEntityDef
     { parsedEntityDefComments :: [Text]
     , parsedEntityDefEntityName :: EntityNameHS
     , parsedEntityDefSchemaName :: Maybe SchemaNameDB
+      -- ^ @since 2.14.7
     , parsedEntityDefIsSum :: Bool
     , parsedEntityDefEntityAttributes :: [Attr]
     , parsedEntityDefFieldAttributes :: [[Token]]

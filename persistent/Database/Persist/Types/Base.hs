@@ -153,10 +153,12 @@ data EntityDef = EntityDef
     -- ^ Whether or not this entity represents a sum type in the database.
     , entityComments :: !(Maybe Text)
     -- ^ Optional comments on the entity.
+    --
+    -- @since 2.10.0
     , entitySchema :: !(Maybe SchemaNameDB)
     -- ^ The schema the entity belongs to.
     --
-    -- @since 2.10.0
+    -- @since 2.14.7
     }
     deriving (Show, Eq, Read, Ord, Lift)
 
