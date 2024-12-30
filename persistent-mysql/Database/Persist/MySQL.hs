@@ -557,6 +557,8 @@ addReference
     -- ^ Referenced table name
     -> (Maybe SchemaNameDB)
     -- ^ Referenced schema name
+    --
+    -- @since 2.13.2
     -> FieldNameDB
     -- ^ Column name
     -> FieldCascade
@@ -689,6 +691,7 @@ getColumn
     -> (Text -> IO Statement)
     -> EntityNameDB
     -> Maybe SchemaNameDB
+    -- ^ @since 2.13.2
     -> [PersistValue]
     -> Maybe ColumnReference
     -> IO (Either Text Column)
@@ -1074,7 +1077,12 @@ showAlterDb (AlterTable t s at) = (False, pack $ showAlterTable t s at)
 
 
 -- | Render an action that must be done on a table.
-showAlterTable :: EntityNameDB -> Maybe SchemaNameDB -> AlterTable -> String
+showAlterTable
+  :: EntityNameDB
+  -> Maybe SchemaNameDB
+  -- ^ @since 2.13.2
+  -> AlterTable
+  -> String
 showAlterTable table schema (AddUniqueConstraint cname cols) = concat
     [ "ALTER TABLE "
     , escapeE table schema
@@ -1098,7 +1106,12 @@ showAlterTable table schema (DropUniqueConstraint cname) = concat
 
 
 -- | Render an action that must be done on a column.
-showAlter :: EntityNameDB -> Maybe SchemaNameDB -> AlterColumn -> String
+showAlter
+  :: EntityNameDB
+  -> Maybe SchemaNameDB
+  -- ^ @since 2.13.2
+  -> AlterColumn
+  -> String
 showAlter table schema (Change (Column n nu t def gen defConstraintName maxLen _ref)) =
     concat
     [ "ALTER TABLE "
@@ -1198,7 +1211,11 @@ showAlter table schema (DropReference cname) = concat
 escapeC :: ConstraintNameDB -> String
 escapeC = escapeWith (escapeDBName . T.unpack)
 
-escapeE :: EntityNameDB -> Maybe SchemaNameDB -> String
+escapeE
+  :: EntityNameDB
+  -> Maybe SchemaNameDB
+  -- ^ @since 2.13.2
+  -> String
 escapeE entity Nothing = escapeWith (escapeDBName . T.unpack) entity
 escapeE entity (Just schema) = escapeNS schema <> "." <> escapeNS entity
   where
@@ -1208,7 +1225,11 @@ escapeE entity (Just schema) = escapeNS schema <> "." <> escapeNS entity
 escapeF :: FieldNameDB -> String
 escapeF = escapeWith (escapeDBName . T.unpack)
 
-escapeET :: EntityNameDB -> Maybe SchemaNameDB -> Text
+escapeET
+  :: EntityNameDB
+  -> Maybe SchemaNameDB
+  -- ^ @since 2.13.2
+  -> Text
 escapeET entity schema = T.pack $ escapeE entity schema
 
 escapeFT :: FieldNameDB -> Text
