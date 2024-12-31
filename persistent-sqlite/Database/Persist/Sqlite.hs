@@ -895,7 +895,11 @@ checkForeignKeys = rawQuery query [] .| C.mapM parse
     query = T.unlines
         [ "SELECT origin.rowid, origin.\"table\", group_concat(foreignkeys.\"from\")"
         , "FROM pragma_database_list() as databases"
-        , "INNER JOIN pragma_foreign_key_check(null, databases.name) AS origin"
+        , -- Passing null as the first argument indicates that we are considering
+          -- *all* tables in a particular schema. The second argument determines
+          -- the schema to check. So this inner join iterates over every
+          -- active schema to find all the foreign key constraint violations.
+          "INNER JOIN pragma_foreign_key_check(null, databases.name) AS origin"
         , "INNER JOIN pragma_foreign_key_list(origin.\"table\", databases.name) AS foreignkeys"
         , "ON origin.fkid = foreignkeys.id AND origin.parent = foreignkeys.\"table\""
         , "GROUP BY origin.rowid"
