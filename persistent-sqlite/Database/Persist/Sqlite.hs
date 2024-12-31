@@ -866,6 +866,10 @@ instance FromJSON SqliteConnectionInfo where
 -- @since 2.11.1
 data ForeignKeyViolation = ForeignKeyViolation
     { foreignKeyTable :: Text -- ^ The table of the violated constraint
+    , foreignKeySchema :: Maybe Text
+      -- ^ The schema of the violated constraint
+      --
+      -- @since 2.13.4
     , foreignKeyColumn :: Text -- ^ The column of the violated constraint
     , foreignKeyRowId :: Int64 -- ^ The ROWID of the row with the violated foreign key constraint
     } deriving (Eq, Ord, Show)
@@ -883,9 +887,10 @@ checkForeignKeys
 checkForeignKeys = rawQuery query [] .| C.mapM parse
   where
     parse l = case l of
-        [ PersistInt64 rowid , PersistText table , PersistText column ] ->
+        [ PersistInt64 rowid , PersistText table , PersistText schema , PersistText column ] ->
             return ForeignKeyViolation
                 { foreignKeyTable = table
+                , foreignKeySchema = if schema == "main" then Nothing else Just schema
                 , foreignKeyColumn = column
                 , foreignKeyRowId = rowid
                 }
@@ -893,7 +898,7 @@ checkForeignKeys = rawQuery query [] .| C.mapM parse
             [ "Unexpected result from foreign key check:\n", T.pack (show l) ]
 
     query = T.unlines
-        [ "SELECT origin.rowid, origin.\"table\", group_concat(foreignkeys.\"from\")"
+        [ "SELECT origin.rowid, origin.\"table\", databases.name, group_concat(foreignkeys.\"from\")"
         , "FROM pragma_database_list() as databases"
         , -- Passing null as the first argument indicates that we are considering
           -- *all* tables in a particular schema. The second argument determines
