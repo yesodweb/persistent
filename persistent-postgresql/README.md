@@ -7,16 +7,18 @@ A backend for the `persistent` database library for the PostgreSQL database serv
 ## Development
 
 To run tests on this library, you will need to have a PostgreSQL database server set up and running on your computer.
-The tests will expect to connect to a database named `test` using the `postgres` user and no password.
-This can be done either via the Postgresql command line or using the `createdb` tool:
+The tests will expect to connect to a database named `test` using the `postgres` user and no password, as well as a schema `foo`.
+This can be done via the Postgresql command line.
 
 ```
 $ psql -d postgres
 postgres=# CREATE DATABASE test;
 CREATE DATABASE
-
--- or,
-$ createdb test
+postgres=# \c test
+psql (<version numbers>)
+You are now connected to database "test" as user "postgres".
+test=# CREATE SCHEMA FOO;
+CREATE SCHEMA
 ```
 
 The tests do not pass a test and expect to connect with the `postgres` user.
