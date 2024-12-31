@@ -809,13 +809,16 @@ getColumn connectInfo getter tname tschema [ PersistText cname
         cntrs <- liftIO $ with (stmtQuery stmt vars) (\src -> runConduit $ src .| CL.consume)
         pure $ case cntrs of
             [] -> Nothing
-            [[PersistText tab, PersistText schema, PersistText ref, PersistInt64 pos, PersistText onDel, PersistText onUpd]] ->
+            [[PersistText tab, schema, PersistText ref, PersistInt64 pos, PersistText onDel, PersistText onUpd]] ->
                 if pos == 1
                 then Just $
                   let colSchema =
-                        if T.null schema || schema == (pack $ MySQL.connectDatabase connectInfo)
-                          then Nothing
-                          else Just $ SchemaNameDB schema
+                        case schema of
+                          PersistNull -> Nothing
+                          PersistText schemaName ->
+                            if T.null schemaName || schemaName == (pack $ MySQL.connectDatabase connectInfo)
+                              then Nothing
+                              else Just $ SchemaNameDB schemaName
                    in ColumnReference
                         (EntityNameDB tab)
                         colSchema
