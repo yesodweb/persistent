@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
 import Control.Monad (when)
@@ -7,10 +8,12 @@ import Control.Monad.Logger (LoggingT, runLoggingT)
 import Control.Monad.Reader
 import Control.Monad.Trans.Resource
 import qualified Data.ByteString.Char8 as B
+import Data.Int (Int64)
 import Data.List (sort)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Text (Text)
 import System.Log.FastLogger (fromLogStr)
+import System.IO.Unsafe (unsafePerformIO)
 import Test.Hspec
 import Test.HUnit ((@?=))
 
@@ -37,6 +40,7 @@ runConn f = do
 db :: SqlPersistT (LoggingT (ResourceT IO)) a -> IO a
 db actions = do
   runResourceT $ runConn $ do
+      rawSql @(Single Int64) ("attach 'animals.db' as animals") []
       _ <- runMigrationSilent testMigrate
       actions <* transactionUndo
 
@@ -116,7 +120,7 @@ spec = describe "persistent-qq" $ do
         liftIO $ ret2 @?= [Entity (RFOKey $ unPersonKey p1k) (RFO p1)]
 
     it "sqlQQ/entity in schema" $ db $ do
-        let person = Person "Zacarias" 93 Nothing
+        let person = AnimalPerson "Zacarias" 93 Nothing
         personKey <- insert person
         let pet = PetAnimal personKey "Fluffy"
         petKey <- insert pet
@@ -124,7 +128,7 @@ spec = describe "persistent-qq" $ do
               :: (RawSql a, Functor m, MonadIO m)
               => ReaderT SqlBackend m [a]
             runQueryQuoted = [sqlQQ| SELECT ?? FROM ^{PetAnimal} |]
-            runQueryRaw = [sqlQQ| SELECT ?? FROM animals.pet_animal |]
+            runQueryRaw = [sqlQQ| SELECT ?? FROM animals.PetAnimal |]
         retQuoted <- runQueryQuoted
         retRaw <- runQueryRaw
         liftIO $ retQuoted @?= [Entity petKey pet]

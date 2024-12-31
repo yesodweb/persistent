@@ -110,8 +110,16 @@ share
     ~no Int
     def Int
 
+  -- copied from 'Person'
+  AnimalPerson json schema=animals
+    name Text
+    age Int "some ignored -- \" attribute"
+    color Text Maybe -- this is a comment sql=foobarbaz
+    AnimalPersonNameKey name -- this is a comment sql=foobarbaz
+    deriving Show Eq
+
   PetAnimal schema=animals
-    ownerId PersonId
+    ownerId AnimalPersonId
     name Text
 |]
 
