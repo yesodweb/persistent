@@ -17,7 +17,7 @@ CREATE DATABASE
 postgres=# \c test
 psql (<version numbers>)
 You are now connected to database "test" as user "postgres".
-test=# CREATE SCHEMA FOO;
+test=# CREATE SCHEMA foo;
 CREATE SCHEMA
 ```
 
