@@ -614,7 +614,7 @@ mkCreateTable isTemp entity (cols, uniqs, fdefs) =
 
     footer =
         [ T.concat $ map sqlUnique uniqs
-        , T.concat $ map sqlForeign fdefs
+        , T.concat $ map (sqlForeign $ getEntitySchema entity) fdefs
         , ")"
         ]
 
@@ -674,23 +674,27 @@ sqlColumn noRef (Column name isNull typ def gen _cn _maxLen ref) = T.concat
     onDelete opts = maybe "" (T.append " ON DELETE " . renderCascadeAction) (fcOnDelete opts)
     onUpdate opts = maybe "" (T.append " ON UPDATE " . renderCascadeAction) (fcOnUpdate opts)
 
-sqlForeign :: ForeignDef -> Text
-sqlForeign fdef = T.concat $
+sqlForeign :: Maybe SchemaNameDB -> ForeignDef -> Text
+sqlForeign entitySchema fdef = T.concat $
     [ ", CONSTRAINT "
     , escapeC $ foreignConstraintNameDBName fdef
     , " FOREIGN KEY("
     , T.intercalate "," $ map (escapeF . snd. fst) $ foreignFields fdef
     , ") REFERENCES "
-    , -- It's a syntax error in SQLite to use a dot-qualified table name.
-      -- In general, it's not possible for SQLite to maintain foreign key
+    , -- It's not possible for SQLite to maintain foreign key
       -- constraints across databases (which Persistent calls "schemas").
-      -- So we omit the schema here.
-      escapeE (foreignRefTableDBName fdef)
+      -- In fact, it's a syntax error to use a schema qualifier in this
+      -- part of the SQL expression. So we omit the schema here, and throw
+      -- an error if this is a cross-schema reference.
+      if isCrossSchemaReference
+        then error "Sqlite.sqlForeign: this backend cannot accept foreign key references across different schemas"
+        else escapeE (foreignRefTableDBName fdef)
     , "("
     , T.intercalate "," $ map (escapeF . snd . snd) $ foreignFields fdef
     , ")"
     ] ++ onDelete ++ onUpdate
   where
+    isCrossSchemaReference = foreignRefSchemaDBName fdef /= entitySchema
     onDelete =
         fmap (T.append " ON DELETE ")
         $ showAction
