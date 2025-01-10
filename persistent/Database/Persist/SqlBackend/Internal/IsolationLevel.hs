@@ -3,7 +3,7 @@ module Database.Persist.SqlBackend.Internal.IsolationLevel where
 import Data.String (IsString(..))
 
 -- | Please refer to the documentation for the database in question for a full
--- overview of the semantics of the varying isloation levels
+-- overview of the semantics of the varying isolation levels
 data IsolationLevel = ReadUncommitted
                     | ReadCommitted
                     | RepeatableRead
