@@ -1,6 +1,6 @@
 # Changelog for persistent-postgresql
 
-## 2.13.7
+## 2.13.6.3
 
 * [#1547](https://github.com/yesodweb/persistent/pull/1547)
     * Bump `libpq` bounds
