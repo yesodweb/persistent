@@ -815,10 +815,11 @@ getColumn connectInfo getter tname tschema [ PersistText cname
                   let colSchema =
                         case schema of
                           PersistNull -> Nothing
-                          PersistText schemaName ->
-                            if T.null schemaName || schemaName == (pack $ MySQL.connectDatabase connectInfo)
-                              then Nothing
-                              else Just $ SchemaNameDB schemaName
+                          PersistText schemaName -> do
+                            guard $ not (T.null schemaName)
+                            guard $ schemaName /= (pack $ MySQL.connectDatabase connectInfo)
+                            pure $ SchemaNameDB schemaName
+                          _ -> Nothing -- this should never happen
                    in ColumnReference
                         (EntityNameDB tab)
                         colSchema
