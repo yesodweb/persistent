@@ -1,6 +1,6 @@
 # Changelog for persistent-qq
 
-## 2.12.1
+## 2.12.0.7
 
 * Add tests for the new `schema=` annotation. [#1561](https://github.com/yesodweb/persistent/pull/1561)
 
