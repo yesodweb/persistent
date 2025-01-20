@@ -40,7 +40,7 @@ runConn f = do
 db :: SqlPersistT (LoggingT (ResourceT IO)) a -> IO a
 db actions = do
   runResourceT $ runConn $ do
-      rawSql @(Single Int64) ("attach 'animals.db' as animals") []
+      attachDatabaseFile "animals.db" (SchemaNameDB "animals")
       _ <- runMigrationSilent testMigrate
       actions <* transactionUndo
 

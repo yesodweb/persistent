@@ -58,7 +58,7 @@ test-suite specs
     , mtl
     , persistent >=2.14
     , persistent-qq
-    , persistent-sqlite
+    , persistent-sqlite >=2.13.4
     , resourcet
     , template-haskell
     , text
