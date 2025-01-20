@@ -71,6 +71,7 @@ import qualified Database.Persist.TH.SharedPrimaryKeySpec as SharedPrimaryKeySpe
 import qualified Database.Persist.TH.SumSpec as SumSpec
 import qualified Database.Persist.TH.ToFromPersistValuesSpec as ToFromPersistValuesSpec
 import qualified Database.Persist.TH.TypeLitFieldDefsSpec as TypeLitFieldDefsSpec
+
 -- test to ensure we can have types ending in Id that don't trash the TH
 -- machinery
 type TextId = Text
