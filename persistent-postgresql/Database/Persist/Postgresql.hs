@@ -627,7 +627,6 @@ withStmt' conn query vals =
 doesTableExist :: (Text -> IO Statement)
                -> EntityNameDB
                -> (Maybe SchemaNameDB)
-               -- ^ @since 2.13.6.3
                -> IO Bool
 doesTableExist getter (EntityNameDB name) mSchema = do
     stmt <- getter sql
