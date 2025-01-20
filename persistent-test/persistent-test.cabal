@@ -77,7 +77,7 @@ library
       , monad-logger             >= 0.3.25
       , mtl
       , path-pieces              >= 0.2
-      , persistent               >= 2.14.7    && < 2.15
+      , persistent               >= 2.15    && < 2.16
       , QuickCheck               >= 2.9
       , quickcheck-instances     >= 0.3
       , random                   >= 1.1
