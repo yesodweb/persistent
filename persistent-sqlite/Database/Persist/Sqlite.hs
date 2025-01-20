@@ -137,7 +137,7 @@ createSqlitePoolFromInfo connInfo = createSqlPool $ openWith const connInfo
 
 -- | Create a pool of SQLite connections.
 --
--- @since 2.13.4.0
+-- @since 2.13.4
 createSqlitePoolWithConfig :: (MonadUnliftIO m, MonadLoggerIO m)
                            => Text -- ^ connection string
                            -> ConnectionPoolConfig -> m (Pool SqlBackend)
