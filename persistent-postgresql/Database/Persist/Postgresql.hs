@@ -627,7 +627,7 @@ withStmt' conn query vals =
 doesTableExist :: (Text -> IO Statement)
                -> EntityNameDB
                -> (Maybe SchemaNameDB)
-               -- ^ @since 2.13.7
+               -- ^ @since 2.13.6.3
                -> IO Bool
 doesTableExist getter (EntityNameDB name) mSchema = do
     stmt <- getter sql
@@ -934,7 +934,7 @@ getColumn
     :: (Text -> IO Statement)
     -> EntityNameDB
     -> Maybe SchemaNameDB
-    -- ^ @since 2.13.7
+    -- ^ @since 2.13.6.3
     -> [PersistValue]
     -> Maybe (EntityNameDB, ConstraintNameDB)
     -> IO (Either Text Column)
@@ -1305,7 +1305,7 @@ showAlterDb (AlterTable t s at) = (False, showAlterTable t s at)
 showAlterTable
     :: EntityNameDB
     -> Maybe SchemaNameDB
-    -- ^ @since 2.13.7
+    -- ^ @since 2.13.6.3
     -> AlterTable
     -> Text
 showAlterTable table schema (AddUniqueConstraint cname cols) = T.concat
@@ -1327,7 +1327,7 @@ showAlterTable table schema (DropConstraint cname) = T.concat
 showAlter
     :: EntityNameDB
     -> Maybe SchemaNameDB
-    -- ^ @since 2.13.7
+    -- ^ @since 2.13.6.3
     -> AlterColumn
     -> Text
 showAlter table schema (ChangeType c t extra) =
@@ -1449,13 +1449,13 @@ escape s =
 
 -- | Escapes the SQL identifier of an entity.
 --
--- @since 2.13.7
+-- @since 2.13.6.3
 entityIdentifier :: EntityDef -> Text
 entityIdentifier ed = escapeES (getEntityDBName ed) (getEntitySchema ed)
 
 -- | Escapes a table name, optionally namespaced by a schema.
 --
--- @since 2.13.7
+-- @since 2.13.6.3
 escapeES :: EntityNameDB -> Maybe SchemaNameDB -> Text
 escapeES entityName schemaName = case schemaName of
     Nothing -> escapeE entityName
