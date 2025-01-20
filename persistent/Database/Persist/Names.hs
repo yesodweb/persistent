@@ -74,7 +74,7 @@ newtype ConstraintNameHS = ConstraintNameHS { unConstraintNameHS :: Text }
 -- | The name of a database schema. Different backends vary in their
 -- interpretation of this concept.
 --
--- @since 2.14.7
+-- @since 2.15.0
 newtype SchemaNameDB = SchemaNameDB { unSchemaNameDB :: Text }
   deriving (Show, Eq, Read, Ord, Lift)
 

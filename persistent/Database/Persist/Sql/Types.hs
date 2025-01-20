@@ -42,7 +42,7 @@ data ColumnReference = ColumnReference
     , crSchemaName :: !(Maybe SchemaNameDB)
     -- ^ The name of the schema that the foreign table belongs to.
     --
-    -- @since 2.14.7
+    -- @since 2.15.0
     , crConstraintName :: !ConstraintNameDB
     -- ^ The name of the foreign key constraint.
     --

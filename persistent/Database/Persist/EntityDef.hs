@@ -94,7 +94,7 @@ getEntityExtra = entityExtra
 -- | Get the (optional) schema for an entity. Specified with the syntax
 -- `schema=foo` on the Persistent model.
 --
--- @since 2.14.7
+-- @since 2.15.0
 getEntitySchema :: EntityDef -> Maybe SchemaNameDB
 getEntitySchema = entitySchema
 
@@ -206,7 +206,7 @@ setEntityFields fd ed = ed { entityFields = fd }
 
 -- | Update the entity schema.
 --
--- @since 2.14.7
+-- @since 2.15.0
 setEntitySchema :: Maybe SchemaNameDB -> EntityDef -> EntityDef
 setEntitySchema sn ed = ed { entitySchema = sn }
 
