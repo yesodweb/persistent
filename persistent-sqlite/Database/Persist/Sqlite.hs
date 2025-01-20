@@ -57,6 +57,7 @@ module Database.Persist.Sqlite
     , createRawSqlitePoolFromInfo_
     , withRawSqlitePoolInfo
     , withRawSqlitePoolInfo_
+    , attachDatabaseFile
     ) where
 
 import Control.Concurrent (threadDelay)
@@ -1100,3 +1101,14 @@ instance (PersistUniqueWrite b) => PersistUniqueWrite (RawSqlite b) where
 
 makeLenses ''RawSqlite
 makeLenses ''SqliteConnectionInfo
+
+-- | Attaches a database file specified in the first argument,
+-- which can then be referenced by the schema name specified
+-- in the second argument.
+-- @since 2.13.4
+attachDatabaseFile :: MonadIO m => Text -> SchemaNameDB -> SqlPersistT m ()
+attachDatabaseFile fileName (SchemaNameDB schemaName) = do
+  -- This command always returns an empty list, but we need to
+  -- specialize it to Int64 in order to make it compile.
+  _ :: [Single Int64] <- rawSql ("attach '" <> fileName <> "' as " <> schemaName) []
+  return ()

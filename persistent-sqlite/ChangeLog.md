@@ -4,6 +4,7 @@
 
 * [#1561](https://github.com/yesodweb/persistent/pull/1561)
     * Add schema support to Persistent.
+    * Add 'attachDatabaseFile' for attaching database files as schemas.
 
 ## 2.13.3.0
 

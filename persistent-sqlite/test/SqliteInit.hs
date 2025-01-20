@@ -125,7 +125,7 @@ runConn f = do
     let printDebug = if debugPrint then print . fromLogStr else void . return
     void $ flip runLoggingT (\_ _ _ s -> printDebug s) $ do
         withSqlitePoolInfo sqlite_database 1 $ runSqlPool $ do
-          rawSql @(Single Int64) ("attach '" <> sqlite_foo_database_file <> "' as foo") []
+          attachDatabaseFile "foo.db" (SchemaNameDB "foo")
           f
 
 db :: SqlPersistT (LoggingT (ResourceT IO)) () -> Assertion
