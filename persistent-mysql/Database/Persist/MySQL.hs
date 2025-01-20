@@ -557,7 +557,7 @@ addReference
     -> (Maybe SchemaNameDB)
     -- ^ Referenced schema name
     --
-    -- @since 2.13.2
+    -- @since 2.13.1.6
     -> FieldNameDB
     -- ^ Column name
     -> FieldCascade
@@ -690,7 +690,7 @@ getColumn
     -> (Text -> IO Statement)
     -> EntityNameDB
     -> Maybe SchemaNameDB
-    -- ^ @since 2.13.2
+    -- ^ @since 2.13.1.6
     -> [PersistValue]
     -> Maybe ColumnReference
     -> IO (Either Text Column)
@@ -1083,7 +1083,7 @@ showAlterDb (AlterTable t s at) = (False, pack $ showAlterTable t s at)
 showAlterTable
   :: EntityNameDB
   -> Maybe SchemaNameDB
-  -- ^ @since 2.13.2
+  -- ^ @since 2.13.1.6
   -> AlterTable
   -> String
 showAlterTable table schema (AddUniqueConstraint cname cols) = concat
@@ -1112,7 +1112,7 @@ showAlterTable table schema (DropUniqueConstraint cname) = concat
 showAlter
   :: EntityNameDB
   -> Maybe SchemaNameDB
-  -- ^ @since 2.13.2
+  -- ^ @since 2.13.1.6
   -> AlterColumn
   -> String
 showAlter table schema (Change (Column n nu t def gen defConstraintName maxLen _ref)) =
@@ -1217,7 +1217,7 @@ escapeC = escapeWith (escapeDBName . T.unpack)
 escapeE
   :: EntityNameDB
   -> Maybe SchemaNameDB
-  -- ^ @since 2.13.2
+  -- ^ @since 2.13.1.6
   -> String
 escapeE entity Nothing = escapeWith (escapeDBName . T.unpack) entity
 escapeE entity (Just schema) = escapeNS schema <> "." <> escapeNS entity
@@ -1231,7 +1231,7 @@ escapeF = escapeWith (escapeDBName . T.unpack)
 escapeET
   :: EntityNameDB
   -> Maybe SchemaNameDB
-  -- ^ @since 2.13.2
+  -- ^ @since 2.13.1.6
   -> Text
 escapeET entity schema = T.pack $ escapeE entity schema
 
