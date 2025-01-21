@@ -68,6 +68,10 @@ jobs:
           cabal-version: ${{ matrix.cabal }}
       - name: Check MySQL connection
         run: mysql -utest -ptest -h127.0.0.1 --port=33306 test -e "SELECT 1;"
+      - name: Create 'foo' schema in MySQL
+        run: mysql -utest -ptest -h127.0.0.1 --port=3306 test -e "CREATE DATABASE foo; GRANT ALL ON foo.* to 'test'@'localhost';"
+      - name: Create 'foo' schema in Postgres
+        run: PGPASSWORD=perstest psql -d persistent -U perstest -c "CREATE SCHEMA foo;"
       - name: Start MongoDB
         uses: supercharge/mongodb-github-action@1.8.0
         with:
