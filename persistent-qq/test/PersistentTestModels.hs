@@ -110,10 +110,24 @@ share
     ~no Int
     def Int
 
+  -- copied from 'Person'
+  AnimalPerson json schema=animals
+    name Text
+    age Int "some ignored -- \" attribute"
+    color Text Maybe -- this is a comment sql=foobarbaz
+    AnimalPersonNameKey name -- this is a comment sql=foobarbaz
+    deriving Show Eq
+
+  PetAnimal schema=animals
+    ownerId AnimalPersonId
+    name Text
 |]
 
 deriving instance Show (BackendKey backend) => Show (PetGeneric backend)
 deriving instance Eq (BackendKey backend) => Eq (PetGeneric backend)
+
+deriving instance Show (BackendKey backend) => Show (PetAnimalGeneric backend)
+deriving instance Eq (BackendKey backend) => Eq (PetAnimalGeneric backend)
 
 share [ mkPersist sqlSettings { mpsPrefixFields = False, mpsGeneric = True }
       , mkMigrate "noPrefixMigrate"
@@ -178,3 +192,4 @@ cleanDB = do
   deleteWhere ([] :: [Filter (OutdoorPetGeneric backend)])
   deleteWhere ([] :: [Filter (UserPTGeneric backend)])
   deleteWhere ([] :: [Filter (EmailPTGeneric backend)])
+  deleteWhere ([] :: [Filter (PetAnimalGeneric backend)])

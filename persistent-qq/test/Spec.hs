@@ -1,26 +1,29 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
 import Control.Monad (when)
 import Control.Monad.Logger (LoggingT, runLoggingT)
-import Control.Monad.Trans.Resource
 import Control.Monad.Reader
+import Control.Monad.Trans.Resource
 import qualified Data.ByteString.Char8 as B
-import Data.List.NonEmpty (NonEmpty(..))
+import Data.Int (Int64)
 import Data.List (sort)
+import Data.List.NonEmpty (NonEmpty(..))
 import Data.Text (Text)
 import System.Log.FastLogger (fromLogStr)
+import System.IO.Unsafe (unsafePerformIO)
 import Test.Hspec
 import Test.HUnit ((@?=))
 
+import qualified CodeGenTest
 import Database.Persist.Class.PersistEntity
 import Database.Persist.Sql
 import Database.Persist.Sql.Raw.QQ
 import Database.Persist.Sqlite
-import PersistTestPetType
 import PersistentTestModels
-import qualified CodeGenTest
+import PersistTestPetType
 
 main :: IO ()
 main = hspec spec
@@ -37,6 +40,7 @@ runConn f = do
 db :: SqlPersistT (LoggingT (ResourceT IO)) a -> IO a
 db actions = do
   runResourceT $ runConn $ do
+      attachDatabaseFile "animals.db" (SchemaNameDB "animals")
       _ <- runMigrationSilent testMigrate
       actions <* transactionUndo
 
@@ -114,6 +118,21 @@ spec = describe "persistent-qq" $ do
         ret2 <- runQuery :: (MonadIO m) => SqlPersistT m [Entity (ReverseFieldOrder Person)]
         liftIO $ ret1 @?= [Entity p1k p1]
         liftIO $ ret2 @?= [Entity (RFOKey $ unPersonKey p1k) (RFO p1)]
+
+    it "sqlQQ/entity in schema" $ db $ do
+        let person = AnimalPerson "Zacarias" 93 Nothing
+        personKey <- insert person
+        let pet = PetAnimal personKey "Fluffy"
+        petKey <- insert pet
+        let runQueryQuoted, runQueryRaw
+              :: (RawSql a, Functor m, MonadIO m)
+              => ReaderT SqlBackend m [a]
+            runQueryQuoted = [sqlQQ| SELECT ?? FROM ^{PetAnimal} |]
+            runQueryRaw = [sqlQQ| SELECT ?? FROM animals.PetAnimal |]
+        retQuoted <- runQueryQuoted
+        retRaw <- runQueryRaw
+        liftIO $ retQuoted @?= [Entity petKey pet]
+        liftIO $ retRaw @?= [Entity petKey pet]
 
     it "sqlQQ/OUTER JOIN" $ db $ do
         let insert' :: (PersistStore backend, PersistEntity val, PersistEntityBackend val ~ BaseBackend backend, MonadIO m, SafeToInsert val)

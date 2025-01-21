@@ -310,6 +310,8 @@ parseLines ps = do
 data ParsedEntityDef = ParsedEntityDef
     { parsedEntityDefComments :: [Text]
     , parsedEntityDefEntityName :: EntityNameHS
+    , parsedEntityDefSchemaName :: Maybe SchemaNameDB
+      -- ^ @since 2.15.0
     , parsedEntityDefIsSum :: Bool
     , parsedEntityDefEntityAttributes :: [Attr]
     , parsedEntityDefFieldAttributes :: [[Token]]
@@ -329,6 +331,7 @@ toParsedEntityDef :: LinesWithComments -> ParsedEntityDef
 toParsedEntityDef lwc = ParsedEntityDef
     { parsedEntityDefComments = lwcComments lwc
     , parsedEntityDefEntityName = entNameHS
+    , parsedEntityDefSchemaName = schemaName
     , parsedEntityDefIsSum = isSum
     , parsedEntityDefEntityAttributes = entAttribs
     , parsedEntityDefFieldAttributes = attribs
@@ -348,6 +351,9 @@ toParsedEntityDef lwc = ParsedEntityDef
 
     (attribs, extras) =
         parseEntityFields fieldLines
+
+    schemaName =
+      fmap SchemaNameDB $ listToMaybe $ mapMaybe (T.stripPrefix "schema=") entAttribs
 
 isDocComment :: Token -> Maybe Text
 isDocComment tok =
@@ -712,6 +718,7 @@ mkUnboundEntityDef ps parsedEntDef =
                     case parsedEntityDefComments parsedEntDef of
                         [] -> Nothing
                         comments -> Just (T.unlines comments)
+                , entitySchema = parsedEntityDefSchemaName parsedEntDef
                 }
         }
   where
@@ -1390,6 +1397,9 @@ takeForeign ps entityName = takeRefTable
                                 EntityNameHS refTableName
                             , foreignRefTableDBName =
                                 EntityNameDB $ psToDBName ps refTableName
+                            , foreignRefSchemaDBName =
+                                Nothing
+                            -- ^ This will be determined in the TH phase ('fixForeignRefSchemaDBName').
                             , foreignConstraintNameHaskell =
                                 constraintName
                             , foreignConstraintNameDBName =

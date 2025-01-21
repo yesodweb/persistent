@@ -1,5 +1,10 @@
 # Changelog for persistent-mysql
 
+##  2.13.1.6
+
+* [#1561](https://github.com/yesodweb/persistent/pull/1561)
+    * Add schema support to Persistent
+
 ##  2.13.1.5
 
 * [#1526](https://github.com/yesodweb/persistent/pull/1526)

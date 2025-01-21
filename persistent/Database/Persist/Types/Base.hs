@@ -155,6 +155,10 @@ data EntityDef = EntityDef
     -- ^ Optional comments on the entity.
     --
     -- @since 2.10.0
+    , entitySchema :: !(Maybe SchemaNameDB)
+    -- ^ The schema the entity belongs to.
+    --
+    -- @since 2.15.0
     }
     deriving (Show, Eq, Read, Ord, Lift)
 
@@ -552,6 +556,10 @@ type ForeignFieldDef = (FieldNameHS, FieldNameDB)
 data ForeignDef = ForeignDef
     { foreignRefTableHaskell       :: !EntityNameHS
     , foreignRefTableDBName        :: !EntityNameDB
+    , foreignRefSchemaDBName       :: !(Maybe SchemaNameDB)
+    -- ^ Determines which schema the target table belongs to.
+    --
+    -- @since 2.15.0
     , foreignConstraintNameHaskell :: !ConstraintNameHS
     , foreignConstraintNameDBName  :: !ConstraintNameDB
     , foreignFieldCascade          :: !FieldCascade

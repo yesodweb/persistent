@@ -57,6 +57,7 @@ module Database.Persist.Sqlite
     , createRawSqlitePoolFromInfo_
     , withRawSqlitePoolInfo
     , withRawSqlitePoolInfo_
+    , attachDatabaseFile
     ) where
 
 import Control.Concurrent (threadDelay)
@@ -136,7 +137,7 @@ createSqlitePoolFromInfo connInfo = createSqlPool $ openWith const connInfo
 
 -- | Create a pool of SQLite connections.
 --
--- @since 2.13.4.0
+-- @since 2.13.4
 createSqlitePoolWithConfig :: (MonadUnliftIO m, MonadLoggerIO m)
                            => Text -- ^ connection string
                            -> ConnectionPoolConfig -> m (Pool SqlBackend)
@@ -310,7 +311,7 @@ wrapConnectionInfo connInfo conn logFunc = do
             , connCommit = helper "COMMIT"
             , connRollback = ignoreExceptions . helper "ROLLBACK"
             , connEscapeFieldName = escape . unFieldNameDB
-            , connEscapeTableName = escape . unEntityNameDB . getEntityDBName
+            , connEscapeTableName = entityIdentifier
             , connEscapeRawName = escape
             , connNoLimit = "LIMIT -1"
             , connRDBMS = "sqlite"
@@ -369,7 +370,7 @@ insertSql' ent vals =
           ISRManyKeys sql vals
             where sql = T.concat
                     [ "INSERT INTO "
-                    , escapeE $ getEntityDBName ent
+                    , entityIdentifier ent
                     , "("
                     , T.intercalate "," $ map (escapeF . fieldDB) cols
                     , ") VALUES("
@@ -383,12 +384,12 @@ insertSql' ent vals =
                   [ "SELECT "
                   , escapeF $ fieldDB fd
                   , " FROM "
-                  , escapeE $ getEntityDBName ent
+                  , entityIdentifier ent
                   , " WHERE _ROWID_=last_insert_rowid()"
                   ]
               ins = T.concat
                   [ "INSERT INTO "
-                  , escapeE $ getEntityDBName ent
+                  , entityIdentifier ent
                   , if null cols
                         then " VALUES(null)"
                         else T.concat
@@ -456,7 +457,7 @@ migrate'
 migrate' allDefs getter val = do
     let (cols, uniqs, fdefs) = sqliteMkColumns allDefs val
     let newSql = mkCreateTable False def (filter (not . safeToRemove val . cName) cols, uniqs, fdefs)
-    stmt <- getter "SELECT sql FROM sqlite_master WHERE type='table' AND name=?"
+    stmt <- getter $ "SELECT sql FROM " <> sqliteMaster <> " WHERE type='table' AND name=?"
     oldSql' <- with (stmtQuery stmt [PersistText $ unEntityNameDB table])
       (\src -> runConduit $ src .| go)
     case oldSql' of
@@ -470,6 +471,8 @@ migrate' allDefs getter val = do
   where
     def = val
     table = getEntityDBName def
+    schema = getEntitySchema def
+    sqliteMaster = maybe "sqlite_master" (\schema' -> escapeS schema' <> ".sqlite_master") schema
     go = do
         x <- CL.head
         case x of
@@ -501,7 +504,7 @@ mockMigration mig = do
                 , connCommit = helper "COMMIT"
                 , connRollback = ignoreExceptions . helper "ROLLBACK"
                 , connEscapeFieldName = escape . unFieldNameDB
-                , connEscapeTableName = escape . unEntityNameDB . getEntityDBName
+                , connEscapeTableName = entityIdentifier
                 , connEscapeRawName = escape
                 , connNoLimit = "LIMIT -1"
                 , connRDBMS = "sqlite"
@@ -539,7 +542,7 @@ getCopyTable :: [EntityDef]
              -> EntityDef
              -> IO [(Bool, Text)]
 getCopyTable allDefs getter def = do
-    stmt <- getter $ T.concat [ "PRAGMA table_info(", escapeE table, ")" ]
+    stmt <- getter $ T.concat [ "PRAGMA ", tableInfo, "(", escapeE table, ")" ]
     oldCols' <- with (stmtQuery stmt []) (\src -> runConduit $ src .| getCols)
     let oldCols = map FieldNameDB oldCols'
     let newCols = filter (not . safeToRemove def) $ map cName cols
@@ -552,6 +555,9 @@ getCopyTable allDefs getter def = do
            , (False, dropTmp)
            ]
   where
+    tableInfo = case schema of
+        Nothing -> "table_info"
+        Just schema' -> escapeS schema' <> ".table_info"
     getCols = do
         x <- CL.head
         case x of
@@ -561,30 +567,38 @@ getCopyTable allDefs getter def = do
                 return $ name : names
             Just y -> error $ "Invalid result from PRAGMA table_info: " ++ show y
     table = getEntityDBName def
-    tableTmp = EntityNameDB $ unEntityNameDB table <> "_backup"
+    schema = getEntitySchema def
+    tableIdentifier = entityIdentifier def
+    -- Temporary tables cannot have qualified names, so we prepend
+    -- the name with the intended schema to provide namespacing.
+    tableTmp =
+        EntityNameDB $ T.intercalate "_" $ catMaybes [unSchemaNameDB <$> schema, Just $ unEntityNameDB table, Just "backup"]
+    tableTmpIdentifier = escapeE tableTmp
     (cols, uniqs, fdef) = sqliteMkColumns allDefs def
     cols' = filter (not . safeToRemove def . cName) cols
     newSql = mkCreateTable False def (cols', uniqs, fdef)
-    tmpSql = mkCreateTable True (setEntityDBName tableTmp def) (cols', uniqs, [])
-    dropTmp = "DROP TABLE " <> escapeE tableTmp
-    dropOld = "DROP TABLE " <> escapeE table
+    -- Temporary tables cannot have qualified names, so we override
+    -- the schema to 'Nothing' here.
+    tmpSql = mkCreateTable True (setEntitySchema Nothing $ setEntityDBName tableTmp def) (cols', uniqs, [])
+    dropTmp = "DROP TABLE " <> tableTmpIdentifier
+    dropOld = "DROP TABLE " <> tableIdentifier
     copyToTemp common = T.concat
         [ "INSERT INTO "
-        , escapeE tableTmp
+        , tableTmpIdentifier
         , "("
         , T.intercalate "," $ map escapeF common
         , ") SELECT "
         , T.intercalate "," $ map escapeF common
         , " FROM "
-        , escapeE table
+        , tableIdentifier
         ]
     copyToFinal newCols = T.concat
         [ "INSERT INTO "
-        , escapeE table
+        , tableIdentifier
         , " SELECT "
         , T.intercalate "," $ map escapeF newCols
         , " FROM "
-        , escapeE tableTmp
+        , tableTmpIdentifier
         ]
 
 mkCreateTable :: Bool -> EntityDef -> ([Column], [UniqueDef], [ForeignDef]) -> Text
@@ -595,13 +609,13 @@ mkCreateTable isTemp entity (cols, uniqs, fdefs) =
         [ "CREATE"
         , if isTemp then " TEMP" else ""
         , " TABLE "
-        , escapeE $ getEntityDBName entity
+        , entityIdentifier entity
         , "("
         ]
 
     footer =
         [ T.concat $ map sqlUnique uniqs
-        , T.concat $ map sqlForeign fdefs
+        , T.concat $ map (sqlForeign $ getEntitySchema entity) fdefs
         , ")"
         ]
 
@@ -646,27 +660,42 @@ sqlColumn noRef (Column name isNull typ def gen _cn _maxLen ref) = T.concat
     , mayGenerated gen
     , case ref of
         Nothing -> ""
+        -- This foreign key constraint is only legitimate if it is a reference
+        -- within the same schema.
         Just ColumnReference {crTableName=table, crFieldCascade=cascadeOpts} ->
-          if noRef then "" else " REFERENCES " <> escapeE table
+            if noRef
+                then ""
+                -- This foreign key constraint is only legitimate if it is a reference
+                -- within the same schema. It's a syntax error in SQLite to use a
+                -- dot-qualified name here, so we just escape the table name.
+                else " REFERENCES " <> escapeE table
             <> onDelete cascadeOpts <> onUpdate cascadeOpts
     ]
   where
     onDelete opts = maybe "" (T.append " ON DELETE " . renderCascadeAction) (fcOnDelete opts)
     onUpdate opts = maybe "" (T.append " ON UPDATE " . renderCascadeAction) (fcOnUpdate opts)
 
-sqlForeign :: ForeignDef -> Text
-sqlForeign fdef = T.concat $
+sqlForeign :: Maybe SchemaNameDB -> ForeignDef -> Text
+sqlForeign entitySchema fdef = T.concat $
     [ ", CONSTRAINT "
     , escapeC $ foreignConstraintNameDBName fdef
     , " FOREIGN KEY("
     , T.intercalate "," $ map (escapeF . snd. fst) $ foreignFields fdef
     , ") REFERENCES "
-    , escapeE $ foreignRefTableDBName fdef
+    , -- It's not possible for SQLite to maintain foreign key
+      -- constraints across databases (which Persistent calls "schemas").
+      -- In fact, it's a syntax error to use a schema qualifier in this
+      -- part of the SQL expression. So we omit the schema here, and throw
+      -- an error if this is a cross-schema reference.
+      if isCrossSchemaReference
+        then error "Sqlite.sqlForeign: this backend cannot accept foreign key references across different schemas"
+        else escapeE (foreignRefTableDBName fdef)
     , "("
     , T.intercalate "," $ map (escapeF . snd . snd) $ foreignFields fdef
     , ")"
     ] ++ onDelete ++ onUpdate
   where
+    isCrossSchemaReference = foreignRefSchemaDBName fdef /= entitySchema
     onDelete =
         fmap (T.append " ON DELETE ")
         $ showAction
@@ -695,6 +724,19 @@ escapeC = escapeWith escape
 escapeE :: EntityNameDB -> Text
 escapeE = escapeWith escape
 
+-- | Escapes a schema name.
+--
+-- @since 2.13.4
+escapeS :: SchemaNameDB -> Text
+escapeS = escapeWith escape
+
+-- | Escapes a table name, optionally namespaced by a schema.
+--
+-- @since 2.13.4
+escapeES :: EntityNameDB -> Maybe SchemaNameDB -> Text
+escapeES entity Nothing = escapeE entity
+escapeES entity (Just schema) = escapeS schema <> "." <> escapeE entity
+
 escapeF :: FieldNameDB -> Text
 escapeF = escapeWith escape
 
@@ -705,6 +747,12 @@ escape s =
     q = T.singleton '"'
     go '"' = "\"\""
     go c = T.singleton c
+
+-- | Escapes the identifier for an entity.
+--
+-- @since 2.13.4
+entityIdentifier :: EntityDef -> Text
+entityIdentifier entity = escapeES (getEntityDBName entity) (getEntitySchema entity)
 
 putManySql :: EntityDef -> Int -> Text
 putManySql ent n = putManySql' conflictColumns (toList fields) ent n
@@ -724,14 +772,13 @@ putManySql' conflictColumns fields ent n = q
     fieldDbToText = escapeF . fieldDB
     mkAssignment f = T.concat [f, "=EXCLUDED.", f]
 
-    table = escapeE . getEntityDBName $ ent
     columns = Util.commaSeparated $ map fieldDbToText fields
     placeholders = map (const "?") fields
     updates = map (mkAssignment . fieldDbToText) fields
 
     q = T.concat
         [ "INSERT INTO "
-        , table
+        , entityIdentifier ent
         , Util.parenWrapped columns
         , " VALUES "
         , Util.commaSeparated . replicate n
@@ -824,6 +871,10 @@ instance FromJSON SqliteConnectionInfo where
 -- @since 2.11.1
 data ForeignKeyViolation = ForeignKeyViolation
     { foreignKeyTable :: Text -- ^ The table of the violated constraint
+    , foreignKeySchema :: Maybe Text
+      -- ^ The schema of the violated constraint
+      --
+      -- @since 2.13.4
     , foreignKeyColumn :: Text -- ^ The column of the violated constraint
     , foreignKeyRowId :: Int64 -- ^ The ROWID of the row with the violated foreign key constraint
     } deriving (Eq, Ord, Show)
@@ -841,9 +892,10 @@ checkForeignKeys
 checkForeignKeys = rawQuery query [] .| C.mapM parse
   where
     parse l = case l of
-        [ PersistInt64 rowid , PersistText table , PersistText column ] ->
+        [ PersistInt64 rowid , PersistText table , PersistText schema , PersistText column ] ->
             return ForeignKeyViolation
                 { foreignKeyTable = table
+                , foreignKeySchema = if schema == "main" then Nothing else Just schema
                 , foreignKeyColumn = column
                 , foreignKeyRowId = rowid
                 }
@@ -851,9 +903,14 @@ checkForeignKeys = rawQuery query [] .| C.mapM parse
             [ "Unexpected result from foreign key check:\n", T.pack (show l) ]
 
     query = T.unlines
-        [ "SELECT origin.rowid, origin.\"table\", group_concat(foreignkeys.\"from\")"
-        , "FROM pragma_foreign_key_check() AS origin"
-        , "INNER JOIN pragma_foreign_key_list(origin.\"table\") AS foreignkeys"
+        [ "SELECT origin.rowid, origin.\"table\", databases.name, group_concat(foreignkeys.\"from\")"
+        , "FROM pragma_database_list() as databases"
+        , -- Passing null as the first argument indicates that we are considering
+          -- *all* tables in a particular schema. The second argument determines
+          -- the schema to check. So this inner join iterates over every
+          -- active schema to find all the foreign key constraint violations.
+          "INNER JOIN pragma_foreign_key_check(null, databases.name) AS origin"
+        , "INNER JOIN pragma_foreign_key_list(origin.\"table\", databases.name) AS foreignkeys"
         , "ON origin.fkid = foreignkeys.id AND origin.parent = foreignkeys.\"table\""
         , "GROUP BY origin.rowid"
         ]
@@ -1044,3 +1101,14 @@ instance (PersistUniqueWrite b) => PersistUniqueWrite (RawSqlite b) where
 
 makeLenses ''RawSqlite
 makeLenses ''SqliteConnectionInfo
+
+-- | Attaches a database file specified in the first argument,
+-- which can then be referenced by the schema name specified
+-- in the second argument.
+-- @since 2.13.4
+attachDatabaseFile :: MonadIO m => Text -> SchemaNameDB -> SqlPersistT m ()
+attachDatabaseFile fileName (SchemaNameDB schemaName) = do
+  -- This command always returns an empty list, but we need to
+  -- specialize it to Int64 in order to make it compile.
+  _ :: [Single Int64] <- rawSql ("attach '" <> fileName <> "' as " <> schemaName) []
+  return ()

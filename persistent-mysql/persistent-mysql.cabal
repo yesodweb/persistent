@@ -1,5 +1,5 @@
 name:            persistent-mysql
-version:         2.13.1.5
+version:         2.13.1.6
 license:         MIT
 license-file:    LICENSE
 author:          Felipe Lessa <felipe.lessa@gmail.com>, Michael Snoyman
@@ -28,7 +28,7 @@ extra-source-files: ChangeLog.md
 
 library
     build-depends:   base             >= 4.9      && < 5
-                   , persistent       >= 2.13.3   && < 3
+                   , persistent       >= 2.15   && < 3
                    , aeson            >= 1.0
                    , blaze-builder
                    , bytestring       >= 0.10.8
@@ -54,7 +54,7 @@ test-suite test
     type:            exitcode-stdio-1.0
     main-is:         main.hs
     hs-source-dirs:  test
-    other-modules:   
+    other-modules:
         MyInit
         InsertDuplicateUpdate
         CustomConstraintTest
@@ -62,7 +62,7 @@ test-suite test
         JSONTest
     ghc-options:     -Wall
 
-    build-depends:   
+    build-depends:
         base             >= 4.9 && < 5
       , aeson
       , bytestring

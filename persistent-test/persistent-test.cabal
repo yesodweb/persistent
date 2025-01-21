@@ -1,5 +1,5 @@
 name:            persistent-test
-version:         2.13.1.3
+version:         2.13.2
 license:         MIT
 license-file:    LICENSE
 author:          Michael Snoyman <michael@snoyman.com>
@@ -15,7 +15,7 @@ bug-reports:     https://github.com/yesodweb/persistent/issues
 extra-source-files: ChangeLog.md
 
 library
-    exposed-modules: 
+    exposed-modules:
         CompositeTest
         CustomPersistField
         CustomPersistFieldTest
@@ -57,10 +57,11 @@ library
         UniqueTest
         UpsertTest
         LongIdentifierTest
+        SchemaTest
 
     hs-source-dirs: src
 
-    build-depends: 
+    build-depends:
         base                     >= 4.9       && < 5
       , aeson                    >= 1.0
       , blaze-html               >= 0.9
@@ -76,7 +77,7 @@ library
       , monad-logger             >= 0.3.25
       , mtl
       , path-pieces              >= 0.2
-      , persistent               >= 2.14        && < 2.15
+      , persistent               >= 2.15    && < 2.16
       , QuickCheck               >= 2.9
       , quickcheck-instances     >= 0.3
       , random                   >= 1.1

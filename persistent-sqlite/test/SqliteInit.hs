@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 
 module SqliteInit (
   (@/=), (@==), (==@)
@@ -16,6 +17,7 @@ module SqliteInit (
   , db
   , sqlite_database
   , sqlite_database_file
+  , sqlite_foo_database_file
   , BackendKey(..)
   , GenerateKey(..)
 
@@ -43,22 +45,42 @@ module SqliteInit (
   ) where
 
 import Init
-    ( TestFn(..), truncateTimeOfDay, truncateUTCTime
-    , truncateToMicro, arbText, liftA2, GenerateKey(..)
-    , (@/=), (@==), (==@), MonadFail
-    , assertNotEqual, assertNotEmpty, assertEmpty, asIO
-    , isTravis, RunDb
-    )
+       ( GenerateKey(..)
+       , MonadFail
+       , RunDb
+       , TestFn(..)
+       , arbText
+       , asIO
+       , assertEmpty
+       , assertNotEmpty
+       , assertNotEqual
+       , isTravis
+       , liftA2
+       , truncateTimeOfDay
+       , truncateToMicro
+       , truncateUTCTime
+       , (==@)
+       , (@/=)
+       , (@==)
+       )
 
 -- re-exports
 import Control.Exception (SomeException)
-import Control.Monad (void, replicateM, liftM, when, forM_)
+import Control.Monad (forM_, liftM, replicateM, void, when)
 import Control.Monad.Trans.Reader
-import Database.Persist.TH (mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase, MkPersistSettings(..))
+import Database.Persist.TH
+       ( MkPersistSettings(..)
+       , mkMigrate
+       , mkPersist
+       , persistLowerCase
+       , persistUpperCase
+       , share
+       , sqlSettings
+       )
 import Test.Hspec
 
 -- testing
-import Test.HUnit ((@?=),(@=?), Assertion, assertFailure, assertBool)
+import Test.HUnit (Assertion, assertBool, assertFailure, (@=?), (@?=))
 
 import Control.Monad (unless, (>=>))
 import Control.Monad.IO.Unlift (MonadUnliftIO)
@@ -90,6 +112,9 @@ type BackendMonad = SqlBackend
 sqlite_database_file :: Text
 sqlite_database_file = "testdb.sqlite3"
 
+sqlite_foo_database_file :: Text
+sqlite_foo_database_file = "testdb-foo.sqlite3"
+
 sqlite_database :: SqliteConnectionInfo
 sqlite_database = mkSqliteConnectionInfo sqlite_database_file
 
@@ -99,9 +124,10 @@ runConn f = do
     let debugPrint = not travis && _debugOn
     let printDebug = if debugPrint then print . fromLogStr else void . return
     void $ flip runLoggingT (\_ _ _ s -> printDebug s) $ do
-        withSqlitePoolInfo sqlite_database 1 $ runSqlPool f
+        withSqlitePoolInfo sqlite_database 1 $ runSqlPool $ do
+          attachDatabaseFile "foo.db" (SchemaNameDB "foo")
+          f
 
 db :: SqlPersistT (LoggingT (ResourceT IO)) () -> Assertion
 db actions = do
     runResourceT $ runConn $ actions >> transactionUndo
-

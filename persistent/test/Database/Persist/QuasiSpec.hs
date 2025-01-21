@@ -332,6 +332,7 @@ Notification
                 [ ForeignDef
                     { foreignRefTableHaskell = EntityNameHS "User"
                     , foreignRefTableDBName = EntityNameDB "user"
+                    , foreignRefSchemaDBName = Nothing
                     , foreignConstraintNameHaskell = ConstraintNameHS "fk_noti_user"
                     , foreignConstraintNameDBName = ConstraintNameDB "notificationfk_noti_user"
                     , foreignFieldCascade = FieldCascade Nothing Nothing

@@ -36,9 +36,13 @@ data Column = Column
 -- @since 2.11.0.0
 data ColumnReference = ColumnReference
     { crTableName :: !EntityNameDB
-    -- ^ The table name that the
+    -- ^ The foreign table's name.
     --
     -- @since 2.11.0.0
+    , crSchemaName :: !(Maybe SchemaNameDB)
+    -- ^ The name of the schema that the foreign table belongs to.
+    --
+    -- @since 2.15.0
     , crConstraintName :: !ConstraintNameDB
     -- ^ The name of the foreign key constraint.
     --
@@ -137,4 +141,3 @@ defaultConnectionPoolConfig = ConnectionPoolConfig 1 600 10
 -- processing).
 newtype Single a = Single {unSingle :: a}
     deriving (Eq, Ord, Show, Read)
-
