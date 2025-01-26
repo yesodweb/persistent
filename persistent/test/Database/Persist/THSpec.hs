@@ -26,6 +26,7 @@ module Database.Persist.THSpec where
 
 import Control.Applicative (Const(..))
 import Data.Aeson (decode, encode)
+import Data.Bits (bitSizeMaybe)
 import Data.ByteString.Lazy.Char8 ()
 import Data.Coerce
 import Data.Functor.Identity (Identity(..))
@@ -239,7 +240,10 @@ spec = describe "THSpec" $ do
         it "should have usual haskell name" $ do
             fieldHaskell `shouldBe` FieldNameHS "Id"
         it "should have correct underlying sql type" $ do
-            fieldSqlType `shouldBe` SqlInt64
+            fieldSqlType `shouldBe`
+                if bitSizeMaybe (0 :: Int) <= Just 32
+                    then SqlInt32
+                    else SqlInt64
         it "persistfieldsql should be right" $ do
             sqlType (Proxy @HasDefaultIdId) `shouldBe` SqlInt64
         it "should have correct haskell type" $ do
