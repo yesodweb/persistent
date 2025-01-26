@@ -27,6 +27,7 @@ data Column = Column
     , cGenerated :: !(Maybe Text)
     , cDefaultConstraintName   :: !(Maybe ConstraintNameDB)
     , cMaxLen    :: !(Maybe Integer)
+    , cCollation :: !(Maybe CollationName)
     , cReference :: !(Maybe ColumnReference)
     }
     deriving (Eq, Ord, Show)

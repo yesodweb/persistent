@@ -29,6 +29,17 @@ newtype FieldNameDB = FieldNameDB { unFieldNameDB :: Text }
 instance DatabaseName FieldNameDB where
     escapeWith f (FieldNameDB n) = f n
 
+-- | A 'CollationName' represents the name of a collation that @persistent@
+-- will associate with a particular field.
+--
+-- @since 2.15.0.0
+newtype CollationName = CollationName { unCollatioName :: Text }
+    deriving (Show, Eq, Read, Ord, Lift)
+
+-- | @since 2.15.0.0
+instance DatabaseName CollationName where
+    escapeWith f (CollationName n) = f n
+
 -- | A 'FieldNameHS' represents the Haskell-side name that @persistent@
 -- will use for a field.
 --
