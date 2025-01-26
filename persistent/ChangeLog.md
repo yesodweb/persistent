@@ -1,5 +1,11 @@
 # Changelog for persistent
 
+## Unreleased
+
+* [#1560](https://github.com/yesodweb/persistent/pull/1560)
+    * Add a `NoAction` option for foreign key constraints.
+    * Change the default action from `Restrict` to `NoAction`.
+
 ## 2.14.6.3
 
 * [#1544](https://github.com/yesodweb/persistent/pull/1544)

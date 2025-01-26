@@ -574,7 +574,7 @@ data ForeignDef = ForeignDef
 -- This type is used in both parsing the model definitions and performing
 -- migrations. A 'Nothing' in either of the field values means that the
 -- user has not specified a 'CascadeAction'. An unspecified 'CascadeAction'
--- is defaulted to 'Restrict' when doing migrations.
+-- is defaulted to 'NoAction' when doing migrations.
 --
 -- @since 2.11.0
 data FieldCascade = FieldCascade
@@ -604,7 +604,7 @@ renderFieldCascade (FieldCascade onUpdate onDelete) =
 -- change.
 --
 -- @since 2.11.0
-data CascadeAction = Cascade | Restrict | SetNull | SetDefault
+data CascadeAction = NoAction | Cascade | Restrict | SetNull | SetDefault
     deriving (Show, Eq, Read, Ord, Lift)
 
 -- | Render a 'CascadeAction' to 'Text' such that it can be used in a SQL
@@ -613,6 +613,7 @@ data CascadeAction = Cascade | Restrict | SetNull | SetDefault
 -- @since 2.11.0
 renderCascadeAction :: CascadeAction -> Text
 renderCascadeAction action = case action of
+  NoAction   -> "NO ACTION"
   Cascade    -> "CASCADE"
   Restrict   -> "RESTRICT"
   SetNull    -> "SET NULL"
