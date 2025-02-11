@@ -19,6 +19,7 @@ module Database.Persist.EntityDef
     , getEntityKeyFields
     , getEntityComments
     , getEntityExtra
+    , getEntitySpan
     , isEntitySum
     , entityPrimary
     , entitiesPrimary
@@ -40,7 +41,8 @@ import Database.Persist.EntityDef.Internal
 import Database.Persist.FieldDef
 
 import Database.Persist.Names
-import Database.Persist.Types.Base (ForeignDef, UniqueDef(..), entityKeyFields)
+import Database.Persist.Types.Base
+       (ForeignDef, Span, UniqueDef(..), entityKeyFields)
 
 -- | Retrieve the list of 'UniqueDef' from an 'EntityDef'. This does not include
 -- a @Primary@ key, if one is defined. A future version of @persistent@ will
@@ -205,3 +207,13 @@ overEntityFields
     -> EntityDef
 overEntityFields f ed =
     setEntityFields (f (getEntityFieldsDatabase ed)) ed
+
+-- | Gets the 'Span' of the definition of the entity.
+--
+-- Note that as of this writing the span covers the entire file or quasiquote
+-- where the item is defined due to parsing limitations. This may be changed in
+-- a future release to be more accurate.
+--
+-- @since FIXME TODO MEOW MEOW
+getEntitySpan :: EntityDef -> Maybe Span
+getEntitySpan = entitySpan

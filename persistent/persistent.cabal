@@ -95,6 +95,7 @@ library
 
     other-modules:
         Database.Persist.Types.Base
+        Database.Persist.Types.Span
 
         Database.Persist.Sql.Internal
         Database.Persist.Sql.Types
@@ -157,7 +158,9 @@ test-suite test
     hs-source-dirs:
         test/
 
-    ghc-options: -Wall
+    -- don't warn on partial matches, they're all over the place in the
+    -- testsuite and if they crash they will just fail the test.
+    ghc-options: -Wall -Wno-incomplete-uni-patterns
 
     default-extensions: FlexibleContexts
                       , MultiParamTypeClasses

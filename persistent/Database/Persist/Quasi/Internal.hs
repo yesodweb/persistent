@@ -5,6 +5,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE StrictData #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ViewPatterns #-}
 
@@ -21,6 +22,8 @@ module Database.Persist.Quasi.Internal
     , toFKNameInfixed
     , Token (..)
     , Line (..)
+    , SourceLoc(..)
+    , sourceLocFromTHLoc
     , preparse
     , parseLine
     , parseFieldType
@@ -66,7 +69,7 @@ import qualified Data.Text as T
 import Database.Persist.EntityDef.Internal
 import Database.Persist.Types
 import Database.Persist.Types.Base
-import Language.Haskell.TH.Syntax (Lift)
+import Language.Haskell.TH.Syntax (Lift, Loc(..))
 import qualified Text.Read as R
 
 data ParseState a = PSDone | PSFail String | PSSuccess a Text deriving Show
@@ -205,14 +208,48 @@ toFKNameInfixed :: Text -> EntityNameHS -> ConstraintNameHS -> Text
 toFKNameInfixed inf (EntityNameHS entName) (ConstraintNameHS conName) =
     entName <> inf <> conName
 
--- | Parses a quasi-quoted syntax into a list of entity definitions.
-parse :: PersistSettings -> Text -> [UnboundEntityDef]
-parse ps = maybe [] (parseLines ps) . preparse
+-- | Source location: file and line/col information. This is half of a 'Span'.
+data SourceLoc = SourceLoc
+    { locFile :: Text
+    , locStartLine :: Int
+    , locStartCol :: Int
+    } deriving (Show, Lift)
 
-preparse :: Text -> Maybe (NonEmpty Line)
+sourceLocFromTHLoc :: Loc -> SourceLoc
+sourceLocFromTHLoc Loc {loc_filename=filename, loc_start=start} =
+    SourceLoc {locFile = T.pack filename, locStartLine = fst start, locStartCol = snd start}
+
+
+-- | Parses a quasi-quoted syntax into a list of entity definitions.
+parse :: PersistSettings -> [(Maybe SourceLoc, Text)] -> [UnboundEntityDef]
+parse ps blocks =
+    mconcat $ handleBlock <$> blocks
+    where
+        handleBlock (mLoc, block) =
+            maybe []
+                (\(numLines, lns) -> parseLines ps (approximateSpan numLines block <$> mLoc) lns)
+                (preparse block)
+        -- FIXME: put an actually truthful span into here
+        -- We can't give a better result if we push any of this down into the
+        -- parser at the moment since the parser throws out location info by
+        -- e.g. discarding comment lines completely without keeping track of
+        -- where it is. The realistic fix to this is rewriting the parser in
+        -- Megaparsec, which is a reasonable idea that should actually be done.
+        approximateSpan numLines block loc =
+            Span
+            { spanFile = locFile loc
+            , spanStartLine = locStartLine loc
+            , spanStartCol = locStartCol loc
+            , spanEndLine = locStartLine loc + numLines - 1
+            -- Last line's length plus one (since we are one-past-the-end)
+            , spanEndCol = (+ 1) . T.length . T.takeWhileEnd (/= '\n') $ block
+            }
+
+preparse :: Text -> Maybe (Int, NonEmpty Line)
 preparse txt = do
     lns <- NEL.nonEmpty (T.lines txt)
-    NEL.nonEmpty $ mapMaybe parseLine (NEL.toList lns)
+    let rawLineCount = length lns
+    (rawLineCount,) <$> NEL.nonEmpty (mapMaybe parseLine (NEL.toList lns))
 
 parseLine :: Text -> Maybe Line
 parseLine txt = do
@@ -303,9 +340,9 @@ lowestIndent :: NonEmpty Line -> Int
 lowestIndent = minimum . fmap lineIndent
 
 -- | Divide lines into blocks and make entity definitions.
-parseLines :: PersistSettings -> NonEmpty Line -> [UnboundEntityDef]
-parseLines ps = do
-    fmap (mkUnboundEntityDef ps . toParsedEntityDef) . associateLines
+parseLines :: PersistSettings -> Maybe Span -> NonEmpty Line -> [UnboundEntityDef]
+parseLines ps mSpan = do
+    fmap (mkUnboundEntityDef ps . toParsedEntityDef mSpan) . associateLines
 
 data ParsedEntityDef = ParsedEntityDef
     { parsedEntityDefComments :: [Text]
@@ -314,6 +351,7 @@ data ParsedEntityDef = ParsedEntityDef
     , parsedEntityDefEntityAttributes :: [Attr]
     , parsedEntityDefFieldAttributes :: [[Token]]
     , parsedEntityDefExtras :: M.Map Text [ExtraLine]
+    , parsedEntityDefSpan :: Maybe Span
     }
 
 entityNamesFromParsedDef :: PersistSettings -> ParsedEntityDef -> (EntityNameHS, EntityNameDB)
@@ -325,14 +363,15 @@ entityNamesFromParsedDef ps parsedEntDef = (entNameHS, entNameDB)
     entNameDB =
         EntityNameDB $ getDbName ps (unEntityNameHS entNameHS) (parsedEntityDefEntityAttributes parsedEntDef)
 
-toParsedEntityDef :: LinesWithComments -> ParsedEntityDef
-toParsedEntityDef lwc = ParsedEntityDef
+toParsedEntityDef :: Maybe Span -> LinesWithComments -> ParsedEntityDef
+toParsedEntityDef mSpan lwc = ParsedEntityDef
     { parsedEntityDefComments = lwcComments lwc
     , parsedEntityDefEntityName = entNameHS
     , parsedEntityDefIsSum = isSum
     , parsedEntityDefEntityAttributes = entAttribs
     , parsedEntityDefFieldAttributes = attribs
     , parsedEntityDefExtras = extras
+    , parsedEntityDefSpan = mSpan
     }
   where
     entityLine :| fieldLines =
@@ -458,6 +497,10 @@ data UnboundEntityDef
     -- the field?" yet, so we defer those to the Template Haskell execution.
     --
     -- @since 2.13.0.0
+    , unboundEntityDefSpan :: Maybe Span
+    -- ^ The source code span of this entity in the models file.
+    --
+    -- @since 2.15.0.0
     }
     deriving (Eq, Ord, Show, Lift)
 
@@ -481,6 +524,7 @@ unbindEntityDef ed =
             ed
         , unboundEntityFields =
             map unbindFieldDef (entityFields ed)
+        , unboundEntityDefSpan = entitySpan ed
         }
 
 -- | Returns the @['UnboundFieldDef']@ for an 'UnboundEntityDef'. This returns
@@ -689,6 +733,7 @@ mkUnboundEntityDef ps parsedEntDef =
                     DefaultKey (FieldNameDB $ psIdName ps)
         , unboundEntityFields =
             cols
+        , unboundEntityDefSpan = parsedEntityDefSpan parsedEntDef
         , unboundEntityDef =
             EntityDef
                 { entityHaskell = entNameHS
@@ -712,6 +757,7 @@ mkUnboundEntityDef ps parsedEntDef =
                     case parsedEntityDefComments parsedEntDef of
                         [] -> Nothing
                         comments -> Just (T.unlines comments)
+                , entitySpan = parsedEntityDefSpan parsedEntDef
                 }
         }
   where

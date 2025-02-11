@@ -69,6 +69,7 @@ import Database.Persist.Types.Base
        , PersistValue(..)
        , ReferenceDef(..)
        , SqlType(..)
+       , Span(..)
        , UniqueDef(..)
        , UpdateException(..)
        , WhyNullable(..)

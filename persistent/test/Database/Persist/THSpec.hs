@@ -35,6 +35,7 @@ import Data.Proxy
 import Data.Text (Text, pack)
 import Data.Time
 import GHC.Generics (Generic)
+import qualified Language.Haskell.TH.Syntax as TH
 import System.Environment
 import Test.Hspec
 import Test.Hspec.QuickCheck
@@ -43,11 +44,11 @@ import Test.QuickCheck.Gen (Gen)
 
 import Database.Persist
 import Database.Persist.EntityDef.Internal
+import Database.Persist.Quasi.Internal (SourceLoc(..), sourceLocFromTHLoc)
 import Database.Persist.Sql
 import Database.Persist.Sql.Util
 import Database.Persist.TH
 import TemplateTestImports
-
 
 import qualified Database.Persist.TH.CommentSpec as CommentSpec
 import qualified Database.Persist.TH.CompositeKeyStyleSpec as CompositeKeyStyleSpec
@@ -76,6 +77,10 @@ import qualified Database.Persist.TH.TypeLitFieldDefsSpec as TypeLitFieldDefsSpe
 -- machinery
 type TextId = Text
 
+-- | Location above the block defining Person below. Must be before it. Do not move!
+-- Used to test TH definition positions are plausible.
+personDefBeforeLoc :: SourceLoc
+personDefBeforeLoc = $(TH.lift @_ @SourceLoc . sourceLocFromTHLoc =<< TH.location)
 share [mkPersistWith  sqlSettings { mpsGeneric = False, mpsDeriveInstances = [''Generic] } [entityDef @JsonEncodingSpec.JsonEncoding Proxy]] [persistUpperCase|
 
 Person json
@@ -107,6 +112,10 @@ QualifiedReference
     jsonEncoding JsonEncodingSpec.JsonEncodingId
 
 |]
+-- | Location after the block defining Person above. Must be after it. Do not move!
+-- Used to test TH definition positions are plausible.
+personDefAfterLoc :: SourceLoc
+personDefAfterLoc = $(TH.lift @_ @SourceLoc . sourceLocFromTHLoc =<< TH.location)
 
 mkPersist sqlSettings [persistLowerCase|
 HasPrimaryDef
@@ -325,6 +334,11 @@ spec = describe "THSpec" $ do
                     , fcOnUpdate = Nothing
                     }
         describe "entityDef" $ do
+            it "correct position" $ do
+                let Just theSpan = entitySpan simpleCascadeDef
+                theSpan `shouldSatisfy` ((> locStartLine personDefBeforeLoc) . spanStartLine)
+                theSpan `shouldSatisfy` (\s -> spanStartLine s < spanEndLine s)
+                theSpan `shouldSatisfy` ((< locStartLine personDefAfterLoc) . spanEndLine)
             it "works" $ do
                 simpleCascadeDef
                     `shouldBe`
@@ -371,6 +385,10 @@ spec = describe "THSpec" $ do
                             , entityExtra = mempty
                             , entitySum = False
                             , entityComments = Nothing
+                            -- We cannot test this is a precise value without
+                            -- being really fragile, but we have another test to
+                            -- verify the line is in range.
+                            , entitySpan = entitySpan simpleCascadeDef
                             }
         it "has the cascade on the field def" $ do
             fieldCascade subject `shouldBe` expected

@@ -153,8 +153,9 @@ conp = ConP
 -- used as input to the template haskell generation code (mkPersist).
 persistWith :: PersistSettings -> QuasiQuoter
 persistWith ps = QuasiQuoter
-    { quoteExp =
-        parseReferences ps . pack
+    { quoteExp = \exp -> do
+        loc <- location
+        parseReferences ps [(Just $ sourceLocFromTHLoc loc, pack exp)]
     , quotePat =
         error "persistWith can't be used as pattern"
     , quoteType =
@@ -221,9 +222,10 @@ persistFileWith ps fp = persistManyFileWith ps [fp]
 persistManyFileWith :: PersistSettings -> [FilePath] -> Q Exp
 persistManyFileWith ps fps = do
     mapM_ qAddDependentFile fps
-    ss <- mapM (qRunIO . getFileContents) fps
-    let s = T.intercalate "\n" ss -- be tolerant of the user forgetting to put a line-break at EOF.
-    parseReferences ps s
+    ss <- mapM (\fp -> (fp,) <$> (qRunIO . getFileContents) fp) fps
+    parseReferences ps (map (\(fp, content) -> (Just $ sourceLoc fp, content)) ss)
+    where
+        sourceLoc path = SourceLoc {locFile = T.pack path, locStartLine = 1, locStartCol = 1}
 
 getFileContents :: FilePath -> IO Text
 getFileContents = fmap decodeUtf8 . BS.readFile
@@ -279,7 +281,7 @@ embedEntityDefsMap existingEnts rawEnts =
 -- instead of @['EntityDef']@.
 --
 -- @since 2.5.3
-parseReferences :: PersistSettings -> Text -> Q Exp
+parseReferences :: PersistSettings -> [(Maybe SourceLoc, Text)] -> Q Exp
 parseReferences ps s = lift $ parse ps s
 
 preprocessUnboundDefs

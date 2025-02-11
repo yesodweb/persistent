@@ -13,6 +13,7 @@ module Database.Persist.Types.Base
     , PersistValue(..)
     , fromPersistValueText
     , LiteralType(..)
+    , Span(..)
     ) where
 
 import Control.Exception (Exception)
@@ -38,6 +39,7 @@ import Instances.TH.Lift ()
 
 import Database.Persist.Names
 import Database.Persist.PersistValue
+import Database.Persist.Types.Span (Span(..))
 
 -- | A 'Checkmark' should be used as a field type whenever a
 -- uniqueness constraint should guarantee that a certain kind of
@@ -123,6 +125,24 @@ data WhyNullable = ByMaybeAttr
                  | ByNullableAttr
                   deriving (Eq, Show)
 
+-- | A pair of (start line/col, end line/col) coordinates. The end column will
+-- be one past the final character (i.e. the span (1,1)->(1,1) is zero
+-- characters long).
+--
+-- Spans are 1-indexed in both lines and columns.
+--
+-- Conceptually identical to GHC's @RealSourceSpan@.
+--
+-- @since TODO FIXME MEOW MEOW
+data Span = Span
+    { spanFile :: !Text
+    , spanStartLine :: !Int
+    , spanStartCol :: !Int
+    , spanEndLine :: !Int
+    , spanEndCol :: !Int
+    }
+    deriving (Show, Eq, Read, Ord, Lift)
+
 -- | An 'EntityDef' represents the information that @persistent@ knows
 -- about an Entity. It uses this information to generate the Haskell
 -- datatype, the SQL migrations, and other relevant conversions.
@@ -155,6 +175,14 @@ data EntityDef = EntityDef
     -- ^ Optional comments on the entity.
     --
     -- @since 2.10.0
+    , entitySpan :: !(Maybe Span)
+    -- ^ Source code span occupied by this entity. May be absent if it is not
+    -- known.
+    --
+    -- Note that until a refactor is completed, these cover the entire
+    -- persistent parser input rather than the particular entity in question.
+    --
+    -- @since TODO FIXME MEOW MEOW
     }
     deriving (Show, Eq, Read, Ord, Lift)
 

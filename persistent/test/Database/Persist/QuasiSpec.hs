@@ -8,7 +8,6 @@ module Database.Persist.QuasiSpec where
 import Prelude hiding (lines)
 
 import Control.Exception
-import Control.Monad
 import Data.List hiding (lines)
 import Data.List.NonEmpty (NonEmpty(..), (<|))
 import qualified Data.List.NonEmpty as NEL
@@ -22,6 +21,13 @@ import Test.Hspec
 import Test.Hspec.QuickCheck
 import Test.QuickCheck
 import Text.Shakespeare.Text (st)
+
+defs :: T.Text -> [UnboundEntityDef]
+defs t = parse lowerCaseSettings [(Nothing, t)]
+
+defsSnake :: T.Text -> [UnboundEntityDef]
+defsSnake t = parse (setPsUseSnakeCaseForeignKeys lowerCaseSettings) [(Nothing, t)]
+
 
 spec :: Spec
 spec = describe "Quasi" $ do
@@ -270,7 +276,7 @@ Car
     car CarId         -- | the car reference
 
                     |]
-        let [bicycle, car, vehicle] = parse lowerCaseSettings subject
+        let [bicycle, car, vehicle] = defs subject
 
         it "should parse the `entityHaskell` field" $ do
             getUnboundEntityNameHS bicycle `shouldBe` EntityNameHS "Bicycle"
@@ -312,7 +318,7 @@ Car
             (simplifyUnique <$> entityUniques (unboundEntityDef vehicle)) `shouldBe` []
 
         it "should parse the `entityForeigns` field" $ do
-            let [user, notification] = parse lowerCaseSettings [st|
+            let [user, notification] = defs [st|
 User
     name            Text
     emailFirst      Text
@@ -371,7 +377,7 @@ User
     name Text
     age  (Maybe Int
 |]
-            let [user] = parse lowerCaseSettings definitions
+            let [user] = defs definitions
             evaluate (unboundEntityDef user)
                 `shouldErrorWithMessage`
                     "Unterminated parens string starting with Maybe Int"
@@ -381,7 +387,7 @@ User
 User
     age  Int OnUpdateCascade OnUpdateCascade
 |]
-            let [user] = parse lowerCaseSettings definitions
+            let [user] = defs definitions
             mapM (evaluate . unboundFieldCascade) (unboundEntityFields user)
                 `shouldErrorWithMessage`
                     "found more than one OnUpdate action, tokens: [\"OnUpdateCascade\",\"OnUpdateCascade\"]"
@@ -391,7 +397,7 @@ User
 User
     age  Int OnDeleteCascade OnDeleteCascade
 |]
-            let [user] = parse lowerCaseSettings definitions
+            let [user] = defs definitions
             mapM (evaluate . unboundFieldCascade) (unboundEntityFields user)
                 `shouldErrorWithMessage`
                     "found more than one OnDelete action, tokens: [\"OnDeleteCascade\",\"OnDeleteCascade\"]"
@@ -404,7 +410,7 @@ User
     name Text
     age  Int
 |]
-                let [user] = parse lowerCaseSettings definitions
+                let [user] = defs definitions
                 getUnboundEntityNameHS user `shouldBe` EntityNameHS "User"
                 entityDB (unboundEntityDef user) `shouldBe` EntityNameDB "user"
                 let idFields = NEL.toList (entitiesPrimary (unboundEntityDef user))
@@ -424,7 +430,7 @@ User
     name Text
     age  Int
 |]
-                let [user] = parse lowerCaseSettings definitions
+                let [user] = defs definitions
                     errMsg = [st|expected only one Id declaration per entity|]
                 evaluate (unboundEntityDef user) `shouldErrorWithMessage`
                     (T.unpack errMsg)
@@ -438,7 +444,7 @@ User
     age  Int
     Primary ref
 |]
-                let [user] = parse lowerCaseSettings definitions
+                let [user] = defs definitions
                 getUnboundEntityNameHS user `shouldBe` EntityNameHS "User"
                 entityDB (unboundEntityDef user) `shouldBe` EntityNameDB "user"
                 let idFields = NEL.toList (entitiesPrimary (unboundEntityDef user))
@@ -472,7 +478,7 @@ User
     Primary ref
     Primary name
 |]
-                let [user] = parse lowerCaseSettings definitions
+                let [user] = defs definitions
                     errMsg = "expected only one Primary declaration per entity"
                 evaluate (unboundEntityDef user) `shouldErrorWithMessage`
                     errMsg
@@ -486,7 +492,7 @@ User
     age  Int
     Primary ref
 |]
-                let [user] = parse lowerCaseSettings definitions
+                let [user] = defs definitions
                     errMsg = [st|Specified both an ID field and a Primary field|]
                 evaluate (unboundEntityDef user) `shouldErrorWithMessage`
                     (T.unpack errMsg)
@@ -497,7 +503,7 @@ User
     age Text
     Primary ref
 |]
-                let [user] = parse lowerCaseSettings definitions
+                let [user] = defs definitions
                 case unboundPrimarySpec user of
                     NaturalKey ucd -> do
                         evaluate (NEL.head $ unboundCompositeCols ucd) `shouldErrorWithMessage`
@@ -514,7 +520,7 @@ User
 
     UniqueEmail emailFirst emailSecond
 |]
-                let [user] = parse lowerCaseSettings definitions
+                let [user] = defs definitions
                     uniques = entityUniques (unboundEntityDef user)
                     [dbNames] = fmap snd . uniqueFields <$> uniques
                     errMsg = unwords
@@ -530,7 +536,7 @@ User
     age Text
     Unique some
 |]
-                let [user] = parse lowerCaseSettings definitions
+                let [user] = defs definitions
                 evaluate (unboundPrimarySpec user) `shouldErrorWithMessage`
                     "invalid unique constraint on table[\"User\"] expecting an uppercase constraint name xs=[\"some\"]"
 
@@ -556,7 +562,7 @@ Notification
                     flippedFK (EntityNameHS entName) (ConstraintNameHS conName) =
                         conName <> entName
                     [_user, notification] =
-                        parse (setPsToFKName flippedFK lowerCaseSettings) validDefinitions
+                        parse (setPsToFKName flippedFK lowerCaseSettings) [(Nothing, validDefinitions)]
                     [notificationForeignDef] =
                         unboundForeignDef <$> unboundForeignDefs notification
                 foreignConstraintNameDBName notificationForeignDef
@@ -578,7 +584,7 @@ Notification
     sentToSecond    Text
     Foreign User
 |]
-                let [_user, notification] = parse (setPsUseSnakeCaseForiegnKeys lowerCaseSettings) definitions
+                let [_user, notification] = defsSnake definitions
                 mapM (evaluate . unboundForeignFields) (unboundForeignDefs notification)
                     `shouldErrorWithMessage`
                         "invalid foreign key constraint on table[\"Notification\"] expecting a lower case constraint name or a cascading action xs=[]"
@@ -598,7 +604,7 @@ Notification
     sentToSecond    Text
     Foreign User fk_noti_user
 |]
-                let [_user, notification] = parse (setPsUseSnakeCaseForiegnKeys lowerCaseSettings) definitions
+                let [_user, notification] = defsSnake definitions
                 mapM (evaluate . unboundForeignFields) (unboundForeignDefs notification)
                     `shouldErrorWithMessage`
                         "No fields on foreign reference."
@@ -618,7 +624,7 @@ Notification
     sentToSecond    Text
     Foreign User fk_noti_user sentToFirst sentToSecond References emailFirst
 |]
-                let [_user, notification] = parse (setPsUseSnakeCaseForiegnKeys lowerCaseSettings) definitions
+                let [_user, notification] = defsSnake definitions
                 mapM (evaluate . unboundForeignFields) (unboundForeignDefs notification)
                     `shouldErrorWithMessage`
                         "invalid foreign key constraint on table[\"Notification\"] Found 2 foreign fields but 1 parent fields"
@@ -638,7 +644,7 @@ Notification
     sentToSecond    Text
     Foreign User OnDeleteCascade OnDeleteCascade
 |]
-                let [_user, notification] = parse (setPsUseSnakeCaseForiegnKeys lowerCaseSettings) definitions
+                let [_user, notification] = defsSnake definitions
                 mapM (evaluate . unboundForeignFields) (unboundForeignDefs notification)
                     `shouldErrorWithMessage`
                         "invalid foreign key constraint on table[\"Notification\"] found more than one OnDelete actions"
@@ -658,14 +664,14 @@ Notification
     sentToSecond    Text
     Foreign User OnUpdateCascade OnUpdateCascade
 |]
-                let [_user, notification] = parse (setPsUseSnakeCaseForiegnKeys lowerCaseSettings) definitions
+                let [_user, notification] = defsSnake definitions
                 mapM (evaluate . unboundForeignFields) (unboundForeignDefs notification)
                     `shouldErrorWithMessage`
                         "invalid foreign key constraint on table[\"Notification\"] found more than one OnUpdate actions"
 
             it "should allow you to enable snake cased foriegn keys via a preset configuration function" $ do
                 let [_user, notification] =
-                        parse (setPsUseSnakeCaseForiegnKeys lowerCaseSettings) validDefinitions
+                        defsSnake validDefinitions
                     [notificationForeignDef] =
                         unboundForeignDef <$> unboundForeignDefs notification
                 foreignConstraintNameDBName notificationForeignDef
@@ -683,7 +689,7 @@ CustomerTransfer
     currencyCode CurrencyCode
     uuid TransferUuid
 |]
-                let [customerTransfer] = parse lowerCaseSettings tickedDefinition
+                let [customerTransfer] = defs tickedDefinition
                 let expectedType =
                         FTTypeCon Nothing "MoneyAmount" `FTApp` FTTypePromoted "Customer" `FTApp` FTTypePromoted "Debit"
 
@@ -703,7 +709,7 @@ WithFinite
     one    (Finite 1)
     twenty (Labelled "twenty")
 |]
-                let [withFinite] = parse lowerCaseSettings tickedDefinition
+                let [withFinite] = defs tickedDefinition
 
                 (simplifyField <$> unboundEntityFields withFinite) `shouldBe`
                     [ (FieldNameHS "one", FTApp (FTTypeCon Nothing "Finite") (FTLit (IntTypeLit 1)))
@@ -776,7 +782,7 @@ Baz
         let preparsed =
                 preparse subject
         it "preparse works" $ do
-            (length <$> preparsed) `shouldBe` Just 10
+            (length . snd <$> preparsed) `shouldBe` Just 10
 
         let fooLines =
                 [ Line
@@ -829,7 +835,7 @@ Baz
 
         let
             linesAssociated =
-                case preparsed of
+                case snd <$> preparsed of
                     Nothing -> error "preparsed failed"
                     Just lines -> associateLines lines
         it "associateLines works" $ do
@@ -868,7 +874,7 @@ Baz
                                 "more entities parsed than expected"
 
                 result =
-                    parse lowerCaseSettings subject
+                    defs subject
             length result `shouldBe` 4
 
             test
@@ -891,7 +897,7 @@ Baz
                     [ Line { lineIndent = 2, tokens = Token "name" :| [Token "String"] }
                     , Line { lineIndent = 2, tokens = Token "age" :| [Token "Int"] }
                     ]
-            preparse "Person\n  name String\n  age Int" `shouldBe` Just expected
+            preparse "Person\n  name String\n  age Int" `shouldBe` Just (3, expected)
 
         it "recognizes comments" $ do
             let text = "Foo\n  x X\n-- | Hello\nBar\n name String"
@@ -902,7 +908,7 @@ Baz
                     , Line { lineIndent = 0, tokens = pure (Token "Bar") }
                     , Line { lineIndent = 1, tokens = Token "name" :| [Token "String"] }
                     ]
-            preparse text `shouldBe` Just expected
+            preparse text `shouldBe` Just (5, expected)
 
         it "preparse indented" $ do
             let t = T.unlines
@@ -920,7 +926,7 @@ Baz
                     , Line { lineIndent = 2, tokens = pure (Token "Bar") }
                     , Line { lineIndent = 4, tokens = Token "name" :| [Token "String"] }
                     ]
-            preparse t `shouldBe` Just expected
+            preparse t `shouldBe` Just (6, expected)
 
         it "preparse extra blocks" $ do
             let t = T.unlines
@@ -941,7 +947,7 @@ Baz
                     , Line { lineIndent = 2, tokens = pure (Token "ExtraBlock2") }
                     , Line { lineIndent = 4, tokens = pure (Token "something") }
                     ]
-            preparse t `shouldBe` Just expected
+            preparse t `shouldBe` Just (7, expected)
 
         it "field comments" $ do
             let text = T.unlines
@@ -956,7 +962,7 @@ Baz
                     , Line { lineIndent = 2, tokens = [DocComment "Field"] }
                     , Line { lineIndent = 2, tokens = (Token <$> ["name", "String"]) }
                     ]
-            preparse text `shouldBe` Just expected
+            preparse text `shouldBe` Just (4, expected)
 
     describe "associateLines" $ do
         let foo =
@@ -1015,7 +1021,7 @@ Baz
                         }
                     ]
         it "works with textual input" $ do
-            let text = preparse "Foo\n  x X\n-- | Hello\nBar\n name String"
+            let text = snd <$> preparse "Foo\n  x X\n-- | Hello\nBar\n name String"
             associateLines <$> text
                 `shouldBe` Just
                     [ LinesWithComments
@@ -1034,7 +1040,7 @@ Baz
                         }
                     ]
         it "works with extra blocks" $ do
-            let text = preparse . T.unlines $
+            let text = fmap snd . preparse . T.unlines $
                     [ "LowerCaseTable"
                     , "    Id             sql=my_id"
                     , "    fullName Text"
@@ -1063,7 +1069,7 @@ Baz
                 ]
 
         it "works with extra blocks twice" $ do
-            let text = preparse . T.unlines $
+            let text = fmap snd . preparse . T.unlines $
                     [ "IdTable"
                     , "    Id Day default=CURRENT_DATE"
                     , "    name Text"
@@ -1104,7 +1110,7 @@ Baz
 
 
         it "works with field comments" $ do
-            let text = preparse . T.unlines $
+            let text = fmap snd . preparse . T.unlines $
                     [ "-- | Model"
                     , "Foo"
                     , "  -- | Field"
@@ -1138,7 +1144,7 @@ Baz
                     , "  Extra2"
                     , "    something"
                     ]
-        let [subject] = parse lowerCaseSettings lines
+        let [subject] = defs lines
         it "produces the right name" $ do
             getUnboundEntityNameHS subject `shouldBe` EntityNameHS "Foo"
         describe "unboundEntityFields" $ do
@@ -1163,7 +1169,7 @@ Baz
                 ]
         describe "works with extra blocks" $ do
             let [_, lowerCaseTable, idTable] =
-                    case parse lowerCaseSettings $ T.unlines
+                    case defs $ T.unlines
                         [ ""
                         , "IdTable"
                         , "    Id Day default=CURRENT_DATE"
