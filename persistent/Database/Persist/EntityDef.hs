@@ -214,6 +214,6 @@ overEntityFields f ed =
 -- where the item is defined due to parsing limitations. This may be changed in
 -- a future release to be more accurate.
 --
--- @since FIXME TODO MEOW MEOW
+-- @since 2.15.0.0
 getEntitySpan :: EntityDef -> Maybe Span
 getEntitySpan = entitySpan

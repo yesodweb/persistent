@@ -125,24 +125,6 @@ data WhyNullable = ByMaybeAttr
                  | ByNullableAttr
                   deriving (Eq, Show)
 
--- | A pair of (start line/col, end line/col) coordinates. The end column will
--- be one past the final character (i.e. the span (1,1)->(1,1) is zero
--- characters long).
---
--- Spans are 1-indexed in both lines and columns.
---
--- Conceptually identical to GHC's @RealSourceSpan@.
---
--- @since TODO FIXME MEOW MEOW
-data Span = Span
-    { spanFile :: !Text
-    , spanStartLine :: !Int
-    , spanStartCol :: !Int
-    , spanEndLine :: !Int
-    , spanEndCol :: !Int
-    }
-    deriving (Show, Eq, Read, Ord, Lift)
-
 -- | An 'EntityDef' represents the information that @persistent@ knows
 -- about an Entity. It uses this information to generate the Haskell
 -- datatype, the SQL migrations, and other relevant conversions.
@@ -182,7 +164,7 @@ data EntityDef = EntityDef
     -- Note that until a refactor is completed, these cover the entire
     -- persistent parser input rather than the particular entity in question.
     --
-    -- @since TODO FIXME MEOW MEOW
+    -- @since 2.15.0.0
     }
     deriving (Show, Eq, Read, Ord, Lift)
 
