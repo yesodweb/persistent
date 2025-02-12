@@ -1,5 +1,12 @@
 # Changelog for persistent
 
+# 2.15.0.0
+
+* [#1569](https://github.com/yesodweb/persistent/pull/1569)
+  * Add position information to `EntityDef`, `UnboundEntityDef` via a `Span`
+    field as a preliminary design that just gives the entire span of the
+    input text (i.e. the entire file or quasiquote the item is defined in).
+
 ## 2.14.6.3
 
 * [#1544](https://github.com/yesodweb/persistent/pull/1544)
