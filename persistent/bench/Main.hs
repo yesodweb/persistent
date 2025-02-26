@@ -14,6 +14,7 @@ import Language.Haskell.TH.Syntax
 
 import Database.Persist.Quasi
 import Database.Persist.TH
+import Database.Persist.TH.Internal
 import Models
 
 main :: IO ()

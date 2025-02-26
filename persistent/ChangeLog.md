@@ -6,6 +6,15 @@
   * Add position information to `EntityDef`, `UnboundEntityDef` via a `Span`
     field as a preliminary design that just gives the entire span of the
     input text (i.e. the entire file or quasiquote the item is defined in).
+  * Move `Database.Persist.TH` internals to `Database.Persist.TH.Internal` and
+    no longer export the following internals:
+    * lensPTH
+    * parseReferences
+    * embedEntityDefs
+    * fieldError
+    * AtLeastOneUniqueKey(..)
+    * OnlyOneUniqueKey(..)
+    * pkNewtype
 
 ## 2.14.6.3
 

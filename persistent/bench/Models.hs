@@ -9,6 +9,7 @@ import qualified Data.Text as Text
 import Database.Persist.Quasi
 import Database.Persist.Quasi.Internal
 import Database.Persist.TH
+import Database.Persist.TH.Internal
 import Database.Persist.Sql
 
 -- TODO: we use lookupName and reify etc which breaks in IO. somehow need to
