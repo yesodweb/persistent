@@ -1,5 +1,6 @@
 {
-  description = "Persistence interface for Haskell allowing multiple storage methods.";
+  description =
+    "Persistence interface for Haskell allowing multiple storage methods.";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
@@ -17,7 +18,7 @@
             ${ghcVer} = prev.haskell.packages."${ghcVer}".override (oldArgs: {
               overrides =
                 prev.lib.composeExtensions (oldArgs.overrides or (_: _: { }))
-                  (overlay prev);
+                (overlay prev);
             });
           };
         };
@@ -31,18 +32,12 @@
             config.allowBroken = true;
           };
 
-        in
-        {
+        in {
           packages = rec {
             default = persistent;
             inherit (pkgs.haskell.packages.${ghcVer})
-              persistent
-              persistent-qq
-              persistent-template
-              persistent-mysql
-              persistent-test
-              persistent-postgresql
-              persistent-sqlite;
+              persistent persistent-qq persistent-template persistent-mysql
+              persistent-test persistent-postgresql persistent-sqlite;
           };
 
           checks = self.packages.${system};
@@ -52,10 +47,9 @@
 
           devShells.default =
             let haskellPackages = pkgs.haskell.packages.${ghcVer};
-            in
-            haskellPackages.shellFor {
-              packages = p: with pkgs.haskell.packages.${ghcVer};
-                [
+            in haskellPackages.shellFor {
+              packages = p:
+                with pkgs.haskell.packages.${ghcVer}; [
                   persistent
                   persistent-qq
                   persistent-template
@@ -67,20 +61,14 @@
                   persistent-sqlite
                 ];
               withHoogle = true;
-              buildInputs = with haskellPackages; [
-                haskell-language-server
-                fourmolu
-                ghcid
-                cabal-install
-              ] ++ (with pkgs; [
-                sqlite
-              ]);
+              buildInputs = with haskellPackages;
+                [ haskell-language-server fourmolu ghcid cabal-install ]
+                ++ (with pkgs; [ sqlite ]);
               # Change the prompt to show that you are in a devShell
               # shellHook = "export PS1='\\e[1;34mdev > \\e[0m'";
             };
         };
-    in
-    flake-utils.lib.eachDefaultSystem out // {
+    in flake-utils.lib.eachDefaultSystem out // {
       # this stuff is *not* per-system
       overlays = {
         default = makeHaskellOverlay (prev: hfinal: hprev:
@@ -90,8 +78,7 @@
             # overrides from nixpkgs for these packages for e.g.
             # persistent-sqlite using the nix-provided sqlite.
             makeLocal = n: hlib.overrideSrc hprev.${n} { src = ./. + "/${n}"; };
-          in
-          {
+          in {
             persistent = makeLocal "persistent";
             persistent-test = makeLocal "persistent-test";
             persistent-sqlite = makeLocal "persistent-sqlite";
