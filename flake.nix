@@ -7,8 +7,6 @@
     flake-utils.url = "github:numtide/flake-utils";
   };
 
-  nixConfig.allow-import-from-derivation = true; # cabal2nix uses IFD
-
   outputs = { self, nixpkgs, flake-utils }:
     let
       ghcVer = "ghc902";
@@ -91,4 +89,15 @@
           });
       };
     };
+
+  nixConfig = {
+    extra-substituters = [
+      "https://cache.nixos.org/"
+      "https://cache.iog.io" # use GHC binary cache.
+    ];
+    extra-trusted-public-keys = [
+      "hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ="
+    ];
+    allow-import-from-derivation = "true";
+  };
 }
