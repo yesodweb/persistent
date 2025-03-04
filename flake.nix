@@ -30,7 +30,7 @@
                   ghcid = "latest";
                   haskell-language-server = "latest";
                 };
-                buildInputs = with pkgs; [ sqlite ];
+                buildInputs = with pkgs; [ postgresql ];
               };
             };
           })
