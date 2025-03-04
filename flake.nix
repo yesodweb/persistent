@@ -21,6 +21,7 @@
             project = final.haskell-nix.project' {
               src = ./.;
               compiler-nix-name = "ghc966";
+              projectFileName = "cabal.project";
               shell = {
                 tools = {
                   cabal = "latest";
