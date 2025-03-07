@@ -1,5 +1,4 @@
 restylers:
   - fourmolu
-  - hlint
   - stylish-haskell:
       enabled: false
