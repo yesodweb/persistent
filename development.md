@@ -1,11 +1,10 @@
 # Style Guide
 
-## `stylish-haskell`
+## `fourmolu`
 
 This repository uses
-[`stylish-haskell`](https://hackage.haskell.org/package/stylish-haskell) as an
-autoformatter. `stylish-haskell` is inherently limited, so it won't handle
-everything, but it will format import lists, extension lists, etc.
+[`fourmolu`](https://hackage.haskell.org/package/fourmolu) as an
+autoformatter.
 
 ## `editorconfig`
 
