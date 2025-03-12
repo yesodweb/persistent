@@ -30,7 +30,7 @@
                   ghcid = "latest";
                   haskell-language-server = "latest";
                 };
-                buildInputs = with pkgs; [ postgresql ];
+                buildInputs = with pkgs; [ mariadb postgresql redis sqlite ];
               };
               modules = [{
                 packages."mysql".components.library = with pkgs; {
