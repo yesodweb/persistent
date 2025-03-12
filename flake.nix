@@ -32,6 +32,15 @@
                 };
                 buildInputs = with pkgs; [ postgresql ];
               };
+              modules = [{
+                packages."mysql".components.library = with pkgs; {
+                  configureFlags = [
+                    "--with-mysql_config=${mariadb-connector-c.dev}/bin/mysql_config"
+                  ];
+                  includes = [ openssl zlib ];
+                  libs = [ openssl zlib ];
+                };
+              }];
             };
           })
         ];
