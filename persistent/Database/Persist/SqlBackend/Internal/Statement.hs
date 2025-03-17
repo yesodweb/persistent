@@ -13,9 +13,9 @@ data Statement = Statement
     { stmtFinalize :: IO ()
     , stmtReset :: IO ()
     , stmtExecute :: [PersistValue] -> IO Int64
-    , stmtQuery ::
-        forall m.
-        (MonadIO m) =>
-        [PersistValue] ->
-        Acquire (ConduitM () [PersistValue] m ())
+    , stmtQuery
+        :: forall m
+         . (MonadIO m)
+        => [PersistValue]
+        -> Acquire (ConduitM () [PersistValue] m ())
     }
