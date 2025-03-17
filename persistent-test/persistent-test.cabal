@@ -89,21 +89,21 @@ library
       , unliftio-core
       , unordered-containers
 
-  default-language: Haskell2010
-  default-extensions:
-      ExistentialQuantification
-      FlexibleContexts
-      FlexibleInstances
-      MultiParamTypeClasses
-      OverloadedStrings
-      QuasiQuotes
-      TemplateHaskell
-      TypeFamilies
-      StandaloneDeriving
-      DerivingStrategies
-      GeneralizedNewtypeDeriving
-      DataKinds
+    default-language: Haskell2010
+    default-extensions:
+        ExistentialQuantification
+        FlexibleContexts
+        FlexibleInstances
+        MultiParamTypeClasses
+        OverloadedStrings
+        QuasiQuotes
+        TemplateHaskell
+        TypeFamilies
+        StandaloneDeriving
+        DerivingStrategies
+        GeneralizedNewtypeDeriving
+        DataKinds
 
 source-repository head
   type:     git
-  location: git://github.com/yesodweb/persistent.git
+  location: https://github.com/yesodweb/persistent.git

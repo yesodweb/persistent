@@ -28,6 +28,14 @@ cabal.sandbox.config
 dist-newstyle/
 .ghc.environment.*
 
+# for direnv
+.envrc
+
+# nix relation
+.direnv/
+.env.local
+result/
+
 ## Docker image ignores
 /.cabal/
 /.stackage/
