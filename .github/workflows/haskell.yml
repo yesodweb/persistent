@@ -45,23 +45,23 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        cabal: ["3.10"]
+        cabal: ["3.12"]
         ghc:
-          - "8.8.4"
-          - "8.10.7"
-          - "9.0.2"
-          - "9.2.7"
-          - "9.4.5"
-          - "9.6.5"
-        include:
-        - ghc: "9.10.1"
-          cabal: "3.12"
+          - "8.8"
+          - "8.10"
+          - "9.0"
+          - "9.2"
+          - "9.4"
+          - "9.6"
+          - "9.8"
+          - "9.10"
+          - "9.12"
 
     env:
       CONFIG: "--enable-tests --enable-benchmarks"
     steps:
       - uses: actions/checkout@v2
-      - uses: haskell/actions/setup@v2
+      - uses: haskell-actions/setup@v2
         id: setup-haskell-cabal
         with:
           ghc-version: ${{ matrix.ghc }}
