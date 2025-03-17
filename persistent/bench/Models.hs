@@ -1,7 +1,6 @@
 {-# LANGUAGE TupleSections #-}
 module Models where
 
-import Data.List (singleton)
 import Data.Monoid
 import Language.Haskell.TH
 import qualified Data.Text as Text
@@ -21,7 +20,7 @@ parseReferences' :: String -> IO Exp
 parseReferences' = runQ . parseReferencesQ
 
 parseReferencesQ :: String -> Q Exp
-parseReferencesQ = parseReferences lowerCaseSettings . singleton . (Nothing,) . Text.pack
+parseReferencesQ = parseReferences lowerCaseSettings . pure . (Nothing,) . Text.pack
 
 -- | # of models, # of fields
 mkModels :: Int -> Int -> String
