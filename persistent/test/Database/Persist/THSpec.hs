@@ -80,7 +80,7 @@ type TextId = Text
 -- | Location above the block defining Person below. Must be before it. Do not move!
 -- Used to test TH definition positions are plausible.
 personDefBeforeLoc :: SourceLoc
-personDefBeforeLoc = $(TH.lift @_ @SourceLoc . sourceLocFromTHLoc =<< TH.location)
+personDefBeforeLoc = $(TH.lift . sourceLocFromTHLoc =<< TH.location)
 share [mkPersistWith  sqlSettings { mpsGeneric = False, mpsDeriveInstances = [''Generic] } [entityDef @JsonEncodingSpec.JsonEncoding Proxy]] [persistUpperCase|
 
 Person json
@@ -115,7 +115,7 @@ QualifiedReference
 -- | Location after the block defining Person above. Must be after it. Do not move!
 -- Used to test TH definition positions are plausible.
 personDefAfterLoc :: SourceLoc
-personDefAfterLoc = $(TH.lift @_ @SourceLoc . sourceLocFromTHLoc =<< TH.location)
+personDefAfterLoc = $(TH.lift . sourceLocFromTHLoc =<< TH.location)
 
 mkPersist sqlSettings [persistLowerCase|
 HasPrimaryDef
