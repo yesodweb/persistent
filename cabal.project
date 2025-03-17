@@ -1,20 +1,24 @@
 packages:
-  persistent
-  persistent-sqlite
-  persistent-test
-  persistent-mongoDB
-  persistent-mysql
-  persistent-postgresql
-  persistent-redis
-  persistent-qq
+    persistent
+    persistent-sqlite
+    persistent-test
+    persistent-mongoDB
+    persistent-mysql
+    persistent-postgresql
+    persistent-redis
+    persistent-qq
 
 -- required by nix.
 package postgresql-libpq
-  flags: +use-pkg-config
+    flags: +use-pkg-config
+
+allow-newer:
+    -- https://github.com/fizruk/http-api-data/pull/146
+    http-api-data 
 
 constraints:
-  -- https://github.com/mongodb-haskell/mongodb/pull/152
-  mongoDB < 2.7.1.3 
+    -- https://github.com/mongodb-haskell/mongodb/pull/152
+    mongoDB < 2.7.1.3 
 
 -- Needed to test that `persistent-redis` works with mtl-2.3
 -- https://github.com/informatikr/hedis/pull/190
