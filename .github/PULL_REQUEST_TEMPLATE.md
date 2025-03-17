@@ -2,8 +2,9 @@ Before submitting your PR, check that you've:
 
 - [ ] Documented new APIs with [Haddock markup](https://www.haskell.org/haddock/doc/html/index.html)
 - [ ] Added [`@since` declarations](http://haskell-haddock.readthedocs.io/en/latest/markup.html#since) to the Haddock
-- [ ] Ran `stylish-haskell` on any changed files.
-- [ ] Adhered to the code style (see the `.editorconfig` file for details)
+- [ ] Ran `fourmolu` on any changed files (`restyled` will do this for you, so
+  accept the suggested changes if it makes them)
+- [ ] Adhered to the code style (see the `.editorconfig` and `fourmolu.yaml` files for details)
 
 After submitting your PR:
 
