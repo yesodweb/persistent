@@ -73,7 +73,7 @@ jobs:
         with:
           mongodb-version: '5.0'
       - name: Start Redis
-        uses: supercharge/redis-github-action@1.4.0
+        uses: shogo82148/actions-setup-redis@v1
       - run: sudo apt-get update && sudo apt-get install -y libpcre3-dev
       - run: cabal v2-update
       - run: cabal v2-freeze $CONFIG
