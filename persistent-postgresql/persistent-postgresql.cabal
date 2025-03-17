@@ -43,7 +43,7 @@ library
 
 source-repository head
   type:     git
-  location: git://github.com/yesodweb/persistent.git
+  location: https://github.com/yesodweb/persistent.git
 
 test-suite test
     type:            exitcode-stdio-1.0

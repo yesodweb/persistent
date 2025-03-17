@@ -8,6 +8,10 @@ packages:
   persistent-redis
   persistent-qq
 
+-- required by nix.
+package postgresql-libpq
+  flags: +use-pkg-config
+
 constraints:
   -- https://github.com/mongodb-haskell/mongodb/pull/152
   mongoDB < 2.7.1.3 
