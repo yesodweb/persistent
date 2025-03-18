@@ -1,146 +1,187 @@
-name:            persistent-sqlite
-version:         2.13.3.0
-license:         MIT
-license-file:    LICENSE
-author:          Michael Snoyman <michael@snoyman.com>
-maintainer:      Michael Snoyman <michael@snoyman.com>
-synopsis:        Backend for the persistent library using sqlite3.
-description:     This package includes a thin sqlite3 wrapper based on the direct-sqlite package, as well as the entire C library, so there are no system dependencies.
-category:        Database, Yesod
-stability:       Stable
-cabal-version:   >= 1.10
-build-type:      Simple
-homepage:        http://www.yesodweb.com/book/persistent
-bug-reports:     https://github.com/yesodweb/persistent/issues
-extra-source-files: ChangeLog.md cbits/*.c cbits/*.h
+name:               persistent-sqlite
+version:            2.13.3.0
+license:            MIT
+license-file:       LICENSE
+author:             Michael Snoyman <michael@snoyman.com>
+maintainer:         Michael Snoyman <michael@snoyman.com>
+synopsis:           Backend for the persistent library using sqlite3.
+description:
+  This package includes a thin sqlite3 wrapper based on the direct-sqlite package, as well as the entire C library, so there are no system dependencies.
+
+category:           Database, Yesod
+stability:          Stable
+cabal-version:      >=1.10
+build-type:         Simple
+homepage:           http://www.yesodweb.com/book/persistent
+bug-reports:        https://github.com/yesodweb/persistent/issues
+extra-source-files:
+  cbits/*.c
+  cbits/*.h
+  ChangeLog.md
 
 flag systemlib
   description: Use the system-wide sqlite library
-  default: False
+  default:     False
+
 flag use-pkgconfig
   description: Use pkg-config to find system sqlite library
-  default: False
+  default:     False
+
 flag build-sanity-exe
   description: Build a sanity check test executable
-  default: False
+  default:     False
+
 flag full-text-search
-  description: Enable full-text search in the vendored SQLite library; has no effect if a system SQLite library is used.
-  default: True
+  description:
+    Enable full-text search in the vendored SQLite library; has no effect if a system SQLite library is used.
+
+  default:     True
+
 flag uri-filenames
-  description: Enable URI filenames in the vendored SQLite library; has no effect if a system SQLite library is used.
-  default: True
+  description:
+    Enable URI filenames in the vendored SQLite library; has no effect if a system SQLite library is used.
+
+  default:     True
+
 flag have-usleep
-  description: Enable usleep in the vendored SQLite library; has no effect if a system SQLite library is used.
-  default: True
+  description:
+    Enable usleep in the vendored SQLite library; has no effect if a system SQLite library is used.
+
+  default:     True
+
 flag json1
-  description: Enable json1 in the vendored SQLite library; has no effect if a system SQLite library is used.
-  default: True
+  description:
+    Enable json1 in the vendored SQLite library; has no effect if a system SQLite library is used.
+
+  default:     True
+
 flag use-stat3
-  description: This flag is now a no-op, as the corresponding SQLite option is now a no-op; has no effect if a system SQLite library is used.
-  default: False
+  description:
+    This flag is now a no-op, as the corresponding SQLite option is now a no-op; has no effect if a system SQLite library is used.
+
+  default:     False
+
 flag use-stat4
-  description: Enable STAT4 in the vendored SQLite library (supercedes stat3); has no effect if a system SQLite library is used.
-  default: True
+  description:
+    Enable STAT4 in the vendored SQLite library (supercedes stat3); has no effect if a system SQLite library is used.
+
+  default:     True
 
 library
-    build-depends:   base                    >= 4.9         && < 5
-                   , persistent              >= 2.13.3      && < 3
-                   , aeson                   >= 1.0
-                   , bytestring              >= 0.10
-                   , conduit                 >= 1.2.12
-                   , containers              >= 0.5
-                   , microlens-th            >= 0.4.1.1
-                   , monad-logger            >= 0.3.25
-                   , mtl
-                   , resource-pool
-                   , resourcet               >= 1.1.9
-                   , text                    >= 1.2
-                   , time
-                   , transformers            >= 0.5
-                   , unliftio-core
-                   , unordered-containers
-    exposed-modules: Database.Sqlite
-                     Database.Sqlite.Internal
-                     Database.Persist.Sqlite
-    ghc-options:     -Wall
-    default-language: Haskell2010
-    if flag(systemlib)
-        if flag(use-pkgconfig)
-            pkgconfig-depends: sqlite3
-        else
-            extra-libraries: sqlite3
+  build-depends:
+      aeson                 >=1.0
+    , base                  >=4.9     && <5
+    , bytestring            >=0.10
+    , conduit               >=1.2.12
+    , containers            >=0.5
+    , microlens-th          >=0.4.1.1
+    , monad-logger          >=0.3.25
+    , mtl
+    , persistent            >=2.13.3  && <3
+    , resource-pool
+    , resourcet             >=1.1.9
+    , text                  >=1.2
+    , time
+    , transformers          >=0.5
+    , unliftio-core
+    , unordered-containers
+
+  exposed-modules:
+    Database.Persist.Sqlite
+    Database.Sqlite
+    Database.Sqlite.Internal
+
+  ghc-options:      -Wall
+  default-language: Haskell2010
+
+  if flag(systemlib)
+    if flag(use-pkgconfig)
+      pkgconfig-depends: sqlite3
+
     else
-        c-sources:   cbits/sqlite3.c
-        include-dirs: cbits
-        includes:    sqlite3.h
-        install-includes: sqlite3.h
-        cc-options:  -fPIC -std=c99
-    if flag(full-text-search)
-      cc-options: -DSQLITE_ENABLE_FTS3
-                  -DSQLITE_ENABLE_FTS3_PARENTHESIS
-                  -DSQLITE_ENABLE_FTS4
-                  -DSQLITE_ENABLE_FTS5
-    if flag(uri-filenames)
-      cc-options: -DSQLITE_USE_URI
-    if flag(have-usleep)
-       cc-options: -DHAVE_USLEEP
-    if flag(json1)
-      cc-options: -DSQLITE_ENABLE_JSON1
-    if flag(use-stat4)
-      cc-options: -DSQLITE_ENABLE_STAT4
+      extra-libraries: sqlite3
 
-    c-sources: cbits/config.c
+  else
+    c-sources:        cbits/sqlite3.c
+    include-dirs:     cbits
+    includes:         sqlite3.h
+    install-includes: sqlite3.h
+    cc-options:       -fPIC -std=c99
 
-    if !os(windows)
-        extra-libraries: pthread
+  if flag(full-text-search)
+    cc-options:
+      -DSQLITE_ENABLE_FTS3 -DSQLITE_ENABLE_FTS3_PARENTHESIS
+      -DSQLITE_ENABLE_FTS4 -DSQLITE_ENABLE_FTS5
+
+  if flag(uri-filenames)
+    cc-options: -DSQLITE_USE_URI
+
+  if flag(have-usleep)
+    cc-options: -DHAVE_USLEEP
+
+  if flag(json1)
+    cc-options: -DSQLITE_ENABLE_JSON1
+
+  if flag(use-stat4)
+    cc-options: -DSQLITE_ENABLE_STAT4
+
+  c-sources:        cbits/config.c
+
+  if !os(windows)
+    extra-libraries: pthread
 
 source-repository head
   type:     git
   location: https://github.com/yesodweb/persistent.git
 
 executable sanity
-    if flag(build-sanity-exe)
-        buildable: True
-    else
-        buildable: False
-    main-is: sanity.hs
-    hs-source-dirs: test
-    build-depends: base
-                 , persistent-sqlite
-                 , monad-logger
-    default-language: Haskell2010
+  if flag(build-sanity-exe)
+    buildable: True
+
+  else
+    buildable: False
+
+  main-is:          sanity.hs
+  hs-source-dirs:   test
+  build-depends:
+      base
+    , monad-logger
+    , persistent-sqlite
+
+  default-language: Haskell2010
 
 test-suite test
-    type:            exitcode-stdio-1.0
-    main-is:         main.hs
-    hs-source-dirs:  test
-    other-modules:   
-        SqliteInit
-        Database.Persist.Sqlite.CompositeSpec
-    ghc-options:     -Wall
+  type:             exitcode-stdio-1.0
+  main-is:          main.hs
+  hs-source-dirs:   test
+  other-modules:
+    Database.Persist.Sqlite.CompositeSpec
+    SqliteInit
 
-    build-depends:   base >= 4.9 && < 5
-                   , persistent
-                   , persistent-sqlite
-                   , persistent-test
-                   , bytestring
-                   , containers
-                   , conduit
-                   , exceptions
-                   , fast-logger
-                   , hspec >= 2.4
-                   , HUnit
-                   , microlens
-                   , monad-logger
-                   , mtl
-                   , QuickCheck
-                   , resourcet
-                   , system-fileio
-                   , system-filepath
-                   , temporary
-                   , text
-                   , time
-                   , transformers
-                   , time
-                   , unliftio-core
-    default-language: Haskell2010
+  ghc-options:      -Wall
+  build-depends:
+      base               >=4.9 && <5
+    , bytestring
+    , conduit
+    , containers
+    , exceptions
+    , fast-logger
+    , hspec              >=2.4
+    , HUnit
+    , microlens
+    , monad-logger
+    , mtl
+    , persistent
+    , persistent-sqlite
+    , persistent-test
+    , QuickCheck
+    , resourcet
+    , system-fileio
+    , system-filepath
+    , temporary
+    , text
+    , time
+    , transformers
+    , unliftio-core
+
+  default-language: Haskell2010
