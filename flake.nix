@@ -26,6 +26,7 @@
               shell = {
                 tools = {
                   cabal = "latest";
+                  cabal-fmt = "latest";
                   cabal-install = "latest";
                   fourmolu = "latest";
                   ghcid = "latest";
