@@ -117,10 +117,10 @@ specsWith runDb mmigration checks apprxChecks doubleFn = describe "data type spe
             key <- insert x
             Just y <- get key
             liftIO $ do
-                let check :: (Eq a, Show a) => String -> (entity -> a) -> IO ()
+                let check :: (Eq a, Show a, HasCallStack) => String -> (entity -> a) -> IO ()
                     check s f = (s, f x) @=? (s, f y)
                 -- Check floating-point near equality
-                let check' :: (Fractional p, Show p, Real p) => String -> (entity -> p) -> IO ()
+                let check' :: (Fractional p, Show p, Real p, HasCallStack) => String -> (entity -> p) -> IO ()
                     check' s f
                         | abs (f x - f y) < 0.000001 = return ()
                         | otherwise = (s, f x) @=? (s, f y)
