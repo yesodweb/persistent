@@ -18,3 +18,13 @@ jobs:
       - uses: restyled-io/actions/run@v4
         with:
           suggestions: true
+  cabal-fmt:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v2
+      - uses: haskell-actions/setup@v2
+        with:
+          ghc-version: "9.6"
+          cabal-version: "3.6"
+      - run: cabal install cabal-fmt
+      - run: cabal-fmt --check **/*.cabal
