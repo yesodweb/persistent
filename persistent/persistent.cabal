@@ -21,84 +21,80 @@ extra-source-files:
   README.md
 
 library
-    build-depends:
-        base                     >= 4.11.1.0     && < 5
-      , aeson                    >= 1.0 && < 2.3
-      , attoparsec
-      , attoparsec-aeson         >= 2.1.0.0 && < 2.3
-      , base64-bytestring
-      , blaze-html               >= 0.9
-      , bytestring               >= 0.10
-      , conduit                  >= 1.3
-      , containers               >= 0.5
-      , deepseq
-      , fast-logger              >= 2.4
-      , http-api-data            >= 0.3
-      , lift-type                >= 0.1.0.0 && < 0.2.0.0
-      , monad-logger             >= 0.3.28
-      , mtl
-      , path-pieces              >= 0.2
-      , resource-pool            >= 0.2.3
-      , resourcet                >= 1.1.10
-      , scientific
-      , silently
-      , template-haskell         >= 2.13 && < 2.24
-      , text                     >= 1.2
-      , th-lift-instances        >= 0.1.14    && < 0.2
-      , time                     >= 1.6
-      , transformers             >= 0.5
-      , unliftio
-      , unliftio-core
-      , unordered-containers
-      , vault
-      , vector
+  build-depends:
+      aeson                 >=1.0      && <2.3
+    , attoparsec
+    , attoparsec-aeson      >=2.1.0.0  && <2.3
+    , base                  >=4.11.1.0 && <5
+    , base64-bytestring
+    , blaze-html            >=0.9
+    , bytestring            >=0.10
+    , conduit               >=1.3
+    , containers            >=0.5
+    , deepseq
+    , fast-logger           >=2.4
+    , http-api-data         >=0.3
+    , lift-type             >=0.1.0.0  && <0.2.0.0
+    , monad-logger          >=0.3.28
+    , mtl
+    , path-pieces           >=0.2
+    , resource-pool         >=0.2.3
+    , resourcet             >=1.1.10
+    , scientific
+    , silently
+    , template-haskell      >=2.13     && <2.24
+    , text                  >=1.2
+    , th-lift-instances     >=0.1.14   && <0.2
+    , time                  >=1.6
+    , transformers          >=0.5
+    , unliftio
+    , unliftio-core
+    , unordered-containers
+    , vault
+    , vector
 
-    default-extensions:
-        FlexibleContexts
-      , MultiParamTypeClasses
-      , OverloadedStrings
-      , TypeFamilies
+  default-extensions:
+    FlexibleContexts
+    MultiParamTypeClasses
+    OverloadedStrings
+    TypeFamilies
 
-    exposed-modules:
-        Database.Persist
-        Database.Persist.Types
-        Database.Persist.Names
-        Database.Persist.PersistValue
-        Database.Persist.EntityDef
-        Database.Persist.EntityDef.Internal
-        Database.Persist.FieldDef
-        Database.Persist.FieldDef.Internal
-        Database.Persist.ImplicitIdDef
-        Database.Persist.ImplicitIdDef.Internal
-        Database.Persist.TH
-        Database.Persist.TH.Internal
-
-        Database.Persist.Quasi
-        Database.Persist.Quasi.Internal
-
-        Database.Persist.Sql
-        Database.Persist.Sql.Migration
-        Database.Persist.Sql.Types.Internal
-        Database.Persist.Sql.Util
-
-        Database.Persist.SqlBackend
-        Database.Persist.SqlBackend.StatementCache
-        Database.Persist.SqlBackend.SqlPoolHooks
-        Database.Persist.SqlBackend.Internal
-        Database.Persist.SqlBackend.Internal.InsertSqlResult
-        Database.Persist.SqlBackend.Internal.IsolationLevel
-        Database.Persist.SqlBackend.Internal.SqlPoolHooks
-        Database.Persist.SqlBackend.Internal.Statement
-        Database.Persist.SqlBackend.Internal.StatementCache
-        Database.Persist.SqlBackend.Internal.MkSqlBackend
-
-        Database.Persist.Class
-        Database.Persist.Class.PersistEntity
-        Database.Persist.Class.PersistQuery
-        Database.Persist.Class.PersistUnique
-        Database.Persist.Class.PersistConfig
-        Database.Persist.Class.PersistField
-        Database.Persist.Class.PersistStore
+  exposed-modules:
+    Database.Persist
+    Database.Persist.Class
+    Database.Persist.Class.PersistConfig
+    Database.Persist.Class.PersistEntity
+    Database.Persist.Class.PersistField
+    Database.Persist.Class.PersistQuery
+    Database.Persist.Class.PersistStore
+    Database.Persist.Class.PersistUnique
+    Database.Persist.EntityDef
+    Database.Persist.EntityDef.Internal
+    Database.Persist.FieldDef
+    Database.Persist.FieldDef.Internal
+    Database.Persist.ImplicitIdDef
+    Database.Persist.ImplicitIdDef.Internal
+    Database.Persist.Names
+    Database.Persist.PersistValue
+    Database.Persist.Quasi
+    Database.Persist.Quasi.Internal
+    Database.Persist.Sql
+    Database.Persist.Sql.Migration
+    Database.Persist.Sql.Types.Internal
+    Database.Persist.Sql.Util
+    Database.Persist.SqlBackend
+    Database.Persist.SqlBackend.Internal
+    Database.Persist.SqlBackend.Internal.InsertSqlResult
+    Database.Persist.SqlBackend.Internal.IsolationLevel
+    Database.Persist.SqlBackend.Internal.MkSqlBackend
+    Database.Persist.SqlBackend.Internal.SqlPoolHooks
+    Database.Persist.SqlBackend.Internal.Statement
+    Database.Persist.SqlBackend.Internal.StatementCache
+    Database.Persist.SqlBackend.SqlPoolHooks
+    Database.Persist.SqlBackend.StatementCache
+    Database.Persist.TH
+    Database.Persist.TH.Internal
+    Database.Persist.Types
 
     other-modules:
       Database.Persist.Compatible.TH
