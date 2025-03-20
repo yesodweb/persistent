@@ -1,108 +1,116 @@
-name:            persistent-postgresql
-version:         2.13.6.2
-license:         MIT
-license-file:    LICENSE
-author:          Felipe Lessa, Michael Snoyman <michael@snoyman.com>
-maintainer:      Michael Snoyman <michael@snoyman.com>
-synopsis:        Backend for the persistent library using postgresql.
-description:     Based on the postgresql-simple package
-category:        Database, Yesod
-stability:       Stable
-cabal-version:   >= 1.10
-build-type:      Simple
-homepage:        http://www.yesodweb.com/book/persistent
-bug-reports:     https://github.com/yesodweb/persistent/issues
+name:               persistent-postgresql
+version:            2.13.6.2
+license:            MIT
+license-file:       LICENSE
+author:             Felipe Lessa, Michael Snoyman <michael@snoyman.com>
+maintainer:         Michael Snoyman <michael@snoyman.com>
+synopsis:           Backend for the persistent library using postgresql.
+description:        Based on the postgresql-simple package
+category:           Database, Yesod
+stability:          Stable
+cabal-version:      >=1.10
+build-type:         Simple
+homepage:           http://www.yesodweb.com/book/persistent
+bug-reports:        https://github.com/yesodweb/persistent/issues
 extra-source-files: ChangeLog.md
 
 library
-    build-depends:   base                  >= 4.9      && < 5
-                   , persistent            >= 2.13.3   && < 3
-                   , aeson                 >= 1.0
-                   , attoparsec
-                   , blaze-builder
-                   , bytestring            >= 0.10
-                   , conduit               >= 1.2.12
-                   , containers            >= 0.5
-                   , monad-logger          >= 0.3.25
-                   , mtl
-                   , postgresql-simple     >= 0.6.1    && < 0.8
-                   , postgresql-libpq      >= 0.9.4.2  && < 0.12
-                   , resourcet             >= 1.1.9
-                   , resource-pool
-                   , string-conversions
-                   , text                  >= 1.2
-                   , time                  >= 1.6
-                   , transformers          >= 0.5
-                   , unliftio-core
-                   , vault
-    exposed-modules: Database.Persist.Postgresql
-                   , Database.Persist.Postgresql.Internal
-                   , Database.Persist.Postgresql.JSON
-    ghc-options:     -Wall
-    default-language: Haskell2010
+  build-depends:
+      aeson               >=1.0
+    , attoparsec
+    , base                >=4.9     && <5
+    , blaze-builder
+    , bytestring          >=0.10
+    , conduit             >=1.2.12
+    , containers          >=0.5
+    , monad-logger        >=0.3.25
+    , mtl
+    , persistent          >=2.13.3  && <3
+    , postgresql-libpq    >=0.9.4.2 && <0.12
+    , postgresql-simple   >=0.6.1   && <0.8
+    , resource-pool
+    , resourcet           >=1.1.9
+    , string-conversions
+    , text                >=1.2
+    , time                >=1.6
+    , transformers        >=0.5
+    , unliftio-core
+    , vault
+
+  exposed-modules:
+    Database.Persist.Postgresql
+    Database.Persist.Postgresql.Internal
+    Database.Persist.Postgresql.JSON
+
+  ghc-options:      -Wall
+  default-language: Haskell2010
 
 source-repository head
   type:     git
   location: https://github.com/yesodweb/persistent.git
 
 test-suite test
-    type:            exitcode-stdio-1.0
-    main-is:         main.hs
-    hs-source-dirs:  test
-    other-modules:   PgInit
-                     ArrayAggTest
-                     EquivalentTypeTestPostgres
-                     JSONTest
-                     CustomConstraintTest
-                     PgIntervalTest
-                     UpsertWhere
-                     ImplicitUuidSpec
-                     MigrationReferenceSpec
-    ghc-options:     -Wall
+  type:             exitcode-stdio-1.0
+  main-is:          main.hs
+  hs-source-dirs:   test
+  other-modules:
+    ArrayAggTest
+    CustomConstraintTest
+    EquivalentTypeTestPostgres
+    ImplicitUuidSpec
+    JSONTest
+    MigrationReferenceSpec
+    PgInit
+    PgIntervalTest
+    UpsertWhere
 
-    build-depends:   base                 >= 4.9 && < 5
-                   , persistent
-                   , persistent-postgresql
-                   , persistent-qq
-                   , persistent-test
-                   , aeson
-                   , bytestring
-                   , containers
-                   , fast-logger
-                   , HUnit
-                   , hspec                >= 2.4
-                   , hspec-expectations
-                   , hspec-expectations-lifted
-                   , monad-logger
-                   , QuickCheck
-                   , quickcheck-instances
-                   , resourcet
-                   , text
-                   , time
-                   , transformers
-                   , path-pieces
-                   , http-api-data
-                   , unliftio-core
-                   , unliftio
-                   , unordered-containers
-                   , vector
-    default-language: Haskell2010
+  ghc-options:      -Wall
+  build-depends:
+      aeson
+    , base                       >=4.9 && <5
+    , bytestring
+    , containers
+    , fast-logger
+    , hspec                      >=2.4
+    , hspec-expectations
+    , hspec-expectations-lifted
+    , http-api-data
+    , HUnit
+    , monad-logger
+    , path-pieces
+    , persistent
+    , persistent-postgresql
+    , persistent-qq
+    , persistent-test
+    , QuickCheck
+    , quickcheck-instances
+    , resourcet
+    , text
+    , time
+    , transformers
+    , unliftio
+    , unliftio-core
+    , unordered-containers
+    , vector
+
+  default-language: Haskell2010
 
 executable conn-kill
-    buildable: False
-    main-is: Main.hs
-    hs-source-dirs: conn-killed
-    ghc-options: -threaded
-    build-depends:
-        base
-      , persistent-postgresql
-      , monad-logger
-      , text
-      , unliftio
-      , time
-      , transformers
-      , persistent
-      , bytestring
-      , resource-pool
-      , mtl
-    default-language: Haskell2010
+  buildable:        False
+  main-is:          Main.hs
+  hs-source-dirs:   conn-killed
+  ghc-options:      -threaded
+  build-depends:
+      base
+    , bytestring
+    , monad-logger
+    , mtl
+    , persistent
+    , persistent-postgresql
+    , resource-pool
+    , text
+    , time
+    , transformers
+    , unliftio
+
+  default-language: Haskell2010

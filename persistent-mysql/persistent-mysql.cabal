@@ -1,89 +1,95 @@
-name:            persistent-mysql
-version:         2.13.1.5
-license:         MIT
-license-file:    LICENSE
-author:          Felipe Lessa <felipe.lessa@gmail.com>, Michael Snoyman
-maintainer:      Felipe Lessa <felipe.lessa@gmail.com>
-synopsis:        Backend for the persistent library using MySQL database server.
-category:        Database, Yesod
-stability:       Stable
-cabal-version:   >= 1.10
-build-type:      Simple
-homepage:        http://www.yesodweb.com/book/persistent
-bug-reports:     https://github.com/yesodweb/persistent/issues
+name:               persistent-mysql
+version:            2.13.1.5
+license:            MIT
+license-file:       LICENSE
+author:             Felipe Lessa <felipe.lessa@gmail.com>, Michael Snoyman
+maintainer:         Felipe Lessa <felipe.lessa@gmail.com>
+synopsis:
+  Backend for the persistent library using MySQL database server.
+
+category:           Database, Yesod
+stability:          Stable
+cabal-version:      >=1.10
+build-type:         Simple
+homepage:           http://www.yesodweb.com/book/persistent
+bug-reports:        https://github.com/yesodweb/persistent/issues
 description:
-    This package contains a backend for persistent using the
-    MySQL database server.  Internally it uses the @mysql-simple@
-    and @mysql@ packages in order to access the database.
-    .
-    This package supports only MySQL 5.1 and above.  However, it
-    has been tested only on MySQL 5.5.
-    Only the InnoDB storage engine is officially supported.
-    .
-    Known problems:
-    .
-    * This package does not support statements inside other
-      statements.
+  This package contains a backend for persistent using the
+  MySQL database server.  Internally it uses the @mysql-simple@
+  and @mysql@ packages in order to access the database.
+  .
+  This package supports only MySQL 5.1 and above.  However, it
+  has been tested only on MySQL 5.5.
+  Only the InnoDB storage engine is officially supported.
+  .
+  Known problems:
+  .
+  * This package does not support statements inside other
+  statements.
+
 extra-source-files: ChangeLog.md
 
 library
-    build-depends:   base             >= 4.9      && < 5
-                   , persistent       >= 2.13.3   && < 3
-                   , aeson            >= 1.0
-                   , blaze-builder
-                   , bytestring       >= 0.10.8
-                   , conduit          >= 1.2.12
-                   , containers       >= 0.5
-                   , monad-logger
-                   , mysql            >= 0.2.1    && < 0.3
-                   , mysql-simple     >= 0.4.7    && < 0.5
-                   , resourcet        >= 1.1
-                   , resource-pool
-                   , text             >= 1.2
-                   , transformers     >= 0.5
-                   , unliftio-core
-    exposed-modules: Database.Persist.MySQL
-    ghc-options:     -Wall
-    default-language: Haskell2010
+  build-depends:
+      aeson          >=1.0
+    , base           >=4.9    && <5
+    , blaze-builder
+    , bytestring     >=0.10.8
+    , conduit        >=1.2.12
+    , containers     >=0.5
+    , monad-logger
+    , mysql          >=0.2.1  && <0.3
+    , mysql-simple   >=0.4.7  && <0.5
+    , persistent     >=2.13.3 && <3
+    , resource-pool
+    , resourcet      >=1.1
+    , text           >=1.2
+    , transformers   >=0.5
+    , unliftio-core
+
+  exposed-modules:  Database.Persist.MySQL
+  ghc-options:      -Wall
+  default-language: Haskell2010
 
 source-repository head
   type:     git
   location: https://github.com/yesodweb/persistent.git
 
 test-suite test
-    type:            exitcode-stdio-1.0
-    main-is:         main.hs
-    hs-source-dirs:  test
-    other-modules:   
-        MyInit
-        InsertDuplicateUpdate
-        CustomConstraintTest
-        ImplicitUuidSpec
-        JSONTest
-    ghc-options:     -Wall
+  type:             exitcode-stdio-1.0
+  main-is:          main.hs
+  hs-source-dirs:   test
+  other-modules:
+    CustomConstraintTest
+    ImplicitUuidSpec
+    InsertDuplicateUpdate
+    JSONTest
+    MyInit
 
-    build-depends:   
-        base             >= 4.9 && < 5
-      , aeson
-      , bytestring
-      , containers
-      , conduit
-      , fast-logger
-      , hspec            >= 2.4
-      , http-api-data
-      , HUnit
-      , monad-logger
-      , mysql
-      , path-pieces
-      , persistent
-      , persistent-mysql
-      , persistent-qq
-      , persistent-test
-      , QuickCheck
-      , quickcheck-instances
-      , resourcet
-      , text
-      , time
-      , transformers
-      , unliftio-core
-    default-language: Haskell2010
+  ghc-options:      -Wall
+  build-depends:
+      aeson
+    , base                  >=4.9 && <5
+    , bytestring
+    , conduit
+    , containers
+    , fast-logger
+    , hspec                 >=2.4
+    , http-api-data
+    , HUnit
+    , monad-logger
+    , mysql
+    , path-pieces
+    , persistent
+    , persistent-mysql
+    , persistent-qq
+    , persistent-test
+    , QuickCheck
+    , quickcheck-instances
+    , resourcet
+    , text
+    , time
+    , transformers
+    , unliftio-core
+
+  default-language: Haskell2010

@@ -1,67 +1,68 @@
-cabal-version: 1.12
-name:           persistent-qq
-version:        2.12.0.6
-synopsis:       Provides a quasi-quoter for raw SQL for persistent
-description:    Please see README and API docs at <http://www.stackage.org/package/persistent>.
-category:       Database, Yesod
-homepage:       https://github.com/yesodweb/persistent#readme
-bug-reports:    https://github.com/yesodweb/persistent/issues
-author:         Michael Snoyman <michael@snoyman.com>
-maintainer:     Michael Snoyman <michael@snoyman.com>
-license:        MIT
-license-file:   LICENSE
-build-type:     Simple
+cabal-version:      1.12
+name:               persistent-qq
+version:            2.12.0.6
+synopsis:           Provides a quasi-quoter for raw SQL for persistent
+description:
+  Please see README and API docs at <http://www.stackage.org/package/persistent>.
+
+category:           Database, Yesod
+homepage:           https://github.com/yesodweb/persistent#readme
+bug-reports:        https://github.com/yesodweb/persistent/issues
+author:             Michael Snoyman <michael@snoyman.com>
+maintainer:         Michael Snoyman <michael@snoyman.com>
+license:            MIT
+license-file:       LICENSE
+build-type:         Simple
 extra-source-files:
-    ChangeLog.md
-    README.md
+  ChangeLog.md
+  README.md
 
 source-repository head
-  type: git
+  type:     git
   location: https://github.com/yesodweb/persistent
 
 library
-  exposed-modules:
-      Database.Persist.Sql.Raw.QQ
-  other-modules:
-      Paths_persistent_qq
-  hs-source-dirs:
-      src
-  ghc-options: -Wall
+  exposed-modules:  Database.Persist.Sql.Raw.QQ
+  other-modules:    Paths_persistent_qq
+  hs-source-dirs:   src
+  ghc-options:      -Wall
   build-depends:
-      base >=4.9 && <5
+      base              >=4.9  && <5
     , haskell-src-meta
     , mtl
-    , persistent >=2.12
+    , persistent        >=2.12
     , template-haskell
     , text
+
   default-language: Haskell2010
 
 test-suite specs
-  type: exitcode-stdio-1.0
-  main-is: Spec.hs
+  type:             exitcode-stdio-1.0
+  main-is:          Spec.hs
   other-modules:
-      PersistentTestModels
-      PersistTestPetCollarType
-      PersistTestPetType
-      CodeGenTest
-  hs-source-dirs:
-      test
-  ghc-options: -Wall
+    CodeGenTest
+    PersistentTestModels
+    PersistTestPetCollarType
+    PersistTestPetType
+
+  hs-source-dirs:   test
+  ghc-options:      -Wall
   build-depends:
-      HUnit
-    , aeson
+      aeson
     , base
+    , bytestring
     , fast-logger
     , haskell-src-meta
     , hspec
+    , HUnit
     , monad-logger
     , mtl
-    , persistent >=2.14
+    , persistent         >=2.14
     , persistent-qq
     , persistent-sqlite
     , resourcet
     , template-haskell
     , text
     , unliftio
-    , bytestring
+
   default-language: Haskell2010

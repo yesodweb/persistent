@@ -1,24 +1,30 @@
-name:            persistent-template
-version:         2.12.0.0
-license:         MIT
-license-file:    LICENSE
-author:          Michael Snoyman <michael@snoyman.com>
-maintainer:      Michael Snoyman <michael@snoyman.com>, Greg Weber <greg@gregweber.info>
-synopsis:        Type-safe, non-relational, multi-backend persistence.
-description:     Hackage documentation generation is not reliable. For up to date documentation, please see: <http://www.stackage.org/package/persistent-template>.
-category:        Database, Yesod
-stability:       Stable
-cabal-version:   >= 1.10
-build-type:      Simple
-homepage:        http://www.yesodweb.com/book/persistent
-bug-reports:     https://github.com/yesodweb/persistent/issues
-extra-source-files: ChangeLog.md README.md
+name:               persistent-template
+version:            2.12.0.0
+license:            MIT
+license-file:       LICENSE
+author:             Michael Snoyman <michael@snoyman.com>
+maintainer:
+  Michael Snoyman <michael@snoyman.com>, Greg Weber <greg@gregweber.info>
+
+synopsis:           Type-safe, non-relational, multi-backend persistence.
+description:
+  Hackage documentation generation is not reliable. For up to date documentation, please see: <http://www.stackage.org/package/persistent-template>.
+
+category:           Database, Yesod
+stability:          Stable
+cabal-version:      >=1.10
+build-type:         Simple
+homepage:           http://www.yesodweb.com/book/persistent
+bug-reports:        https://github.com/yesodweb/persistent/issues
+extra-source-files:
+  ChangeLog.md
+  README.md
 
 library
-    build-depends:   base                     >= 4.10      && < 5
-    exposed-modules: 
-    ghc-options:     -Wall
-    default-language: Haskell2010
+  build-depends:    base >=4.10 && <5
+  exposed-modules:
+  ghc-options:      -Wall
+  default-language: Haskell2010
 
 source-repository head
   type:     git
