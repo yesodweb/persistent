@@ -132,7 +132,7 @@ instance NFData DerivStrategy where
 instance NFData DerivClause where
 #endif
 
-#if MIN_VERSION_template_haskell(2,20,0)
+#if MIN_VERSION_template_haskell(2,21,0)
 instance NFData BndrVis where
 #endif
 
