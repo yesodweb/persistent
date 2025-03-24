@@ -23,6 +23,7 @@ source-repository-package
     type: git
     location: https://github.com/parsonsmatt/mysql
     tag: 1e7dc274bf9a2919c9dd4298ed46c1bd1a1b677d
+    --sha256: 1zbwly28rpwkqqkj9cbsbr57rx2y79nbfcrvqmp7a0gxy0d9i4qy
 
 -- Needed to test that `persistent-redis` works with mtl-2.3
 -- https://github.com/informatikr/hedis/pull/190
