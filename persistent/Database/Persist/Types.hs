@@ -75,6 +75,7 @@ import Database.Persist.Types.Base
        , WhyNullable(..)
        , fieldAttrsContainsNullable
        , keyAndEntityFields
+       , keyAndEntityFieldsDatabase
        , noCascade
        , parseFieldAttrs
        )

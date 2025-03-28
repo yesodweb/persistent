@@ -24,6 +24,7 @@ module Database.Persist.EntityDef
     , entityPrimary
     , entitiesPrimary
     , keyAndEntityFields
+    , keyAndEntityFieldsDatabase
      -- * Setters
     , setEntityId
     , setEntityIdDef

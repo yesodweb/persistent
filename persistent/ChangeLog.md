@@ -1,5 +1,10 @@
 # Changelog for persistent
 
+# 2.15.1.0
+
+* [#1519](https://github.com/yesodweb/persistent/pull/1519/files/9865a295f4545d30e55aacb6efc25f27f758e8ad#diff-5af2883367baae8f7f266df6a89fc2d1defb7572d94ed069e05c8135a883bc45)
+    * Add `keyAndEntityFieldsDatabase`. This was intended to be added in 2.14.7.0 but was not properly re-exported.
+
 # 2.15.0.0
 
 * [#1569](https://github.com/yesodweb/persistent/pull/1569)

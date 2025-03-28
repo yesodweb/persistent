@@ -11,6 +11,7 @@ module Database.Persist.EntityDef.Internal
     , entityPrimary
     , entitiesPrimary
     , keyAndEntityFields
+    , keyAndEntityFieldsDatabase
     , toEmbedEntityDef
     , EntityIdDef(..)
     ) where
