@@ -1,12 +1,21 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -haddock #-}
 
 module Database.Persist.TH.EntityHaddockSpec (spec) where
 
 import TemplateTestImports
+import Database.Persist.TH.EntityHaddockSpec.CommentModel
 
 #if MIN_VERSION_template_haskell(2,18,0)
-import Database.Persist.TH.CommentSpec (CommentModel (..))
 import Language.Haskell.TH (DocLoc (DeclDoc), getDoc)
 import Language.Haskell.TH.Syntax (lift)
 

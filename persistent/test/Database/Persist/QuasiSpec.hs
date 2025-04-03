@@ -9,8 +9,9 @@ import Prelude hiding (lines)
 
 import Control.Exception
 import Data.List hiding (lines)
-import Data.List.NonEmpty (NonEmpty(..), (<|))
+import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NEL
+import Data.Maybe (fromMaybe, mapMaybe)
 import qualified Data.Map as Map
 import qualified Data.Text as T
 import Database.Persist.EntityDef.Internal
@@ -18,9 +19,8 @@ import Database.Persist.Quasi
 import Database.Persist.Quasi.Internal
 import Database.Persist.Types
 import Test.Hspec
-import Test.Hspec.QuickCheck
 import Test.QuickCheck
-import Text.Shakespeare.Text (st)
+import Text.Shakespeare.Text (st, sbt)
 
 defs :: T.Text -> [UnboundEntityDef]
 defs t = parse lowerCaseSettings [(Nothing, t)]
@@ -28,61 +28,19 @@ defs t = parse lowerCaseSettings [(Nothing, t)]
 defsSnake :: T.Text -> [UnboundEntityDef]
 defsSnake t = parse (setPsUseSnakeCaseForeignKeys lowerCaseSettings) [(Nothing, t)]
 
+parseLines :: T.Text -> NonEmpty Line
+parseLines txt =
+    fromMaybe (error "parseLines failed to parse any lines") $ do
+        NEL.nonEmpty (mapMaybe parseLine (T.lines txt))
+
+expectLength :: MonadFail m => Int -> T.Text -> [a] -> m [a]
+expectLength n description els =
+    if length els == n
+       then pure els
+       else fail $ "Expected there to be " <> show n <> " " <> T.unpack description <> " but there were " <> show (length els)
 
 spec :: Spec
 spec = describe "Quasi" $ do
-    describe "parseEntityFields" $ do
-        let helloWorldTokens = Token "hello" :| [Token "world"]
-            foobarbazTokens = Token "foo" :| [Token "bar", Token "baz"]
-        it "works" $ do
-            parseEntityFields []
-                `shouldBe`
-                    mempty
-        it "works2" $ do
-            parseEntityFields
-                [ Line 0 helloWorldTokens
-                ]
-                `shouldBe`
-                    ( [NEL.toList helloWorldTokens], mempty )
-        it "works3" $ do
-            parseEntityFields
-                [ Line 0 helloWorldTokens
-                , Line 2 foobarbazTokens
-                ]
-                `shouldBe`
-                    ( [NEL.toList helloWorldTokens, NEL.toList foobarbazTokens], mempty )
-        it "works4" $ do
-            parseEntityFields
-                [ Line 0 [Token "Product"]
-                , Line 2 (Token <$> ["name", "Text"])
-                , Line 2 (Token <$> ["added", "UTCTime", "default=CURRENT_TIMESTAMP"])
-                ]
-                `shouldBe`
-                    ( []
-                    , Map.fromList
-                        [ ("Product",
-                            [ ["name", "Text"]
-                            , ["added", "UTCTime", "default=CURRENT_TIMESTAMP"]
-                            ]
-                        ) ]
-                    )
-        it "works5" $ do
-            parseEntityFields
-                [ Line 0 [Token "Product"]
-                , Line 2 (Token <$> ["name", "Text"])
-                , Line 4 [Token "ExtraBlock"]
-                , Line 4 (Token <$> ["added", "UTCTime", "default=CURRENT_TIMESTAMP"])
-                ]
-                `shouldBe`
-                    ( []
-                    , Map.fromList
-                        [ ("Product",
-                            [ ["name", "Text"]
-                            , ["ExtraBlock"]
-                            , ["added", "UTCTime", "default=CURRENT_TIMESTAMP"]
-                            ]
-                        )]
-                    )
     describe "takeColsEx" $ do
         let subject = takeColsEx upperCaseSettings
         it "fails on a single word" $ do
@@ -139,29 +97,41 @@ spec = describe "Quasi" $ do
         it "handles normal words" $
             parseLine " foo   bar  baz" `shouldBe`
                 Just
-                    ( Line 1
-                        [ Token "foo"
-                        , Token "bar"
-                        , Token "baz"
-                        ]
+                    ( Line
+                        { lineIndent = 1
+                        , lineTokens =
+                            [ "foo"
+                            , "bar"
+                            , "baz"
+                            ]
+                        , lineComment = Nothing
+                        }
                     )
 
         it "handles numbers" $
             parseLine "  one (Finite 1)" `shouldBe`
                 Just
-                    ( Line 2
-                        [ Token "one"
-                        , Token "Finite 1"
-                        ]
+                    ( Line
+                        { lineIndent = 2
+                        , lineTokens =
+                            [ "one"
+                            , "Finite 1"
+                            ]
+                        , lineComment = Nothing
+                        }
                     )
 
         it "handles quotes" $
             parseLine "  \"foo bar\"  \"baz\"" `shouldBe`
                 Just
-                    ( Line 2
-                        [ Token "foo bar"
-                        , Token "baz"
-                        ]
+                    ( Line
+                        { lineIndent = 2
+                        , lineTokens =
+                            [ "foo bar"
+                            , "baz"
+                            ]
+                        , lineComment = Nothing
+                        }
                     )
 
         it "should error if quotes are unterminated" $ do
@@ -172,87 +142,126 @@ spec = describe "Quasi" $ do
         it "handles quotes mid-token" $
             parseLine "  x=\"foo bar\"  \"baz\"" `shouldBe`
                 Just
-                    ( Line 2
-                        [ Token "x=foo bar"
-                        , Token "baz"
-                        ]
+                    ( Line
+                        { lineIndent = 2
+                        , lineTokens =
+                            [ "x=foo bar"
+                            , "baz"
+                            ]
+                        , lineComment = Nothing
+                        }
                     )
 
         it "handles escaped quote mid-token" $
             parseLine "  x=\\\"foo bar\"  \"baz\"" `shouldBe`
                 Just
-                    ( Line 2
-                        [ Token "x=\\\"foo"
-                        , Token "bar\""
-                        , Token "baz"
-                        ]
+                    ( Line
+                        { lineIndent = 2
+                        , lineTokens =
+                            [ "x=\\\"foo"
+                            , "bar\""
+                            , "baz"
+                            ]
+                        , lineComment = Nothing
+                        }
                     )
 
         it "handles unnested parantheses" $
             parseLine "  (foo bar)  (baz)" `shouldBe`
                 Just
-                    ( Line 2
-                        [ Token "foo bar"
-                        , Token "baz"
-                        ]
+                    ( Line
+                        { lineIndent = 2
+                        , lineTokens =
+                            [ "foo bar"
+                            , "baz"
+                            ]
+                        , lineComment = Nothing
+                        }
                     )
 
         it "handles unnested parantheses mid-token" $
             parseLine "  x=(foo bar)  (baz)" `shouldBe`
                 Just
-                    ( Line 2
-                        [ Token "x=foo bar"
-                        , Token "baz"
-                        ]
+                    ( Line
+                        { lineIndent = 2
+                        , lineTokens =
+                            [ "x=foo bar"
+                            , "baz"
+                            ]
+                        , lineComment = Nothing
+                        }
                     )
 
         it "handles nested parantheses" $
             parseLine "  (foo (bar))  (baz)" `shouldBe`
                 Just
-                    ( Line 2
-                        [ Token "foo (bar)"
-                        , Token "baz"
-                        ]
+                    ( Line
+                        { lineIndent = 2
+                        , lineTokens =
+                            [ "foo (bar)"
+                            , "baz"
+                            ]
+                        , lineComment = Nothing
+                        }
                     )
 
         it "escaping" $
             parseLine "  (foo \\(bar)  y=\"baz\\\"\"" `shouldBe`
                 Just
-                    ( Line 2
-                        [ Token "foo (bar"
-                        , Token "y=baz\""
-                        ]
+                    ( Line
+                        { lineIndent = 2
+                        , lineTokens =
+                            [ "foo (bar"
+                            , "y=baz\""
+                            ]
+                        , lineComment = Nothing
+                        }
                     )
 
         it "mid-token quote in later token" $
             parseLine "foo bar baz=(bin\")" `shouldBe`
                 Just
-                    ( Line 0
-                        [ Token "foo"
-                        , Token "bar"
-                        , Token "baz=bin\""
-                        ]
+                    ( Line
+                        { lineIndent = 0
+                        , lineTokens =
+                            [ "foo"
+                            , "bar"
+                            , "baz=bin\""
+                            ]
+                        , lineComment = Nothing
+                        }
                     )
 
         describe "comments" $ do
             it "recognizes one line" $ do
                 parseLine "-- | this is a comment" `shouldBe`
                     Just
-                        ( Line 0
-                            [ DocComment "this is a comment"
-                            ]
+                        ( Line
+                            { lineIndent = 0
+                            , lineTokens = []
+                            , lineComment = Just (Comment "-- |" "this is a comment")
+                            }
                         )
+
             it "recognizes empty line" $ do
                 parseLine "-- |" `shouldBe`
                     Just
-                        ( Line 0
-                            [ DocComment ""
-                            ]
+                        ( Line
+                            { lineIndent = 0
+                            , lineTokens = []
+                            , lineComment = Just (Comment "-- |" "")
+                            }
                         )
 
             it "works if comment is indented" $ do
                 parseLine "  -- | comment" `shouldBe`
-                    Just (Line 2 [DocComment "comment"])
+                    Just
+                        ( Line
+                            { lineIndent = 2
+                            , lineTokens = []
+                            , lineComment = Just (Comment "-- |" "comment")
+                            }
+                        )
 
     describe "parse" $ do
         let subject =
@@ -289,7 +298,7 @@ Car
             entityDB (unboundEntityDef vehicle) `shouldBe` EntityNameDB "vehicle"
 
         it "should parse the `entityAttrs` field" $ do
-            entityAttrs (unboundEntityDef bicycle) `shouldBe` ["-- | this is a bike"]
+            entityAttrs (unboundEntityDef bicycle) `shouldBe` []
             entityAttrs (unboundEntityDef car) `shouldBe` []
             entityAttrs (unboundEntityDef vehicle) `shouldBe` []
 
@@ -297,15 +306,15 @@ Car
             let simplifyField field =
                     (unboundFieldNameHS field, unboundFieldNameDB field, unboundFieldComments field)
             (simplifyField <$> unboundEntityFields bicycle) `shouldBe`
-                [ (FieldNameHS "brand", FieldNameDB "brand", Nothing)
+                [ (FieldNameHS "brand", FieldNameDB "brand", Just "the brand of the bike\n")
                 ]
             (simplifyField <$> unboundEntityFields car) `shouldBe`
                 [ (FieldNameHS "make", FieldNameDB "make", Just "the make of the Car\n")
                 , (FieldNameHS "model", FieldNameDB "model", Just "the model of the Car\n")
                 ]
             (simplifyField <$> unboundEntityFields vehicle) `shouldBe`
-                [ (FieldNameHS "bicycle", FieldNameDB "bicycle", Nothing)
-                , (FieldNameHS "car", FieldNameDB "car", Nothing)
+                [ (FieldNameHS "bicycle", FieldNameDB "bicycle", Just "the bike reference\n")
+                , (FieldNameHS "car", FieldNameDB "car", Just "the car reference\n")
                 ]
 
         it "should parse the `entityUniques` field" $ do
@@ -357,7 +366,7 @@ Notification
             entityDerives (unboundEntityDef vehicle) `shouldBe` []
 
         it "should parse the `entityEntities` field" $ do
-            entityExtra (unboundEntityDef bicycle) `shouldBe` Map.singleton "ExtraBike" [["foo", "bar", "-- | this is a foo bar"], ["baz"]]
+            entityExtra (unboundEntityDef bicycle) `shouldBe` Map.singleton "ExtraBike" [["foo", "bar"], ["baz"]]
             entityExtra (unboundEntityDef car) `shouldBe` mempty
             entityExtra (unboundEntityDef vehicle) `shouldBe` mempty
 
@@ -367,7 +376,7 @@ Notification
             entitySum (unboundEntityDef vehicle) `shouldBe` True
 
         it "should parse the `entityComments` field" $ do
-            entityComments (unboundEntityDef bicycle) `shouldBe` Nothing
+            entityComments (unboundEntityDef bicycle) `shouldBe` Just "this is a bike\n"
             entityComments (unboundEntityDef car) `shouldBe` Just "This is a Car\n"
             entityComments (unboundEntityDef vehicle) `shouldBe` Nothing
 
@@ -779,75 +788,44 @@ Baz
     c FooId
                     |]
 
-        let preparsed =
-                preparse subject
+        let preparsed = parseLines subject
+
         it "preparse works" $ do
-            (length . snd <$> preparsed) `shouldBe` Just 10
+            length preparsed `shouldBe` 10
 
-        let fooLines =
-                [ Line
-                    { lineIndent = 0
-                    , tokens = Token "Foo" :| []
-                    }
-                , Line
-                    { lineIndent = 4
-                    , tokens = Token "name" :| [Token "String"]
-                    }
-                , Line
-                    { lineIndent = 4
-                    , tokens = Token "age" :| [Token "Int"]
-                    }
-                ]
-            emptyLines =
-                [ Line
-                    { lineIndent = 0
-                    , tokens = Token "EmptyEntity" :| []
-                    }
-                ]
-            barLines =
-                [ Line
-                    { lineIndent = 0
-                    , tokens = Token "Bar" :| []
-                    }
-                , Line
-                    { lineIndent = 4
-                    , tokens = Token "name" :| [Token "String"]
-                    }
-                ]
-            bazLines =
-                [ Line
-                    { lineIndent = 0
-                    , tokens = Token "Baz" :| []
-                    }
-                , Line
-                    { lineIndent = 4
-                    , tokens = Token "a" :| [Token "Int"]
-                    }
-                , Line
-                    { lineIndent = 4
-                    , tokens = Token "b" :| [Token "String"]
-                    }
-                , Line
-                    { lineIndent = 4
-                    , tokens = Token "c" :| [Token "FooId"]
-                    }
-                ]
+        it "parseEntityDefs works" $ do
+            let simplifyParsedFieldDef pfa =
+                    (parsedFieldDefTokens pfa, parsedFieldDefComments pfa)
 
-        let
-            linesAssociated =
-                case snd <$> preparsed of
-                    Nothing -> error "preparsed failed"
-                    Just lines -> associateLines lines
-        it "associateLines works" $ do
-            linesAssociated `shouldMatchList`
-                [ LinesWithComments
-                    { lwcLines = NEL.fromList fooLines
-                    , lwcComments = []
-                    }
-                , LinesWithComments (NEL.fromList emptyLines) []
-                , LinesWithComments (NEL.fromList barLines) []
-                , LinesWithComments (NEL.fromList bazLines) []
-                ]
+            let parsedDefs = parseEntityDefs Nothing preparsed
+
+            [fooDef, emptyEntityDef, barDef, bazDef] <- expectLength 4 "parsed definitions" parsedDefs
+
+            parsedEntityDefEntityName fooDef `shouldBe` EntityNameHS "Foo"
+            parsedEntityDefComments fooDef `shouldBe` []
+
+            [fooName, fooAge] <- expectLength 2 "Foo fields" (parsedEntityDefFieldAttributes fooDef)
+            simplifyParsedFieldDef fooName `shouldBe` (["name", "String"], [])
+            simplifyParsedFieldDef fooAge `shouldBe` (["age", "Int"], [])
+
+            parsedEntityDefEntityName emptyEntityDef `shouldBe` EntityNameHS "EmptyEntity"
+            parsedEntityDefComments emptyEntityDef `shouldBe` []
+
+            [] <- expectLength 0 "EmptyEntity fields" (parsedEntityDefFieldAttributes emptyEntityDef)
+
+            parsedEntityDefEntityName barDef `shouldBe` EntityNameHS "Bar"
+            parsedEntityDefComments barDef `shouldBe` []
+
+            [barName] <- expectLength 1 "Bar fields" (parsedEntityDefFieldAttributes barDef)
+            simplifyParsedFieldDef barName `shouldBe` (["name", "String"], [])
+
+            parsedEntityDefEntityName bazDef `shouldBe` EntityNameHS "Baz"
+            parsedEntityDefComments bazDef `shouldBe` []
+
+            [bazA, bazB, bazC] <- expectLength 3 "Baz fields" (parsedEntityDefFieldAttributes bazDef)
+            simplifyParsedFieldDef bazA `shouldBe` (["a", "Int"], [])
+            simplifyParsedFieldDef bazB `shouldBe` (["b", "String"], [])
+            simplifyParsedFieldDef bazC `shouldBe` (["c", "FooId"], [])
 
         it "parse works" $ do
             let test name'fieldCount parsedList = do
@@ -885,28 +863,24 @@ Baz
                 ]
                 result
 
-
     describe "preparse" $ do
-        prop "omits lines that are only whitespace" $ \len -> do
-            ws <- vectorOf len arbitraryWhiteSpaceChar
-            pure $ preparse (T.pack ws) === Nothing
-
         it "recognizes entity" $ do
             let expected =
-                    Line { lineIndent = 0, tokens = pure (Token "Person") } :|
-                    [ Line { lineIndent = 2, tokens = Token "name" :| [Token "String"] }
-                    , Line { lineIndent = 2, tokens = Token "age" :| [Token "Int"] }
+                    Line { lineIndent = 0, lineTokens = ["Person"], lineComment = Nothing } :|
+                    [ Line { lineIndent = 2, lineTokens = ["name", "String"], lineComment = Nothing }
+                    , Line { lineIndent = 2, lineTokens = ["age", "Int"], lineComment = Nothing }
                     ]
+
             preparse "Person\n  name String\n  age Int" `shouldBe` Just (3, expected)
 
         it "recognizes comments" $ do
             let text = "Foo\n  x X\n-- | Hello\nBar\n name String"
             let expected =
-                    Line { lineIndent = 0, tokens = pure (Token "Foo") } :|
-                    [ Line { lineIndent = 2, tokens = Token "x" :| [Token "X"] }
-                    , Line { lineIndent = 0, tokens = pure (DocComment "Hello") }
-                    , Line { lineIndent = 0, tokens = pure (Token "Bar") }
-                    , Line { lineIndent = 1, tokens = Token "name" :| [Token "String"] }
+                    Line { lineIndent = 0, lineTokens = ["Foo"], lineComment = Nothing } :|
+                    [ Line { lineIndent = 2, lineTokens = ["x", "X"], lineComment = Nothing }
+                    , Line { lineIndent = 0, lineTokens = [], lineComment = Just (Comment "-- |" "Hello") }
+                    , Line { lineIndent = 0, lineTokens = ["Bar"], lineComment = Nothing }
+                    , Line { lineIndent = 1, lineTokens = ["name", "String"], lineComment = Nothing }
                     ]
             preparse text `shouldBe` Just (5, expected)
 
@@ -920,11 +894,12 @@ Baz
                     , "    name String"
                     ]
                 expected =
-                    Line { lineIndent = 2, tokens = pure (Token "Foo") } :|
-                    [ Line { lineIndent = 4, tokens = Token "x" :| [Token "X"] }
-                    , Line { lineIndent = 2, tokens = pure (DocComment "Comment") }
-                    , Line { lineIndent = 2, tokens = pure (Token "Bar") }
-                    , Line { lineIndent = 4, tokens = Token "name" :| [Token "String"] }
+                    Line { lineIndent = 2, lineTokens = ["Foo"], lineComment = Nothing } :|
+                    [ Line { lineIndent = 4, lineTokens = ["x", "X"], lineComment = Nothing }
+                    , Line { lineIndent = 2, lineTokens = [], lineComment = Just (Comment "-- |" "Comment") }
+                    , Line { lineIndent = 2, lineTokens = [], lineComment = Just (Comment "--" "hidden comment") }
+                    , Line { lineIndent = 2, lineTokens = ["Bar"], lineComment = Nothing }
+                    , Line { lineIndent = 4, lineTokens = ["name", "String"], lineComment = Nothing }
                     ]
             preparse t `shouldBe` Just (6, expected)
 
@@ -939,13 +914,13 @@ Baz
                     , "    something"
                     ]
                 expected =
-                    Line { lineIndent = 0, tokens = pure (Token "LowerCaseTable") } :|
-                    [ Line { lineIndent = 2, tokens = Token "name" :| [Token "String"] }
-                    , Line { lineIndent = 2, tokens = pure (Token "ExtraBlock") }
-                    , Line { lineIndent = 4, tokens = Token "foo" :| [Token "bar"] }
-                    , Line { lineIndent = 4, tokens = pure (Token "baz") }
-                    , Line { lineIndent = 2, tokens = pure (Token "ExtraBlock2") }
-                    , Line { lineIndent = 4, tokens = pure (Token "something") }
+                    Line { lineIndent = 0, lineTokens = ["LowerCaseTable"], lineComment = Nothing } :|
+                    [ Line { lineIndent = 2, lineTokens = ["name", "String"], lineComment = Nothing }
+                    , Line { lineIndent = 2, lineTokens = ["ExtraBlock"], lineComment = Nothing }
+                    , Line { lineIndent = 4, lineTokens = ["foo", "bar"], lineComment = Nothing }
+                    , Line { lineIndent = 4, lineTokens = ["baz"], lineComment = Nothing }
+                    , Line { lineIndent = 2, lineTokens = ["ExtraBlock2"], lineComment = Nothing }
+                    , Line { lineIndent = 4, lineTokens = ["something"], lineComment = Nothing }
                     ]
             preparse t `shouldBe` Just (7, expected)
 
@@ -957,178 +932,225 @@ Baz
                     , "  name String"
                     ]
                 expected =
-                    Line { lineIndent = 0, tokens = [DocComment "Model"] } :|
-                    [ Line { lineIndent = 0, tokens = [Token "Foo"] }
-                    , Line { lineIndent = 2, tokens = [DocComment "Field"] }
-                    , Line { lineIndent = 2, tokens = (Token <$> ["name", "String"]) }
+                    Line { lineIndent = 0, lineTokens = [], lineComment = Just (Comment "-- |" "Model") } :|
+                    [ Line { lineIndent = 0, lineTokens = ["Foo"], lineComment = Nothing }
+                    , Line { lineIndent = 2, lineTokens = [], lineComment = Just (Comment "-- |" "Field") }
+                    , Line { lineIndent = 2, lineTokens = ["name", "String"], lineComment = Nothing }
                     ]
             preparse text `shouldBe` Just (4, expected)
 
-    describe "associateLines" $ do
-        let foo =
-                Line
-                    { lineIndent = 0
-                    , tokens = pure (Token "Foo")
-                    }
-            name'String =
-                Line
-                    { lineIndent = 2
-                    , tokens = Token "name" :| [Token "String"]
-                    }
-            comment =
-                Line
-                    { lineIndent = 0
-                    , tokens = pure (DocComment "comment")
-                    }
-        it "works" $ do
-            associateLines
-                ( comment :|
-                [ foo
-                , name'String
-                ])
-                `shouldBe`
-                    [ LinesWithComments
-                        { lwcComments = ["comment"]
-                        , lwcLines = foo :| [name'String]
-                        }
-                    ]
-        let bar =
-                Line
-                    { lineIndent = 0
-                    , tokens = Token "Bar" :| [Token "sql", Token "=", Token "bars"]
-                    }
-            age'Int =
-                Line
-                    { lineIndent = 1
-                    , tokens = Token "age" :| [Token "Int"]
-                    }
-        it "works when used consecutively" $ do
-            associateLines
-                ( bar :|
-                [ age'Int
-                , comment
-                , foo
-                , name'String
-                ])
-                `shouldBe`
-                    [ LinesWithComments
-                        { lwcComments = []
-                        , lwcLines = bar :| [age'Int]
-                        }
-                    , LinesWithComments
-                        { lwcComments = ["comment"]
-                        , lwcLines = foo :| [name'String]
-                        }
-                    ]
-        it "works with textual input" $ do
-            let text = snd <$> preparse "Foo\n  x X\n-- | Hello\nBar\n name String"
-            associateLines <$> text
-                `shouldBe` Just
-                    [ LinesWithComments
-                        { lwcLines =
-                            Line {lineIndent = 0, tokens = Token "Foo" :| []}
-                            :| [ Line {lineIndent = 2, tokens = Token "x" :| [Token "X"]} ]
-                        , lwcComments =
-                            []
-                        }
-                    , LinesWithComments
-                        { lwcLines =
-                            Line {lineIndent = 0, tokens = Token "Bar" :| []}
-                            :| [ Line {lineIndent = 1, tokens = Token "name" :| [Token "String"]}]
-                        , lwcComments =
-                            ["Hello"]
-                        }
-                    ]
-        it "works with extra blocks" $ do
-            let text = fmap snd . preparse . T.unlines $
-                    [ "LowerCaseTable"
-                    , "    Id             sql=my_id"
-                    , "    fullName Text"
-                    , "    ExtraBlock"
-                    , "        foo bar"
-                    , "        baz"
-                    , "        bin"
-                    , "    ExtraBlock2"
-                    , "        something"
-                    ]
-            associateLines <$> text `shouldBe` Just
-                [ LinesWithComments
-                    { lwcLines =
-                        Line { lineIndent = 0, tokens = pure (Token "LowerCaseTable") } :|
-                        [ Line { lineIndent = 4, tokens = Token "Id" :| [Token "sql=my_id"] }
-                        , Line { lineIndent = 4, tokens = Token "fullName" :| [Token "Text"] }
-                        , Line { lineIndent = 4, tokens = pure (Token "ExtraBlock") }
-                        , Line { lineIndent = 8, tokens = Token "foo" :| [Token "bar"] }
-                        , Line { lineIndent = 8, tokens = pure (Token "baz") }
-                        , Line { lineIndent = 8, tokens = pure (Token "bin") }
-                        , Line { lineIndent = 4, tokens = pure (Token "ExtraBlock2") }
-                        , Line { lineIndent = 8, tokens = pure (Token "something") }
-                        ]
-                    , lwcComments = []
-                    }
-                ]
+    describe "parseEntityDefs" $ do
+        let simplifyParsedFieldDef pfa =
+                (parsedFieldDefTokens pfa, parsedFieldDefComments pfa)
 
-        it "works with extra blocks twice" $ do
-            let text = fmap snd . preparse . T.unlines $
-                    [ "IdTable"
-                    , "    Id Day default=CURRENT_DATE"
-                    , "    name Text"
-                    , ""
-                    , "LowerCaseTable"
-                    , "    Id             sql=my_id"
-                    , "    fullName Text"
-                    , "    ExtraBlock"
-                    , "        foo bar"
-                    , "        baz"
-                    , "        bin"
-                    , "    ExtraBlock2"
-                    , "        something"
-                    ]
-            associateLines <$> text `shouldBe` Just
-                [ LinesWithComments
-                    { lwcLines = Line 0 (pure (Token "IdTable")) :|
-                        [ Line 4 (Token "Id" <| Token "Day" :| [Token "default=CURRENT_DATE"])
-                        , Line 4 (Token "name" :| [Token "Text"])
-                        ]
-                    , lwcComments = []
-                    }
-                , LinesWithComments
-                    { lwcLines =
-                        Line { lineIndent = 0, tokens = pure (Token "LowerCaseTable") } :|
-                        [ Line { lineIndent = 4, tokens = Token "Id" :| [Token "sql=my_id"] }
-                        , Line { lineIndent = 4, tokens = Token "fullName" :| [Token "Text"] }
-                        , Line { lineIndent = 4, tokens = pure (Token "ExtraBlock") }
-                        , Line { lineIndent = 8, tokens = Token "foo" :| [Token "bar"] }
-                        , Line { lineIndent = 8, tokens = pure (Token "baz") }
-                        , Line { lineIndent = 8, tokens = pure (Token "bin") }
-                        , Line { lineIndent = 4, tokens = pure (Token "ExtraBlock2") }
-                        , Line { lineIndent = 8, tokens = pure (Token "something") }
-                        ]
-                    , lwcComments = []
-                    }
-                ]
+        it "parses an entity with one field" $ do
+            let simpleEntity =
+                    parseLines
+                        [sbt|Foo
+                            |  name String
+                            |]
+            let [fooDef] = parseEntityDefs Nothing simpleEntity
+            parsedEntityDefComments fooDef `shouldBe` []
+            parsedEntityDefEntityName fooDef `shouldBe` EntityNameHS "Foo"
+            let [fooName] = parsedEntityDefFieldAttributes fooDef
+            simplifyParsedFieldDef fooName `shouldBe` (["name", "String"], [])
 
+        let foo = parseLines
+                      [sbt|-- | comment
+                          |Foo
+                          |  name String
+                          |]
+
+        it "parses an entity with a comment" $ do
+            let [fooDef] = parseEntityDefs Nothing foo
+            parsedEntityDefComments fooDef `shouldBe` [Comment "-- |" "comment"]
+            parsedEntityDefEntityName fooDef `shouldBe` EntityNameHS "Foo"
+            let [fooName] = parsedEntityDefFieldAttributes fooDef
+            simplifyParsedFieldDef fooName `shouldBe` (["name", "String"], [])
 
         it "works with field comments" $ do
-            let text = fmap snd . preparse . T.unlines $
-                    [ "-- | Model"
-                    , "Foo"
-                    , "  -- | Field"
-                    , "  name String"
-                    ]
-            associateLines <$> text `shouldBe` Just
-                [ LinesWithComments
-                    { lwcLines =
-                        Line { lineIndent = 0, tokens = (Token "Foo") :| [] } :|
-                            [ Line { lineIndent = 2, tokens = pure (DocComment "Field") }
-                            , Line { lineIndent = 2, tokens = Token "name" :| [Token "String"] }
-                            ]
-                    , lwcComments =
-                        ["Model"]
-                    }
+            let text = parseLines
+                  [sbt|-- | Model
+                      |Foo
+                      |  -- | Field
+                      |  name String
+                      |]
+            let [fooDef] = parseEntityDefs Nothing text
+            parsedEntityDefComments fooDef `shouldBe` [Comment "-- |" "Model"]
+            parsedEntityDefEntityName fooDef `shouldBe` EntityNameHS "Foo"
+            let simpleFields = simplifyParsedFieldDef <$> parsedEntityDefFieldAttributes fooDef
+            simpleFields `shouldBe`
+                [ (["name", "String"], [Comment "-- |" "Field"])
                 ]
 
+        let bar = parseLines
+                      [sbt|Bar sql=bars
+                          | age Int
+                          |]
 
+        it "works when used for multiple definitions" $ do
+            let [fooDef, barDef] = parseEntityDefs Nothing (foo <> bar)
+
+            parsedEntityDefComments fooDef `shouldBe` [Comment "-- |" "comment"]
+            parsedEntityDefEntityName fooDef `shouldBe` EntityNameHS "Foo"
+            let simpleFooFields = simplifyParsedFieldDef <$> parsedEntityDefFieldAttributes fooDef
+            simpleFooFields `shouldBe`
+                [ (["name", "String"], [])
+                ]
+
+            parsedEntityDefComments barDef `shouldBe` []
+            parsedEntityDefEntityName barDef `shouldBe` EntityNameHS "Bar"
+            let simpleBarFields = simplifyParsedFieldDef <$> parsedEntityDefFieldAttributes barDef
+            simpleBarFields `shouldBe`
+                [ (["age", "Int"], [])
+                ]
+
+        it "can parse one indented entity" $ do
+            let indentedLines = parseLines
+                    [sbt|    CompanyUser
+                        |        name Text
+                        |]
+            let [companyUserDef] = parseEntityDefs Nothing indentedLines
+            parsedEntityDefEntityName companyUserDef `shouldBe` EntityNameHS "CompanyUser"
+            let simpleFields = simplifyParsedFieldDef <$> parsedEntityDefFieldAttributes companyUserDef
+            simpleFields `shouldBe`
+                [ (["name", "Text"], [])
+                ]
+
+        it "can parse indented entities" $ do
+            let companyUserLines = parseLines
+                    [sbt|   CompanyUser
+                        |      companyName Text
+                        |      userName Text
+                        |      Primary companyName userName
+                        |
+                        |   CompanyUser2
+                        |      companyName Text
+                        |      userName Text
+                        |      Primary companyName userName
+                        |]
+            let [companyUserDef, _] = parseEntityDefs Nothing companyUserLines
+            parsedEntityDefComments companyUserDef `shouldBe` []
+            parsedEntityDefEntityName companyUserDef `shouldBe` EntityNameHS "CompanyUser"
+            let simpleFields = simplifyParsedFieldDef <$> parsedEntityDefFieldAttributes companyUserDef
+            simpleFields `shouldBe`
+                [ (["companyName", "Text"], [])
+                , (["userName", "Text"], [])
+                , (["Primary", "companyName", "userName"], [])
+                ]
+
+        it "parse entity example - entity with default field" $ do
+            let productLines = parseLines
+                    [sbt|Product
+                        |  name Text
+                        |  added UTCTime default=CURRENT_TIMESTAMP
+                        |]
+            let [productDef] = parseEntityDefs Nothing productLines
+            parsedEntityDefComments productDef `shouldBe` []
+            parsedEntityDefEntityName productDef `shouldBe` EntityNameHS "Product"
+            let simpleFields = simplifyParsedFieldDef <$> parsedEntityDefFieldAttributes productDef
+            simpleFields `shouldBe`
+                [ (["name", "Text"], [])
+                , (["added", "UTCTime", "default=CURRENT_TIMESTAMP"], [])
+                ]
+
+        it "parse entity example - entity with extra block 1" $ do
+            let productLines = parseLines
+                    [sbt|Product
+                        |  name Text
+                        |    ExtraBlock
+                        |    added UTCTime default=CURRENT_TIMESTAMP
+                        |]
+            let [productDef] = parseEntityDefs Nothing productLines
+            parsedEntityDefComments productDef `shouldBe` []
+            parsedEntityDefEntityName productDef `shouldBe` EntityNameHS "Product"
+            let simpleFields = simplifyParsedFieldDef <$> parsedEntityDefFieldAttributes productDef
+            simpleFields `shouldBe`
+                [ (["name", "Text"], [])
+                , (["added", "UTCTime", "default=CURRENT_TIMESTAMP"], [])
+                ]
+            let extras = parsedEntityDefExtras productDef
+            extras `shouldBe`
+                [ ("ExtraBlock", [])
+                ]
+
+        it "parse entity example - entity with extra block 2" $ do
+            let lowerCaseTableLines = parseLines
+                    [sbt|LowerCaseTable
+                        |    Id             sql=my_id
+                        |    fullName Text
+                        |    ExtraBlock
+                        |        foo bar
+                        |        baz
+                        |        bin
+                        |    ExtraBlock2
+                        |        something
+                        |]
+            let [lowerCaseTableDef] = parseEntityDefs Nothing lowerCaseTableLines
+            parsedEntityDefComments lowerCaseTableDef `shouldBe` []
+            parsedEntityDefEntityName lowerCaseTableDef `shouldBe` EntityNameHS "LowerCaseTable"
+            let simpleFields = simplifyParsedFieldDef <$> parsedEntityDefFieldAttributes lowerCaseTableDef
+            simpleFields `shouldBe`
+                [ (["Id", "sql=my_id"], [])
+                , (["fullName", "Text"], [])
+                ]
+            let extras = parsedEntityDefExtras lowerCaseTableDef
+            extras `shouldBe`
+                [ ("ExtraBlock",
+                    [ ["foo", "bar"]
+                    , ["baz"]
+                    , ["bin"]
+                    ])
+                , ("ExtraBlock2",
+                    [ ["something"]
+                    ])
+                ]
+
+        it "works with two extra blocks" $ do
+            let lowerCaseTableLines = parseLines
+                    [sbt|IdTable
+                        |    Id Day default=CURRENT_DATE
+                        |    name Text
+                        |
+                        |LowerCaseTable
+                        |    Id             sql=my_id
+                        |    fullName Text
+                        |    ExtraBlock
+                        |        foo bar
+                        |        baz
+                        |        bin
+                        |    ExtraBlock2
+                        |        something
+                        |]
+            let [idTableDef, lowerCaseTableDef] = parseEntityDefs Nothing lowerCaseTableLines
+            parsedEntityDefComments idTableDef `shouldBe` []
+            parsedEntityDefEntityName idTableDef `shouldBe` EntityNameHS "IdTable"
+            let simpleFieldsId = simplifyParsedFieldDef <$> parsedEntityDefFieldAttributes idTableDef
+            simpleFieldsId `shouldBe`
+                [ (["Id", "Day", "default=CURRENT_DATE"], [])
+                , (["name", "Text"], [])
+                ]
+            let idExtras = parsedEntityDefExtras idTableDef
+            idExtras `shouldBe` []
+
+            parsedEntityDefComments lowerCaseTableDef `shouldBe` []
+            parsedEntityDefEntityName lowerCaseTableDef `shouldBe` EntityNameHS "LowerCaseTable"
+            let simpleFields = simplifyParsedFieldDef <$> parsedEntityDefFieldAttributes lowerCaseTableDef
+            simpleFields `shouldBe`
+                [ (["Id", "sql=my_id"], [])
+                , (["fullName", "Text"], [])
+                ]
+            let extras = parsedEntityDefExtras lowerCaseTableDef
+            extras `shouldBe`
+                [ ("ExtraBlock",
+                    [ ["foo", "bar"]
+                    , ["baz"]
+                    , ["bin"]
+                    ])
+                , ("ExtraBlock2",
+                    [ ["something"]
+                    ])
+                ]
 
     describe "parseLines" $ do
         let lines =

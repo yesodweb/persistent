@@ -50,7 +50,7 @@ import Database.Persist.Sql.Util
 import Database.Persist.TH
 import TemplateTestImports
 
-import qualified Database.Persist.TH.CommentSpec as CommentSpec
+import qualified Database.Persist.TH.CommentsSpec as CommentsSpec
 import qualified Database.Persist.TH.CompositeKeyStyleSpec as CompositeKeyStyleSpec
 import qualified Database.Persist.TH.DiscoverEntitiesSpec as DiscoverEntitiesSpec
 import qualified Database.Persist.TH.EmbedSpec as EmbedSpec
@@ -217,7 +217,7 @@ spec = describe "THSpec" $ do
     ForeignRefSpec.spec
     ToFromPersistValuesSpec.spec
     JsonEncodingSpec.spec
-    CommentSpec.spec
+    CommentsSpec.spec
     EntityHaddockSpec.spec
     CompositeKeyStyleSpec.spec
     it "QualifiedReference" $ do

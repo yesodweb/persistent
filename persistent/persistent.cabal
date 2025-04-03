@@ -172,11 +172,12 @@ test-suite test
     Database.Persist.ClassSpec
     Database.Persist.PersistValueSpec
     Database.Persist.QuasiSpec
-    Database.Persist.TH.CommentSpec
+    Database.Persist.TH.CommentsSpec
     Database.Persist.TH.CompositeKeyStyleSpec
     Database.Persist.TH.DiscoverEntitiesSpec
     Database.Persist.TH.EmbedSpec
     Database.Persist.TH.EntityHaddockSpec
+    Database.Persist.TH.EntityHaddockSpec.CommentModel
     Database.Persist.TH.ForeignRefSpec
     Database.Persist.TH.ImplicitIdColSpec
     Database.Persist.TH.JsonEncodingSpec
