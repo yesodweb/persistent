@@ -117,7 +117,7 @@ class (PersistUniqueRead backend, PersistStoreWrite backend) =>
     -- With <#schema-persist-unique-1 schema-1> and <#dataset-persist-unique-1 dataset-1>,
     --
     -- > deleteBySpjName :: MonadIO m => ReaderT SqlBackend m ()
-    -- > deleteBySpjName = deleteBy UniqueUserName "SPJ"
+    -- > deleteBySpjName = deleteBy (UniqueUserName "SPJ")
     --
     -- The above query when applied on <#dataset-persist-unique-1 dataset-1>, will produce this:
     --
