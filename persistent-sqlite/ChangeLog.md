@@ -1,5 +1,11 @@
 # Changelog for persistent-sqlite
 
+## 2.13.3.1
+
+* [1585](https://github.com/yesodweb/persistent/pull/1585)
+    * Fix missing timezone "Z" in Sqlite UTCTime strings, e.g.
+      "2025-04-12T06:53:42Z"
+
 ## 2.13.3.0
 
 * [#1524](https://github.com/yesodweb/persistent/pull/1524)

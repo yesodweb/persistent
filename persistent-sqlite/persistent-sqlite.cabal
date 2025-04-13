@@ -1,5 +1,5 @@
 name:               persistent-sqlite
-version:            2.13.3.0
+version:            2.13.3.1
 license:            MIT
 license-file:       LICENSE
 author:             Michael Snoyman <michael@snoyman.com>
@@ -77,7 +77,7 @@ library
     , microlens-th          >=0.4.1.1
     , monad-logger          >=0.3.25
     , mtl
-    , persistent            >=2.13.3  && <3
+    , persistent            >=2.15.2.0  && <3
     , resource-pool
     , resourcet             >=1.1.9
     , text                  >=1.2

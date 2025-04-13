@@ -11,7 +11,7 @@ module Database.Persist.Class.PersistField
 
 import Control.Arrow (second)
 import Control.Monad ((<=<))
-import Control.Applicative ((<|>))
+import Control.Applicative (asum)
 import qualified Data.Aeson as A
 import Data.ByteString.Char8 (ByteString, unpack, readInt)
 import qualified Data.ByteString.Lazy as L
@@ -311,7 +311,7 @@ instance PersistField UTCTime where
         in
           case NonEmpty.nonEmpty (reads s) of
             Nothing ->
-                case parse8601 s <|> parsePretty s of
+                case asum [parse8601 s, parse8601NoTimezone s, parsePretty s, parsePrettyNoTimezone s] of
                     Nothing -> Left $ fromPersistValueParseError "UTCTime" x
                     Just x' -> Right x'
             Just matches ->
@@ -323,12 +323,20 @@ instance PersistField UTCTime where
                 Right $ fst $ NonEmpty.last matches
       where
 #if MIN_VERSION_time(1,5,0)
+        -- Note: consider using `Data.Time.Format.ISO8601` iso8601ParseM when bumping
+        -- lower "time" package bound to >=1.9; this function require the timezone "Z",
+        -- so best suitable when e.g. dropping support non-canonial "notimezone" and "pretty" parse variants
+        -- in persistent 3.0.
         parseTime' = parseTimeM True defaultTimeLocale
 #else
         parseTime' = parseTime defaultTimeLocale
 #endif
-        parse8601 = parseTime' "%FT%T%Q"
-        parsePretty = parseTime' "%F %T%Q"
+        parse8601 = parseTime' "%FT%T%QZ"
+        parsePretty = parseTime' "%F %T%QZ"
+        -- Before 2.13.3.1 persistent-sqlite was missing the timezone "Z" for UTC,
+        -- which was only implicit, so these functions ensure backwards-compatibility.
+        parse8601NoTimezone = parseTime' "%FT%T%Q"
+        parsePrettyNoTimezone = parseTime' "%F %T%Q"
     fromPersistValue x@(PersistByteString s) =
         case reads $ unpack s of
             (d, _):_ -> Right d

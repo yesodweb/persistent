@@ -486,8 +486,13 @@ bind statement sqlData = do
        $ zip [1..] sqlData
   return ()
 
+-- | Format UTCTime value as a ISO86091 string.
+-- It contains timezone "Z" which corresponds to UTC, e.g. "2025-04-12T06:53:42Z".
+-- Note: We manually format here to support "time" package >=1.6,
+-- but consider using `Data.Time.Format.ISO8601` iso8601Show and iso8601ParseM when bumping
+-- lower "time" package bound to >=1.9.
 format8601 :: UTCTime -> String
-format8601 = formatTime defaultTimeLocale "%FT%T%Q"
+format8601 = formatTime defaultTimeLocale "%FT%T%QZ"
 
 foreign import ccall "sqlite3_column_type"
   columnTypeC :: Ptr () -> Int -> IO Int
