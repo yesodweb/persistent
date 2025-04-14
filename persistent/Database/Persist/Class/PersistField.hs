@@ -332,6 +332,65 @@ instance PersistField UTCTime where
 
     fromPersistValue x = Left $ fromPersistValueError "UTCTime" "time, integer, string, or bytestring" x
 
+#ifdef HIGH_PRECISION_DATE
+utcTimeFromPersistValue :: PersistValue -> Either Text UTCTime
+utcTimeFromPersistValue  (PersistUTCTime d) = Right d
+utcTimeFromPersistValue (PersistInt64 i)  = Right $ posixSecondsToUTCTime $ (/ (1000 * 1000 * 1000)) $ fromIntegral $ i
+utcTimeFromPersistValue x@(PersistText t)  =
+        let s = T.unpack t
+        in
+          case NonEmpty.nonEmpty (reads s) of
+            Nothing ->
+                case parse8601 s <|> parsePretty s of
+                    Nothing -> Left $ fromPersistValueParseError "UTCTime" x
+                    Just x' -> Right x'
+            Just matches ->
+                -- The 'Read UTCTime' instance in newer versions of 'time' is
+                -- more flexible when parsing UTCTime strings and will return
+                -- UTCTimes with different microsecond parsings. The last result
+                -- here contains the parsed UTCTime with as much microsecond
+                -- precision parsed as posssible.
+                Right $ fst $ NonEmpty.last matches
+      where
+        parse8601 = parseTime' "%FT%T%Q"
+        parsePretty = parseTime' "%F %T%Q"
+        parseTime' = parseTimeM True defaultTimeLocale
+utcTimeFromPersistValue x@(PersistByteString s) =
+        case reads $ unpack s of
+            (d, _):_ -> Right d
+            _ -> Left $ fromPersistValueParseError "UTCTime" x
+
+utcTimeFromPersistValue x = Left $ fromPersistValueError "UTCTime" "time, integer, string, or bytestring" x
+#else
+utcTimeFromPersistValue :: PersistValue -> Either Text UTCTime
+utcTimeFromPersistValue  (PersistUTCTime d) = Right d
+utcTimeFromPersistValue x@(PersistText t)  =
+        let s = T.unpack t
+        in
+          case NonEmpty.nonEmpty (reads s) of
+            Nothing ->
+                case parse8601 s <|> parsePretty s of
+                    Nothing -> Left $ fromPersistValueParseError "UTCTime" x
+                    Just x' -> Right x'
+            Just matches ->
+                -- The 'Read UTCTime' instance in newer versions of 'time' is
+                -- more flexible when parsing UTCTime strings and will return
+                -- UTCTimes with different microsecond parsings. The last result
+                -- here contains the parsed UTCTime with as much microsecond
+                -- precision parsed as posssible.
+                Right $ fst $ NonEmpty.last matches
+      where
+        parse8601 = parseTime' "%FT%T%Q"
+        parsePretty = parseTime' "%F %T%Q"
+        parseTime' = parseTimeM True defaultTimeLocale
+utcTimeFromPersistValue x@(PersistByteString s) =
+        case reads $ unpack s of
+            (d, _):_ -> Right d
+            _ -> Left $ fromPersistValueParseError "UTCTime" x
+
+utcTimeFromPersistValue x = Left $ fromPersistValueError "UTCTime" "time, integer, string, or bytestring" x
+#endif
+
 
 -- | Prior to @persistent-2.11.0@, we provided an instance of
 -- 'PersistField' for the 'Natural' type. This was in error, because
