@@ -322,11 +322,6 @@ instance PersistField UTCTime where
                 -- precision parsed as posssible.
                 Right $ fst $ NonEmpty.last matches
       where
-#if MIN_VERSION_time(1,5,0)
-        parseTime' = parseTimeM True defaultTimeLocale
-#else
-        parseTime' = parseTime defaultTimeLocale
-#endif
         parse8601 = parseTime' "%FT%T%Q"
         parsePretty = parseTime' "%F %T%Q"
     fromPersistValue x@(PersistByteString s) =
@@ -335,6 +330,14 @@ instance PersistField UTCTime where
             _ -> Left $ fromPersistValueParseError "UTCTime" x
 
     fromPersistValue x = Left $ fromPersistValueError "UTCTime" "time, integer, string, or bytestring" x
+
+#if MIN_VERSION_time(1,5,0)
+parseTime' :: String -> Maybe UTCTime
+parseTime' = parseTimeM True defaultTimeLocale
+#else
+parseTime' :: String -> Maybe UTCTime
+parseTime' = parseTime defaultTimeLocale
+#endif
 
 -- | Prior to @persistent-2.11.0@, we provided an instance of
 -- 'PersistField' for the 'Natural' type. This was in error, because
