@@ -1139,7 +1139,7 @@ data MkPersistSettings = MkPersistSettings
     -- @
     --
     -- When you have multiple entites with the same field name, you will need to
-    -- add '{-# LANGUAGE DuplicateRecordFields #-}' for your code to compile.
+    -- add @{-# LANGUAGE DuplicateRecordFields #-}@ for your code to compile.
     --
     , mpsAvoidHsKeyword :: Text -> Text
     -- ^ Customise function for field accessors applied only when the field name matches any of Haskell keywords.
