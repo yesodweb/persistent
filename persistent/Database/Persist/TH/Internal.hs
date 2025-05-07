@@ -1086,7 +1086,7 @@ data MkPersistSettings = MkPersistSettings
     , mpsFieldLabelModifier :: Text -> Text -> Text
     -- ^ Customise the field names (and lens names) for generated entity data types.
     --
-    -- Default: simply appends entity name and field name, equivalent to
+    -- Default: appends entity name and field name, equivalent to
     --
     -- @
     -- mpsFieldLabelModifier = \\entityName fieldName -> entityName <> fieldName
