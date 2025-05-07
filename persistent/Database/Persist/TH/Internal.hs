@@ -1136,7 +1136,7 @@ data MkPersistSettings = MkPersistSettings
     -- }
     -- @
     --
-    -- When you have multiple entites with the same field name, you will need to
+    -- When you have multiple entites with the same field name, you might need to
     -- add @{-# LANGUAGE DuplicateRecordFields #-}@ for your code to compile.
     --
     -- @since 2.11.0.0
