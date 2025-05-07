@@ -1115,8 +1115,6 @@ data MkPersistSettings = MkPersistSettings
     --
     -- Note: this setting is ignored if the deprecated 'mpsPrefixFields' is set to False.
     --
-    -- @since 2.11.0.0
-    --
     -- === __Example without entity name__
     --
     -- You may not want the entity name prefix for all fields, so use
@@ -1141,6 +1139,7 @@ data MkPersistSettings = MkPersistSettings
     -- When you have multiple entites with the same field name, you will need to
     -- add @{-# LANGUAGE DuplicateRecordFields #-}@ for your code to compile.
     --
+    -- @since 2.11.0.0
     , mpsAvoidHsKeyword :: Text -> Text
     -- ^ Customise function for field accessors applied only when the field name matches any of Haskell keywords.
     --
