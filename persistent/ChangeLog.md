@@ -1,5 +1,10 @@
 # Changelog for persistent
 
+# 2.15.1.1 (unreleased)
+
+* [#1587](https://github.com/yesodweb/persistent/pull/1587)
+    * Improve documentation of `mpsFieldLabelModifier`.
+
 # 2.15.1.0
 
 * [#1519](https://github.com/yesodweb/persistent/pull/1519/files/9865a295f4545d30e55aacb6efc25f27f758e8ad#diff-5af2883367baae8f7f266df6a89fc2d1defb7572d94ed069e05c8135a883bc45)
