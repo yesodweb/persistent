@@ -11,11 +11,11 @@ module Database.Persist.Class.PersistField
 
 import Control.Arrow (second)
 import Control.Monad ((<=<))
-import Control.Applicative (asum)
 import qualified Data.Aeson as A
 import Data.ByteString.Char8 (ByteString, unpack, readInt)
 import qualified Data.ByteString.Lazy as L
 import Data.Fixed
+import Data.Foldable (asum)
 import Data.Int (Int8, Int16, Int32, Int64)
 import qualified Data.IntMap as IM
 import qualified Data.List.NonEmpty as NonEmpty
