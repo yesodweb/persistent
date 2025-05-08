@@ -432,17 +432,31 @@ withStmt' conn stmt vals = do
                 yield cols
                 pull
 
+-- Sqlite only really supports types "INTEGER", "REAL", "TEXT" "BLOB".
+-- Other typical Sql types are implicitly
+-- converted to one of those through "affinity" rules: https://sqlite.org/datatype3.html#affinity_name_examples
+-- We want to directly use the actually supported types by using "STRICT" tables
+-- so Sqlite also enforces the types: https://sqlite.org/stricttables.html
 showSqlType :: SqlType -> Text
-showSqlType SqlString = "VARCHAR"
+showSqlType SqlString = "TEXT"
 showSqlType SqlInt32 = "INTEGER"
 showSqlType SqlInt64 = "INTEGER"
 showSqlType SqlReal = "REAL"
-showSqlType (SqlNumeric precision scale) = T.concat [ "NUMERIC(", T.pack (show precision), ",", T.pack (show scale), ")" ]
-showSqlType SqlDay = "DATE"
-showSqlType SqlTime = "TIME"
-showSqlType SqlDayTime = "TIMESTAMP"
+-- TODO not sure what the previous precision annotation was used for. It's completely ignored by Sqlite
+-- showSqlType (SqlNumeric precision scale) = T.concat [ "NUMERIC(", T.pack (show precision), ",", T.pack (show scale), ")" ]
+-- not sure if this is correct, probably lossy, if numeric was used for integer numbers.
+showSqlType (SqlNumeric precision scale) = "REAL"
+-- TODO previous was "DATE", which is affinity mapped to NUMERIC/INTEGER, but do we want this instead of ISO8601 text?
+-- https://sqlite.org/datatype3.html#affinity_name_example
+showSqlType SqlDay = "TEXT"
+-- TODO previous was "TIME", which is affinity mapped to NUMERIC/INTEGER, but do we want this instead of ISO8601 text?
+-- https://sqlite.org/datatype3.html#affinity_name_example
+showSqlType SqlTime = "TEXT"
+-- TODO previous was "TIMESTAMP", which is affinity mapped to NUMERIC/INTEGER, but do we want this instead of ISO8601 text?
+-- https://sqlite.org/datatype3.html#affinity_name_example
+showSqlType SqlDayTime = "TEXT"
 showSqlType SqlBlob = "BLOB"
-showSqlType SqlBool = "BOOLEAN"
+showSqlType SqlBool = "INTEGER"
 showSqlType (SqlOther t) = t
 
 sqliteMkColumns :: [EntityDef] -> EntityDef -> ([Column], [UniqueDef], [ForeignDef])
@@ -602,7 +616,7 @@ mkCreateTable isTemp entity (cols, uniqs, fdefs) =
     footer =
         [ T.concat $ map sqlUnique uniqs
         , T.concat $ map sqlForeign fdefs
-        , ")"
+        , ") STRICT"
         ]
 
     columns = case getEntityId entity of
