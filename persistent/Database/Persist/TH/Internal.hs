@@ -1053,7 +1053,9 @@ fixEntityDef ued =
             filter isHaskellUnboundField (unboundEntityFields ued)
         }
 
--- | Settings to be passed to the 'mkPersist' function.
+-- | Settings that can be passed to the 'mkPersist' (mps) function to control what code is generated.
+-- This is (just) the data type definition, so you will most likely want to use and adapt concrete values
+-- like 'sqlSettings'.
 data MkPersistSettings = MkPersistSettings
     { mpsBackend :: Type
     -- ^ Which database backend we\'re using. This type is used for the
@@ -1079,15 +1081,63 @@ data MkPersistSettings = MkPersistSettings
     , mpsPrefixFields :: Bool
     -- ^ Prefix field names with the model name. Default: True.
     --
-    -- Note: this field is deprecated. Use the mpsFieldLabelModifier  and
+    -- Note: this field is deprecated. Use the 'mpsFieldLabelModifier'  and
     -- 'mpsConstraintLabelModifier' instead.
     , mpsFieldLabelModifier :: Text -> Text -> Text
-    -- ^ Customise the field accessors and lens names using the entity and field
-    -- name.  Both arguments are upper cased.
+    -- ^ Customise the field names (and lens names) for generated entity data types.
     --
-    -- Default: appends entity and field.
+    -- Default: appends entity name and field name, equivalent to
     --
-    -- Note: this setting is ignored if mpsPrefixFields is set to False.
+    -- @
+    -- mpsFieldLabelModifier = \\entityName fieldName -> entityName <> fieldName
+    -- @
+    --
+    -- to avoid duplicate record field collisions.
+    --
+    -- For example, with default 'sqlSettings' and
+    --
+    -- @
+    -- 'mkPersistWith' 'sqlSettings' [] ['persistLowerCase'|
+    --     Person
+    --         name   Text
+    --         age    Int
+    -- |]
+    -- @
+    --
+    -- it will generate the entity data type
+    --
+    -- @
+    -- Person {
+    --     personName :: Text,  -- generated field name
+    --     personAge  :: Int    -- generated field name
+    -- }
+    -- @
+    --
+    -- Note: this setting is ignored if the deprecated 'mpsPrefixFields' is set to False.
+    --
+    -- === __Example without entity name__
+    --
+    -- You may not want the entity name prefix for all fields, so use
+    --
+    -- @
+    -- 'mkPersistWith' ('sqlSettings' { mpsFieldLabelModifier = \\\_entityName fieldName -> fieldName }) [] ['persistLowerCase'|
+    --     Person
+    --         name   Text
+    --         age    Int
+    -- |]
+    -- @
+    --
+    -- instead. This will generate the entity data type
+    --
+    -- @
+    -- Person {
+    --     name :: Text,
+    --     age  :: Int
+    -- }
+    -- @
+    --
+    -- When you have multiple entites with the same field name, you might need to
+    -- add @{-# LANGUAGE DuplicateRecordFields #-}@ for your code to compile.
     --
     -- @since 2.11.0.0
     , mpsAvoidHsKeyword :: Text -> Text
@@ -1102,7 +1152,7 @@ data MkPersistSettings = MkPersistSettings
     --
     -- Default: appends entity and field
     --
-    -- Note: this setting is ignored if mpsPrefixFields is set to False.
+    -- Note: this setting is ignored if the deprecated 'mpsPrefixFields' is set to False.
     --
     -- @since 2.11.0.0
     , mpsEntityHaddocks :: Bool
