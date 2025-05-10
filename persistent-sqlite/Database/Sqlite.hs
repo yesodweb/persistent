@@ -464,6 +464,7 @@ bind statement sqlData = do
           case datum of
             PersistInt64 int64 -> bindInt64 statement parameterIndex int64
             PersistDouble double -> bindDouble statement parameterIndex double
+            -- TODO quirk: previous Sqlite "type" was NUMERIC (not a real type but a class of implicit conversions), a rational could have been stored as a float or an integer. If i now use a strict Sqlite type i have to choose (either "INTEGER" or) "REAL", which i think might break existing databases
             PersistRational rational -> bindText statement parameterIndex $ pack $ show (fromRational rational :: Pico)
             PersistBool b -> bindInt64 statement parameterIndex $
                                 if b then 1 else 0

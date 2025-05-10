@@ -432,28 +432,22 @@ withStmt' conn stmt vals = do
                 yield cols
                 pull
 
--- Sqlite only really supports types "INTEGER", "REAL", "TEXT" "BLOB".
+-- Compute the type names to be used in generated migration text for Sqlite.
+-- Sqlite (only really) supports types "INTEGER", "REAL", "TEXT" "BLOB" (and "NULL").
 -- Other typical Sql types are implicitly
 -- converted to one of those through "affinity" rules: https://sqlite.org/datatype3.html#affinity_name_examples
--- We want to directly use the actually supported types by using "STRICT" tables
--- so Sqlite also enforces the types: https://sqlite.org/stricttables.html
+-- However, we use "STRICT" tables so we have to mention the actually supported types,
+-- strict Sqlite also enforces the types: https://sqlite.org/stricttables.html
+-- !The returned Sqlite type names here must match the actually written data in the "bind" function in "persistent-sqlite/Database/Sqlite.hs"!!!
 showSqlType :: SqlType -> Text
 showSqlType SqlString = "TEXT"
 showSqlType SqlInt32 = "INTEGER"
 showSqlType SqlInt64 = "INTEGER"
 showSqlType SqlReal = "REAL"
--- TODO not sure what the previous precision annotation was used for. It's completely ignored by Sqlite
--- showSqlType (SqlNumeric precision scale) = T.concat [ "NUMERIC(", T.pack (show precision), ",", T.pack (show scale), ")" ]
--- not sure if this is correct, probably lossy, if numeric was used for integer numbers.
-showSqlType (SqlNumeric precision scale) = "REAL"
--- TODO previous was "DATE", which is affinity mapped to NUMERIC/INTEGER, but do we want this instead of ISO8601 text?
--- https://sqlite.org/datatype3.html#affinity_name_example
+-- There's no precision support in Sqlite.
+showSqlType (SqlNumeric _precision _scale) = "REAL"
 showSqlType SqlDay = "TEXT"
--- TODO previous was "TIME", which is affinity mapped to NUMERIC/INTEGER, but do we want this instead of ISO8601 text?
--- https://sqlite.org/datatype3.html#affinity_name_example
 showSqlType SqlTime = "TEXT"
--- TODO previous was "TIMESTAMP", which is affinity mapped to NUMERIC/INTEGER, but do we want this instead of ISO8601 text?
--- https://sqlite.org/datatype3.html#affinity_name_example
 showSqlType SqlDayTime = "TEXT"
 showSqlType SqlBlob = "BLOB"
 showSqlType SqlBool = "INTEGER"
