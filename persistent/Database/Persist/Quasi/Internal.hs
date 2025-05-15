@@ -1,11 +1,8 @@
-{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DeriveLift #-}
 {-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE StrictData #-}
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ViewPatterns #-}
 
@@ -21,58 +18,56 @@ module Database.Persist.Quasi.Internal
     , lowerCaseSettings
     , toFKNameInfixed
     , Token (..)
-    , Line (..)
-    , SourceLoc(..)
+    , SourceLoc (..)
     , sourceLocFromTHLoc
-    , preparse
-    , parseLine
     , parseFieldType
-    , associateLines
-    , LinesWithComments(..)
-    , parseEntityFields
     , takeColsEx
-    -- * UnboundEntityDef
-    , UnboundEntityDef(..)
+    , CumulativeParseResult (..)
+    , renderErrors
+
+      -- * UnboundEntityDef
+    , UnboundEntityDef (..)
     , getUnboundEntityNameHS
     , unbindEntityDef
     , getUnboundFieldDefs
-    , UnboundForeignDef(..)
+    , UnboundForeignDef (..)
     , getSqlNameOr
-    , UnboundFieldDef(..)
-    , UnboundCompositeDef(..)
-    , UnboundIdDef(..)
+    , UnboundFieldDef (..)
+    , UnboundCompositeDef (..)
+    , UnboundIdDef (..)
     , unbindFieldDef
     , isUnboundFieldNullable
     , unboundIdDefToFieldDef
-    , PrimarySpec(..)
+    , PrimarySpec (..)
     , mkAutoIdField'
-    , UnboundForeignFieldList(..)
-    , ForeignFieldReference(..)
+    , UnboundForeignFieldList (..)
+    , ForeignFieldReference (..)
     , mkKeyConType
     , isHaskellUnboundField
-    , FieldTypeLit(..)
+    , FieldTypeLit (..)
     ) where
 
 import Prelude hiding (lines)
 
-import Control.Applicative (Alternative((<|>)))
+import Control.Applicative (Alternative ((<|>)))
 import Control.Monad
 import Data.Char (isDigit, isLower, isSpace, isUpper, toLower)
+import Data.Foldable (toList)
 import Data.List (find, foldl')
-import Data.List.NonEmpty (NonEmpty(..))
+import Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.List.NonEmpty as NEL
-import qualified Data.Map as M
 import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
 import Data.Monoid (mappend)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Database.Persist.EntityDef.Internal
+import Database.Persist.Quasi.Internal.ModelParser
 import Database.Persist.Types
 import Database.Persist.Types.Base
-import Language.Haskell.TH.Syntax (Lift, Loc(..))
+import Language.Haskell.TH.Syntax (Lift, Loc (..))
 import qualified Text.Read as R
 
-data ParseState a = PSDone | PSFail String | PSSuccess a Text deriving Show
+data ParseState a = PSDone | PSFail String | PSSuccess a Text deriving (Show)
 
 parseFieldType :: Text -> Either String FieldType
 parseFieldType t0 =
@@ -85,19 +80,22 @@ parseFieldType t0 =
     parseApplyFT :: Text -> ParseState FieldType
     parseApplyFT t =
         case goMany id t of
-            PSSuccess (ft:fts) t' -> PSSuccess (foldl' FTApp ft fts) t'
+            PSSuccess (ft : fts) t' -> PSSuccess (foldl' FTApp ft fts) t'
             PSSuccess [] _ -> PSFail "empty"
             PSFail err -> PSFail err
             PSDone -> PSDone
 
-    parseEnclosed :: Char -> (FieldType -> FieldType) -> Text -> ParseState FieldType
+    parseEnclosed
+        :: Char -> (FieldType -> FieldType) -> Text -> ParseState FieldType
     parseEnclosed end ftMod t =
-      let (a, b) = T.break (== end) t
-      in case parseApplyFT a of
-          PSSuccess ft t' -> case (T.dropWhile isSpace t', T.uncons b) of
-              ("", Just (c, t'')) | c == end -> PSSuccess (ftMod ft) (t'' `Data.Monoid.mappend` t')
-              (x, y) -> PSFail $ show (b, x, y)
-          x -> PSFail $ show x
+        let
+            (a, b) = T.break (== end) t
+         in
+            case parseApplyFT a of
+                PSSuccess ft t' -> case (T.dropWhile isSpace t', T.uncons b) of
+                    ("", Just (c, t'')) | c == end -> PSSuccess (ftMod ft) (t'' `Data.Monoid.mappend` t')
+                    (x, y) -> PSFail $ show (b, x, y)
+                x -> PSFail $ show x
 
     parse1 :: Text -> ParseState FieldType
     parse1 t = fromMaybe (PSFail (show t)) $ do
@@ -105,11 +103,11 @@ parseFieldType t0 =
             Nothing -> pure PSDone
             Just (x, xs) ->
                 parseSpace x xs
-                <|> parseParenEnclosed x xs
-                <|> parseList x xs
-                <|> parseNumericLit x xs
-                <|> parseTextLit x xs
-                <|> parseTypeCon x xs
+                    <|> parseParenEnclosed x xs
+                    <|> parseList x xs
+                    <|> parseNumericLit x xs
+                    <|> parseTextLit x xs
+                    <|> parseTypeCon x xs
 
     parseSpace :: Char -> Text -> Maybe (ParseState FieldType)
     parseSpace c t = do
@@ -127,26 +125,29 @@ parseFieldType t0 =
     parseTextLit :: Char -> Text -> Maybe (ParseState FieldType)
     parseTextLit c t = do
         guard (c == '"')
-        let (a, b) = T.break (== '"') t
+        let
+            (a, b) = T.break (== '"') t
             lit = FTLit (TextTypeLit a)
         pure $ PSSuccess lit (T.drop 1 b)
 
     parseNumericLit :: Char -> Text -> Maybe (ParseState FieldType)
     parseNumericLit c t = do
         guard (isDigit c && T.all isDigit t)
-        let (a, b) = breakAtNextSpace t
+        let
+            (a, b) = breakAtNextSpace t
         lit <- FTLit . IntTypeLit <$> readMaybe (T.cons c a)
         pure $ PSSuccess lit b
 
     parseTypeCon c t = do
         guard (isUpper c || c == '\'')
-        let (a, b) = breakAtNextSpace t
+        let
+            (a, b) = breakAtNextSpace t
         pure $ PSSuccess (parseFieldTypePiece c a) b
 
     goMany :: ([FieldType] -> a) -> Text -> ParseState a
     goMany front t =
         case parse1 t of
-            PSSuccess x t' -> goMany (front . (x:)) t'
+            PSSuccess x t' -> goMany (front . (x :)) t'
             PSFail err -> PSFail err
             PSDone -> PSSuccess (front []) t
 
@@ -160,11 +161,13 @@ parseFieldTypePiece fstChar rest =
         '\'' ->
             FTTypePromoted rest
         _ ->
-            let t = T.cons fstChar rest
-             in case T.breakOnEnd "." t of
-                (_, "") -> FTTypeCon Nothing t
-                ("", _) -> FTTypeCon Nothing t
-                (a, b) -> FTTypeCon (Just $ T.init a) b
+            let
+                t = T.cons fstChar rest
+             in
+                case T.breakOnEnd "." t of
+                    (_, "") -> FTTypeCon Nothing t
+                    ("", _) -> FTTypeCon Nothing t
+                    (a, b) -> FTTypeCon (Just $ T.init a) b
 
 data PersistSettings = PersistSettings
     { psToDBName :: !(Text -> Text)
@@ -187,279 +190,94 @@ data PersistSettings = PersistSettings
     }
 
 defaultPersistSettings, upperCaseSettings, lowerCaseSettings :: PersistSettings
-defaultPersistSettings = PersistSettings
-    { psToDBName = id
-    , psToFKName = \(EntityNameHS entName) (ConstraintNameHS conName) -> entName <> conName
-    , psStrictFields = True
-    , psIdName       = "id"
-    }
-
+defaultPersistSettings =
+    PersistSettings
+        { psToDBName = id
+        , psToFKName = \(EntityNameHS entName) (ConstraintNameHS conName) -> entName <> conName
+        , psStrictFields = True
+        , psIdName = "id"
+        }
 upperCaseSettings = defaultPersistSettings
-
-lowerCaseSettings = defaultPersistSettings
-    { psToDBName =
-        let go c
-                | isUpper c = T.pack ['_', toLower c]
-                | otherwise = T.singleton c
-         in T.dropWhile (== '_') . T.concatMap go
-    }
+lowerCaseSettings =
+    defaultPersistSettings
+        { psToDBName =
+            let
+                go c
+                    | isUpper c = T.pack ['_', toLower c]
+                    | otherwise = T.singleton c
+             in
+                T.dropWhile (== '_') . T.concatMap go
+        }
 
 toFKNameInfixed :: Text -> EntityNameHS -> ConstraintNameHS -> Text
 toFKNameInfixed inf (EntityNameHS entName) (ConstraintNameHS conName) =
     entName <> inf <> conName
 
--- | Source location: file and line/col information. This is half of a 'Span'.
-data SourceLoc = SourceLoc
-    { locFile :: Text
-    , locStartLine :: Int
-    , locStartCol :: Int
-    } deriving (Show, Lift)
-
 sourceLocFromTHLoc :: Loc -> SourceLoc
-sourceLocFromTHLoc Loc {loc_filename=filename, loc_start=start} =
-    SourceLoc {locFile = T.pack filename, locStartLine = fst start, locStartCol = snd start}
-
+sourceLocFromTHLoc Loc{loc_filename = filename, loc_start = start} =
+    SourceLoc
+        { locFile = T.pack filename
+        , locStartLine = fst start
+        , locStartCol = snd start
+        }
 
 -- | Parses a quasi-quoted syntax into a list of entity definitions.
-parse :: PersistSettings -> [(Maybe SourceLoc, Text)] -> [UnboundEntityDef]
-parse ps blocks =
-    mconcat $ handleBlock <$> blocks
-    where
-        handleBlock (mLoc, block) =
-            maybe []
-                (\(numLines, lns) -> parseLines ps (approximateSpan numLines block <$> mLoc) lns)
-                (preparse block)
-        -- FIXME: put an actually truthful span into here
-        -- We can't give a better result if we push any of this down into the
-        -- parser at the moment since the parser throws out location info by
-        -- e.g. discarding comment lines completely without keeping track of
-        -- where it is. The realistic fix to this is rewriting the parser in
-        -- Megaparsec, which is a reasonable idea that should actually be done.
-        approximateSpan numLines block loc =
-            Span
-            { spanFile = locFile loc
-            , spanStartLine = locStartLine loc
-            , spanStartCol = locStartCol loc
-            , spanEndLine = locStartLine loc + numLines - 1
-            -- Last line's length plus one (since we are one-past-the-end)
-            , spanEndCol = (+ 1) . T.length . T.takeWhileEnd (/= '\n') $ block
-            }
-
-preparse :: Text -> Maybe (Int, NonEmpty Line)
-preparse txt = do
-    lns <- NEL.nonEmpty (T.lines txt)
-    let rawLineCount = length lns
-    (rawLineCount,) <$> NEL.nonEmpty (mapMaybe parseLine (NEL.toList lns))
-
-parseLine :: Text -> Maybe Line
-parseLine txt = do
-    Line (parseIndentationAmount txt) <$> NEL.nonEmpty (tokenize txt)
-
--- | A token used by the parser.
-data Token = Token Text    -- ^ @Token tok@ is token @tok@ already unquoted.
-           | DocComment Text -- ^ @DocComment@ is a documentation comment, unmodified.
-  deriving (Show, Eq)
-
-tokenText :: Token -> Text
-tokenText tok =
-    case tok of
-        Token t -> t
-        DocComment t -> "-- | " <> t
-
-parseIndentationAmount :: Text -> Int
-parseIndentationAmount txt =
-    let (spaces, _) = T.span isSpace txt
-     in T.length spaces
-
--- | Tokenize a string.
-tokenize :: Text -> [Token]
-tokenize t
-    | T.null t = []
-    | Just txt <- T.stripPrefix "-- |" t = [DocComment (T.stripStart txt)]
-    | "--" `T.isPrefixOf` t = [] -- Comment until the end of the line.
-    | "#" `T.isPrefixOf` t = [] -- Also comment to the end of the line, needed for a CPP bug (#110)
-    | T.head t == '"' = quotes (T.tail t) id
-    | T.head t == '(' = parens 1 (T.tail t) id
-    | isSpace (T.head t) =
-        tokenize (T.dropWhile isSpace t)
-
-    -- support mid-token quotes and parens
-    | Just (beforeEquals, afterEquals) <- findMidToken t
-    , not (T.any isSpace beforeEquals)
-    , Token next : rest <- tokenize afterEquals =
-        Token (T.concat [beforeEquals, "=", next]) : rest
-
-    | otherwise =
-        let (token, rest) = T.break isSpace t
-         in Token token : tokenize rest
+parse
+  :: PersistSettings
+  -> [(Maybe SourceLoc, Text)]
+  -> CumulativeParseResult [UnboundEntityDef]
+parse ps chunks = toCumulativeParseResult $ map parseChunk chunks
   where
-    findMidToken :: Text -> Maybe (Text, Text)
-    findMidToken t' =
-        case T.break (== '=') t' of
-            (x, T.drop 1 -> y)
-                | "\"" `T.isPrefixOf` y || "(" `T.isPrefixOf` y -> Just (x, y)
-            _ -> Nothing
+    parseChunk :: (Maybe SourceLoc, Text) -> ParseResult [UnboundEntityDef]
+    parseChunk (mSourceLoc, source) =
+      (fmap . fmap) (mkUnboundEntityDef ps) (parseSource mSourceLoc source)
 
-    quotes :: Text -> ([Text] -> [Text]) -> [Token]
-    quotes t' front
-        | T.null t' = error $ T.unpack $ T.concat $
-            "Unterminated quoted string starting with " : front []
-        | T.head t' == '"' = Token (T.concat $ front []) : tokenize (T.tail t')
-        | T.head t' == '\\' && T.length t' > 1 =
-            quotes (T.drop 2 t') (front . (T.take 1 (T.drop 1 t'):))
-        | otherwise =
-            let (x, y) = T.break (`elem` ['\\','\"']) t'
-             in quotes y (front . (x:))
-
-    parens :: Int -> Text -> ([Text] -> [Text]) -> [Token]
-    parens count t' front
-        | T.null t' = error $ T.unpack $ T.concat $
-            "Unterminated parens string starting with " : front []
-        | T.head t' == ')' =
-            if count == (1 :: Int)
-                then Token (T.concat $ front []) : tokenize (T.tail t')
-                else parens (count - 1) (T.tail t') (front . (")":))
-        | T.head t' == '(' =
-            parens (count + 1) (T.tail t') (front . ("(":))
-        | T.head t' == '\\' && T.length t' > 1 =
-            parens count (T.drop 2 t') (front . (T.take 1 (T.drop 1 t'):))
-        | otherwise =
-            let (x, y) = T.break (`elem` ['\\','(',')']) t'
-             in parens count y (front . (x:))
-
--- | A line of parsed tokens
-data Line = Line
-    { lineIndent   :: Int
-    , tokens       :: NonEmpty Token
-    } deriving (Eq, Show)
-
-lineText :: Line -> NonEmpty Text
-lineText = fmap tokenText . tokens
-
-lowestIndent :: NonEmpty Line -> Int
-lowestIndent = minimum . fmap lineIndent
-
--- | Divide lines into blocks and make entity definitions.
-parseLines :: PersistSettings -> Maybe Span -> NonEmpty Line -> [UnboundEntityDef]
-parseLines ps mSpan = do
-    fmap (mkUnboundEntityDef ps . toParsedEntityDef mSpan) . associateLines
-
-data ParsedEntityDef = ParsedEntityDef
-    { parsedEntityDefComments :: [Text]
-    , parsedEntityDefEntityName :: EntityNameHS
-    , parsedEntityDefIsSum :: Bool
-    , parsedEntityDefEntityAttributes :: [Attr]
-    , parsedEntityDefFieldAttributes :: [[Token]]
-    , parsedEntityDefExtras :: M.Map Text [ExtraLine]
-    , parsedEntityDefSpan :: Maybe Span
-    }
-
-entityNamesFromParsedDef :: PersistSettings -> ParsedEntityDef -> (EntityNameHS, EntityNameDB)
+entityNamesFromParsedDef
+    :: PersistSettings -> ParsedEntityDef -> (EntityNameHS, EntityNameDB)
 entityNamesFromParsedDef ps parsedEntDef = (entNameHS, entNameDB)
   where
     entNameHS =
         parsedEntityDefEntityName parsedEntDef
 
     entNameDB =
-        EntityNameDB $ getDbName ps (unEntityNameHS entNameHS) (parsedEntityDefEntityAttributes parsedEntDef)
+        EntityNameDB $
+            getDbName
+                ps
+                (unEntityNameHS entNameHS)
+                (parsedEntityDefEntityAttributes parsedEntDef)
 
-toParsedEntityDef :: Maybe Span -> LinesWithComments -> ParsedEntityDef
-toParsedEntityDef mSpan lwc = ParsedEntityDef
-    { parsedEntityDefComments = lwcComments lwc
-    , parsedEntityDefEntityName = entNameHS
-    , parsedEntityDefIsSum = isSum
-    , parsedEntityDefEntityAttributes = entAttribs
-    , parsedEntityDefFieldAttributes = attribs
-    , parsedEntityDefExtras = extras
-    , parsedEntityDefSpan = mSpan
+-- | This type represents an @Id@ declaration in the QuasiQuoted syntax.
+--
+-- > Id
+--
+-- This uses the implied settings, and is equivalent to omitting the @Id@
+-- statement entirely.
+--
+-- > Id Text
+--
+-- This will set the field type of the ID to be 'Text'.
+--
+-- > Id Text sql=foo_id
+--
+-- This will set the field type of the Id to be 'Text' and the SQL DB name to be @foo_id@.
+--
+-- > Id FooId
+--
+-- This results in a shared primary key - the @FooId@ refers to a @Foo@ table.
+--
+-- > Id FooId OnDelete Cascade
+--
+-- You can set a cascade behavior on an ID column.
+--
+-- @since 2.13.0.0
+data UnboundIdDef = UnboundIdDef
+    { unboundIdEntityName :: EntityNameHS
+    , unboundIdDBName :: !FieldNameDB
+    , unboundIdAttrs :: [FieldAttr]
+    , unboundIdCascade :: FieldCascade
+    , unboundIdType :: Maybe FieldType
     }
-  where
-    entityLine :| fieldLines =
-        lwcLines lwc
-
-    (entityName :| entAttribs) =
-        lineText entityLine
-
-    (isSum, entNameHS) =
-        case T.uncons entityName of
-            Just ('+', x) -> (True, EntityNameHS x)
-            _ -> (False, EntityNameHS entityName)
-
-    (attribs, extras) =
-        parseEntityFields fieldLines
-
-isDocComment :: Token -> Maybe Text
-isDocComment tok =
-    case tok of
-        DocComment txt -> Just txt
-        _ -> Nothing
-
-data LinesWithComments = LinesWithComments
-    { lwcLines :: NonEmpty Line
-    , lwcComments :: [Text]
-    } deriving (Eq, Show)
-
-instance Semigroup LinesWithComments where
-    a <> b =
-        LinesWithComments
-            { lwcLines =
-                foldr NEL.cons (lwcLines b) (lwcLines a)
-            , lwcComments =
-                lwcComments a `mappend` lwcComments b
-            }
-
-appendLwc :: LinesWithComments -> LinesWithComments -> LinesWithComments
-appendLwc = (<>)
-
-newLine :: Line -> LinesWithComments
-newLine l = LinesWithComments (pure l) []
-
-firstLine :: LinesWithComments -> Line
-firstLine = NEL.head . lwcLines
-
-consLine :: Line -> LinesWithComments -> LinesWithComments
-consLine l lwc = lwc { lwcLines = NEL.cons l (lwcLines lwc) }
-
-consComment :: Text -> LinesWithComments -> LinesWithComments
-consComment l lwc = lwc { lwcComments = l : lwcComments lwc }
-
-associateLines :: NonEmpty Line -> [LinesWithComments]
-associateLines lines =
-    foldr combine [] $
-    foldr toLinesWithComments [] lines
-  where
-    toLinesWithComments :: Line -> [LinesWithComments] -> [LinesWithComments]
-    toLinesWithComments line linesWithComments =
-        case linesWithComments of
-            [] ->
-                [newLine line]
-            (lwc : lwcs) ->
-                case isDocComment (NEL.head (tokens line)) of
-                    Just comment
-                        | lineIndent line == lowestIndent lines ->
-                        consComment comment lwc : lwcs
-                    _ ->
-                        if lineIndent line <= lineIndent (firstLine lwc)
-                            && lineIndent (firstLine lwc) /= lowestIndent lines
-                        then
-                            consLine line lwc : lwcs
-                        else
-                            newLine line : lwc : lwcs
-
-    combine :: LinesWithComments -> [LinesWithComments] -> [LinesWithComments]
-    combine lwc [] =
-        [lwc]
-    combine lwc (lwc' : lwcs) =
-        let minIndent = minimumIndentOf lwc
-            otherIndent = minimumIndentOf lwc'
-         in
-            if minIndent < otherIndent then
-                appendLwc lwc lwc' : lwcs
-            else
-                lwc : lwc' : lwcs
-
-    minimumIndentOf :: LinesWithComments -> Int
-    minimumIndentOf = lowestIndent . lwcLines
+    deriving (Eq, Ord, Show, Lift)
 
 -- | An 'EntityDef' produced by the QuasiQuoter. It contains information that
 -- the QuasiQuoter is capable of knowing about the entities. It is inherently
@@ -497,7 +315,7 @@ data UnboundEntityDef
     -- the field?" yet, so we defer those to the Template Haskell execution.
     --
     -- @since 2.13.0.0
-    , unboundEntityDefSpan :: Maybe Span
+    , unboundEntityDefSpan :: Maybe SourceSpan
     -- ^ The source code span of this entity in the models file.
     --
     -- @since 2.15.0.0
@@ -631,24 +449,25 @@ data UnboundFieldDef
 --
 -- @since 2.13.0.0
 unbindFieldDef :: FieldDef -> UnboundFieldDef
-unbindFieldDef fd = UnboundFieldDef
-    { unboundFieldNameHS =
-        fieldHaskell fd
-    , unboundFieldNameDB =
-        fieldDB fd
-    , unboundFieldAttrs =
-        fieldAttrs fd
-    , unboundFieldType =
-        fieldType fd
-    , unboundFieldStrict =
-        fieldStrict fd
-    , unboundFieldCascade =
-        fieldCascade fd
-    , unboundFieldComments =
-        fieldComments fd
-    , unboundFieldGenerated =
-        fieldGenerated fd
-    }
+unbindFieldDef fd =
+    UnboundFieldDef
+        { unboundFieldNameHS =
+            fieldHaskell fd
+        , unboundFieldNameDB =
+            fieldDB fd
+        , unboundFieldAttrs =
+            fieldAttrs fd
+        , unboundFieldType =
+            fieldType fd
+        , unboundFieldStrict =
+            fieldStrict fd
+        , unboundFieldCascade =
+            fieldCascade fd
+        , unboundFieldComments =
+            fieldComments fd
+        , unboundFieldGenerated =
+            fieldGenerated fd
+        }
 
 isUnboundFieldNullable :: UnboundFieldDef -> IsNullable
 isUnboundFieldNullable =
@@ -663,55 +482,56 @@ isUnboundFieldNullable =
 --
 -- @since 2.13.0.0
 data PrimarySpec
-    = NaturalKey UnboundCompositeDef
-    -- ^ A 'NaturalKey' contains columns that are defined on the datatype
-    -- itself. This is defined using the @Primary@ keyword and given a non-empty
-    -- list of columns.
-    --
-    -- @
-    -- User
-    --     name    Text
-    --     email   Text
-    --
-    --     Primary name email
-    -- @
-    --
-    -- A natural key may also contain only a single column. A natural key with
-    -- multiple columns is called a 'composite key'.
-    --
-    -- @since 2.13.0.0
-    | SurrogateKey UnboundIdDef
-    -- ^ A surrogate key is not part of the domain model for a database table.
-    -- You can specify a custom surro
-    --
-    -- You can specify a custom surrogate key using the @Id@ syntax.
-    --
-    -- @
-    -- User
-    --     Id    Text
-    --     name  Text
-    -- @
-    --
-    -- Note that you must provide a @default=@ expression when using this in
-    -- order to use 'insert' or related functions. The 'insertKey' function can
-    -- be used instead, as it allows you to specify a key directly. Fixing this
-    -- issue is tracked in #1247 on GitHub.
-    --
-    -- @since 2.13.0.0
-    | DefaultKey FieldNameDB
-    -- ^ The default key for the entity using the settings in
-    -- 'MkPersistSettings'.
-    --
-    -- This is implicit - a table without an @Id@ or @Primary@ declaration will
-    -- have a 'DefaultKey'.
-    --
-    -- @since 2.13.0.0
+    = -- | A 'NaturalKey' contains columns that are defined on the datatype
+      -- itself. This is defined using the @Primary@ keyword and given a non-empty
+      -- list of columns.
+      --
+      -- @
+      -- User
+      --     name    Text
+      --     email   Text
+      --
+      --     Primary name email
+      -- @
+      --
+      -- A natural key may also contain only a single column. A natural key with
+      -- multiple columns is called a 'composite key'.
+      --
+      -- @since 2.13.0.0
+      NaturalKey UnboundCompositeDef
+    | -- | A surrogate key is not part of the domain model for a database table.
+      -- You can specify a custom surro
+      --
+      -- You can specify a custom surrogate key using the @Id@ syntax.
+      --
+      -- @
+      -- User
+      --     Id    Text
+      --     name  Text
+      -- @
+      --
+      -- Note that you must provide a @default=@ expression when using this in
+      -- order to use 'insert' or related functions. The 'insertKey' function can
+      -- be used instead, as it allows you to specify a key directly. Fixing this
+      -- issue is tracked in #1247 on GitHub.
+      --
+      -- @since 2.13.0.0
+      SurrogateKey UnboundIdDef
+    | -- | The default key for the entity using the settings in
+      -- 'MkPersistSettings'.
+      --
+      -- This is implicit - a table without an @Id@ or @Primary@ declaration will
+      -- have a 'DefaultKey'.
+      --
+      -- @since 2.13.0.0
+      DefaultKey FieldNameDB
     deriving (Eq, Ord, Show, Lift)
 
 -- | Construct an entity definition.
 mkUnboundEntityDef
     :: PersistSettings
-    -> ParsedEntityDef -- ^ parsed entity definition
+    -> ParsedEntityDef
+    -- ^ parsed entity definition
     -> UnboundEntityDef
 mkUnboundEntityDef ps parsedEntDef =
     UnboundEntityDef
@@ -719,14 +539,14 @@ mkUnboundEntityDef ps parsedEntDef =
             entityConstraintDefsForeignsList entityConstraintDefs
         , unboundPrimarySpec =
             case (idField, primaryComposite) of
-                (Just {}, Just {}) ->
+                (Just{}, Just{}) ->
                     error "Specified both an ID field and a Primary field"
                 (Just a, Nothing) ->
                     if unboundIdType a == Just (mkKeyConType (unboundIdEntityName a))
-                    then
-                        DefaultKey (FieldNameDB $ psIdName ps)
-                    else
-                        SurrogateKey a
+                        then
+                            DefaultKey (FieldNameDB $ psIdName ps)
+                        else
+                            SurrogateKey a
                 (Nothing, Just a) ->
                     NaturalKey a
                 (Nothing, Nothing) ->
@@ -738,12 +558,12 @@ mkUnboundEntityDef ps parsedEntDef =
             EntityDef
                 { entityHaskell = entNameHS
                 , entityDB = entNameDB
-                -- idField is the user-specified Id
-                -- otherwise useAutoIdField
-                -- but, adjust it if the user specified a Primary
-                , entityId =
+                , -- idField is the user-specified Id
+                  -- otherwise useAutoIdField
+                  -- but, adjust it if the user specified a Primary
+                  entityId =
                     EntityIdField $
-                    maybe autoIdField (unboundIdDefToFieldDef (defaultIdName ps) entNameHS) idField
+                        maybe autoIdField (unboundIdDefToFieldDef (defaultIdName ps) entNameHS) idField
                 , entityAttrs =
                     parsedEntityDefEntityAttributes parsedEntDef
                 , entityFields =
@@ -767,12 +587,16 @@ mkUnboundEntityDef ps parsedEntDef =
     attribs =
         parsedEntityDefFieldAttributes parsedEntDef
 
+    cols :: [UnboundFieldDef]
+    cols = foldMap (toList . commentedField ps) attribs
+
     textAttribs :: [[Text]]
-    textAttribs =
-        fmap tokenText <$> attribs
+    textAttribs = fmap tokenContent . fst <$> attribs
 
     entityConstraintDefs =
-        foldMap (maybe mempty (takeConstraint ps entNameHS cols) . NEL.nonEmpty) textAttribs
+        foldMap
+            (maybe mempty (takeConstraint ps entNameHS cols) . NEL.nonEmpty)
+            textAttribs
 
     idField =
         case entityConstraintDefsIdField entityConstraintDefs of
@@ -786,8 +610,13 @@ mkUnboundEntityDef ps parsedEntDef =
             SetOnce a -> Just a
             NotSet -> Nothing
 
-    cols :: [UnboundFieldDef]
-    cols = reverse . fst . foldr (associateComments ps) ([], []) $ reverse attribs
+    commentedField
+        :: PersistSettings
+        -> ([Token], Maybe Text)
+        -> Maybe UnboundFieldDef
+    commentedField s (tokens, mCommentText) = do
+        unb <- takeColsEx s (tokenContent <$> tokens)
+        pure $ unb{unboundFieldComments = mCommentText}
 
     autoIdField :: FieldDef
     autoIdField =
@@ -864,35 +693,10 @@ unbindIdDef entityName fd =
             Just $ fieldType fd
         }
 
-associateComments
-    :: PersistSettings
-    -> [Token]
-    -> ([UnboundFieldDef], [Text])
-    -> ([UnboundFieldDef], [Text])
-associateComments ps x (!acc, !comments) =
-    case listToMaybe x of
-        Just (DocComment comment) ->
-            (acc, comment : comments)
-        _ ->
-            case (setFieldComments (reverse comments) <$> takeColsEx ps (tokenText <$> x)) of
-              Just sm ->
-                  (sm : acc, [])
-              Nothing ->
-                  (acc, [])
-
-setFieldComments :: [Text] -> UnboundFieldDef -> UnboundFieldDef
-setFieldComments xs fld =
-    case xs of
-        [] -> fld
-        _ -> fld { unboundFieldComments = Just (T.unlines xs) }
-
 mkAutoIdField :: PersistSettings -> EntityNameHS -> SqlType -> FieldDef
 mkAutoIdField ps =
     mkAutoIdField' (FieldNameDB $ psIdName ps)
 
--- | Creates a default ID field.
---
--- @since 2.13.0.0
 mkAutoIdField' :: FieldNameDB -> EntityNameHS -> SqlType -> FieldDef
 mkAutoIdField' dbName entName idSqlType =
     FieldDef
@@ -900,8 +704,7 @@ mkAutoIdField' dbName entName idSqlType =
         , fieldDB = dbName
         , fieldType = FTTypeCon Nothing $ keyConName entName
         , fieldSqlType = idSqlType
-        , fieldReference =
-            NoReference
+        , fieldReference = NoReference
         , fieldAttrs = []
         , fieldStrict = True
         , fieldComments = Nothing
@@ -912,23 +715,6 @@ mkAutoIdField' dbName entName idSqlType =
 
 keyConName :: EntityNameHS -> Text
 keyConName entName = unEntityNameHS entName `mappend` "Id"
-
-parseEntityFields
-    :: [Line]
-    -> ([[Token]], M.Map Text [ExtraLine])
-parseEntityFields lns =
-    case lns of
-        [] -> ([], M.empty)
-        (line : rest) ->
-            case NEL.toList (tokens line) of
-                [Token name]
-                  | isCapitalizedText name ->
-                    let (children, rest') = span ((> lineIndent line) . lineIndent) rest
-                        (x, y) = parseEntityFields rest'
-                     in (x, M.insert name (NEL.toList . lineText <$> children) y)
-                ts ->
-                    let (x, y) = parseEntityFields rest
-                     in (ts:x, y)
 
 isCapitalizedText :: Text -> Bool
 isCapitalizedText t =
@@ -944,29 +730,31 @@ takeCols
     -> PersistSettings
     -> [Text]
     -> Maybe UnboundFieldDef
-takeCols _ _ ("deriving":_) = Nothing
-takeCols onErr ps (n':typ:rest')
+takeCols _ _ ("deriving" : _) = Nothing
+takeCols onErr ps (n' : typ : rest')
     | not (T.null n) && isLower (T.head n) =
         case parseFieldType typ of
             Left err -> onErr typ err
-            Right ft -> Just UnboundFieldDef
-                { unboundFieldNameHS =
-                    FieldNameHS n
-                , unboundFieldNameDB =
-                    getDbName' ps n fieldAttrs_
-                , unboundFieldType =
-                    ft
-                , unboundFieldAttrs =
-                    fieldAttrs_
-                , unboundFieldStrict =
-                    fromMaybe (psStrictFields ps) mstrict
-                , unboundFieldComments =
-                    Nothing
-                , unboundFieldCascade =
-                    cascade_
-                , unboundFieldGenerated =
-                    generated_
-                }
+            Right ft ->
+                Just
+                    UnboundFieldDef
+                        { unboundFieldNameHS =
+                            FieldNameHS n
+                        , unboundFieldNameDB =
+                            getDbName' ps n fieldAttrs_
+                        , unboundFieldType =
+                            ft
+                        , unboundFieldAttrs =
+                            fieldAttrs_
+                        , unboundFieldStrict =
+                            fromMaybe (psStrictFields ps) mstrict
+                        , unboundFieldComments =
+                            Nothing
+                        , unboundFieldCascade =
+                            cascade_
+                        , unboundFieldGenerated =
+                            generated_
+                        }
   where
     fieldAttrs_ = parseFieldAttrs attrs_
     generated_ = parseGenerated attrs_
@@ -975,7 +763,6 @@ takeCols onErr ps (n':typ:rest')
         | Just x <- T.stripPrefix "!" n' = (Just True, x)
         | Just x <- T.stripPrefix "~" n' = (Just False, x)
         | otherwise = (Nothing, n')
-
 takeCols _ _ _ = Nothing
 
 parseGenerated :: [Text] -> Maybe Text
@@ -1006,9 +793,9 @@ getSqlNameOr def =
                 Nothing
 
 data SetOnceAtMost a
-  = NotSet
-  | SetOnce a
-  | SetMoreThanOnce
+    = NotSet
+    | SetOnce a
+    | SetMoreThanOnce
 
 instance Semigroup (SetOnceAtMost a) where
     a <> b =
@@ -1032,10 +819,14 @@ data EntityConstraintDefs = EntityConstraintDefs
 instance Semigroup EntityConstraintDefs where
     a <> b =
         EntityConstraintDefs
-            { entityConstraintDefsIdField = entityConstraintDefsIdField a <> entityConstraintDefsIdField b
-            , entityConstraintDefsPrimaryComposite = entityConstraintDefsPrimaryComposite a <> entityConstraintDefsPrimaryComposite b
-            , entityConstraintDefsUniques = entityConstraintDefsUniques a <> entityConstraintDefsUniques b
-            , entityConstraintDefsForeigns = entityConstraintDefsForeigns a <> entityConstraintDefsForeigns b
+            { entityConstraintDefsIdField =
+                entityConstraintDefsIdField a <> entityConstraintDefsIdField b
+            , entityConstraintDefsPrimaryComposite =
+                entityConstraintDefsPrimaryComposite a <> entityConstraintDefsPrimaryComposite b
+            , entityConstraintDefsUniques =
+                entityConstraintDefsUniques a <> entityConstraintDefsUniques b
+            , entityConstraintDefsForeigns =
+                entityConstraintDefsForeigns a <> entityConstraintDefsForeigns b
             }
 
 instance Monoid EntityConstraintDefs where
@@ -1070,7 +861,7 @@ takeConstraint ps entityName defs (n :| rest) =
             let
                 unboundComposite =
                     takeComposite (unboundFieldNameHS <$> defs) rest
-            in
+             in
                 mempty
                     { entityConstraintDefsPrimaryComposite =
                         SetOnce unboundComposite
@@ -1082,46 +873,14 @@ takeConstraint ps entityName defs (n :| rest) =
                 { entityConstraintDefsIdField =
                     SetOnce (takeId ps entityName rest)
                 }
-        _ | isCapitalizedText n ->
-            mempty
-                { entityConstraintDefsUniques =
-                    pure <$> takeUniq ps "" defs (n : rest)
-                }
+        _
+            | isCapitalizedText n ->
+                mempty
+                    { entityConstraintDefsUniques =
+                        pure <$> takeUniq ps "" defs (n : rest)
+                    }
         _ ->
             mempty
-
--- | This type represents an @Id@ declaration in the QuasiQuoted syntax.
---
--- > Id
---
--- This uses the implied settings, and is equivalent to omitting the @Id@
--- statement entirely.
---
--- > Id Text
---
--- This will set the field type of the ID to be 'Text'.
---
--- > Id Text sql=foo_id
---
--- This will set the field type of the Id to be 'Text' and the SQL DB name to be @foo_id@.
---
--- > Id FooId
---
--- This results in a shared primary key - the @FooId@ refers to a @Foo@ table.
---
--- > Id FooId OnDelete Cascade
---
--- You can set a cascade behavior on an ID column.
---
--- @since 2.13.0.0
-data UnboundIdDef = UnboundIdDef
-    { unboundIdEntityName :: EntityNameHS
-    , unboundIdDBName :: !FieldNameDB
-    , unboundIdAttrs :: [FieldAttr]
-    , unboundIdCascade :: FieldCascade
-    , unboundIdType :: Maybe FieldType
-    }
-    deriving (Eq, Ord, Show, Lift)
 
 -- TODO: this is hacky (the double takeCols, the setFieldDef stuff, and setIdName.
 -- need to re-work takeCols function
@@ -1168,8 +927,9 @@ data UnboundCompositeDef = UnboundCompositeDef
     }
     deriving (Eq, Ord, Show, Lift)
 
-compositeToUniqueDef :: EntityNameHS -> [UnboundFieldDef] -> UnboundCompositeDef -> UniqueDef
-compositeToUniqueDef entityName fields UnboundCompositeDef {..} =
+compositeToUniqueDef
+    :: EntityNameHS -> [UnboundFieldDef] -> UnboundCompositeDef -> UniqueDef
+compositeToUniqueDef entityName fields UnboundCompositeDef{..} =
     UniqueDef
         { uniqueHaskell =
             ConstraintNameHS (unEntityNameHS entityName <> "PrimaryKey")
@@ -1187,11 +947,9 @@ compositeToUniqueDef entityName fields UnboundCompositeDef {..} =
                 error "Unable to find `hsName` in fields"
             (a : _) ->
                 a
-    matchHsName hsName UnboundFieldDef {..} = do
+    matchHsName hsName UnboundFieldDef{..} = do
         guard $ unboundFieldNameHS == hsName
         pure unboundFieldNameDB
-
-
 
 takeComposite
     :: [FieldNameHS]
@@ -1213,7 +971,7 @@ takeComposite fields pkcols =
                 xs
     (cols, attrs) = break ("!" `T.isPrefixOf`) pkcols
     getDef [] t = error $ "Unknown column in primary key constraint: " ++ show t
-    getDef (d:ds) t
+    getDef (d : ds) t
         | d == FieldNameHS t =
             -- TODO: check for nullability in later step
             -- if nullable (fieldAttrs d) /= NotNullable
@@ -1235,23 +993,24 @@ takeUniq
 takeUniq ps tableName defs (n : rest)
     | isCapitalizedText n = do
         fields <- mfields
-        pure UniqueDef
-            { uniqueHaskell =
-                ConstraintNameHS n
-            , uniqueDBName =
-                dbName
-            , uniqueFields =
-                fmap (\a -> (FieldNameHS a, getDBName defs a)) fields
-            , uniqueAttrs =
-                attrs
-            }
+        pure
+            UniqueDef
+                { uniqueHaskell =
+                    ConstraintNameHS n
+                , uniqueDBName =
+                    dbName
+                , uniqueFields =
+                    fmap (\a -> (FieldNameHS a, getDBName defs a)) fields
+                , uniqueAttrs =
+                    attrs
+                }
   where
     isAttr a =
-      "!" `T.isPrefixOf` a
+        "!" `T.isPrefixOf` a
     isSqlName a =
-      "sql=" `T.isPrefixOf` a
+        "sql=" `T.isPrefixOf` a
     isNonField a =
-       isAttr a || isSqlName a
+        isAttr a || isSqlName a
     (fieldsList, nonFields) =
         break isNonField rest
     mfields =
@@ -1260,39 +1019,44 @@ takeUniq ps tableName defs (n : rest)
     attrs = filter isAttr nonFields
 
     usualDbName =
-      ConstraintNameDB $ psToDBName ps (tableName `T.append` n)
+        ConstraintNameDB $ psToDBName ps (tableName `T.append` n)
     sqlName :: Maybe ConstraintNameDB
     sqlName =
-      case find isSqlName nonFields of
-        Nothing ->
-          Nothing
-        (Just t) ->
-          case drop 1 $ T.splitOn "=" t of
-            (x : _) -> Just (ConstraintNameDB x)
-            _ -> Nothing
+        case find isSqlName nonFields of
+            Nothing ->
+                Nothing
+            (Just t) ->
+                case drop 1 $ T.splitOn "=" t of
+                    (x : _) -> Just (ConstraintNameDB x)
+                    _ -> Nothing
     dbName = fromMaybe usualDbName sqlName
 
     getDBName [] t = error $ T.unpack (unknownUniqueColumnError t defs n)
-    getDBName (d:ds) t
+    getDBName (d : ds) t
         | unboundFieldNameHS d == FieldNameHS t =
             unboundFieldNameDB d
         | otherwise =
             getDBName ds t
-
 takeUniq _ tableName _ xs =
-  error $ "invalid unique constraint on table["
-          ++ show tableName
-          ++ "] expecting an uppercase constraint name xs="
-          ++ show xs
+    error $
+        "invalid unique constraint on table["
+            ++ show tableName
+            ++ "] expecting an uppercase constraint name xs="
+            ++ show xs
 
 unknownUniqueColumnError :: Text -> [UnboundFieldDef] -> Text -> Text
 unknownUniqueColumnError t defs n =
-    "Unknown column in \"" <> n <> "\" constraint: \"" <> t <> "\""
-        <> " possible fields: " <> T.pack (show (toFieldName <$> defs))
-    where
-        toFieldName :: UnboundFieldDef -> Text
-        toFieldName fd =
-            unFieldNameHS (unboundFieldNameHS fd)
+    "Unknown column in \""
+        <> n
+        <> "\" constraint: \""
+        <> t
+        <> "\""
+        <> " possible fields: "
+        <> T.pack (show (toFieldName <$> defs))
+  where
+    toFieldName :: UnboundFieldDef -> Text
+    toFieldName fd =
+        unFieldNameHS (unboundFieldNameHS fd)
 
 -- | Define an explicit foreign key reference.
 --
@@ -1329,38 +1093,38 @@ data UnboundForeignDef
 
 -- | A list of fields present on the foreign reference.
 data UnboundForeignFieldList
-    = FieldListImpliedId (NonEmpty FieldNameHS)
-    -- ^ If no @References@ keyword is supplied, then it is assumed that you are
-    -- referring to the @Primary@ key or @Id@ of the target entity.
-    --
-    -- @since 2.13.0.0
-    | FieldListHasReferences (NonEmpty ForeignFieldReference)
-    -- ^ You can specify the exact columns you're referring to here, if they
-    -- aren't part of a primary key. Most databases expect a unique index on the
-    -- columns you refer to, but Persistent doesnt' check that.
-    --
-    -- @
-    -- User
-    --     Id           UUID default="uuid_generate_v1mc()"
-    --     name         Text
-    --
-    --     UniqueName name
-    --
-    -- Dog
-    --     ownerName    Text
-    --
-    --     Foreign User fk_dog_user ownerName References name
-    -- @
-    --
-    -- @since 2.13.0.0
+    = -- | If no @References@ keyword is supplied, then it is assumed that you are
+      -- referring to the @Primary@ key or @Id@ of the target entity.
+      --
+      -- @since 2.13.0.0
+      FieldListImpliedId (NonEmpty FieldNameHS)
+    | -- | You can specify the exact columns you're referring to here, if they
+      -- aren't part of a primary key. Most databases expect a unique index on the
+      -- columns you refer to, but Persistent doesnt' check that.
+      --
+      -- @
+      -- User
+      --     Id           UUID default="uuid_generate_v1mc()"
+      --     name         Text
+      --
+      --     UniqueName name
+      --
+      -- Dog
+      --     ownerName    Text
+      --
+      --     Foreign User fk_dog_user ownerName References name
+      -- @
+      --
+      -- @since 2.13.0.0
+      FieldListHasReferences (NonEmpty ForeignFieldReference)
     deriving (Eq, Ord, Show, Lift)
 
 -- | A pairing of the 'FieldNameHS' for the source table to the 'FieldNameHS'
 -- for the target table.
 --
 -- @since 2.13.0.0
-data ForeignFieldReference =
-    ForeignFieldReference
+data ForeignFieldReference
+    = ForeignFieldReference
     { ffrSourceField :: FieldNameHS
     -- ^ The column on the source table.
     --
@@ -1381,7 +1145,7 @@ unbindForeignDef fd =
             fd
         }
   where
-    mk ((fH, _), (pH, _))  =
+    mk ((fH, _), (pH, _)) =
         ForeignFieldReference
             { ffrSourceField = fH
             , ffrTargetField = pH
@@ -1401,12 +1165,12 @@ mkUnboundForeignFieldList (fmap FieldNameHS -> source) (fmap FieldNameHS -> targ
                     Right $ FieldListImpliedId sources
                 Just targets ->
                     if length targets /= length sources
-                    then
-                        Left "Target and source length differe on foreign reference."
-                    else
-                        Right
-                        $ FieldListHasReferences
-                        $ NEL.zipWith ForeignFieldReference sources targets
+                        then
+                            Left "Target and source length differe on foreign reference."
+                        else
+                            Right $
+                                FieldListHasReferences $
+                                    NEL.zipWith ForeignFieldReference sources targets
 
 takeForeign
     :: PersistSettings
@@ -1416,16 +1180,19 @@ takeForeign
 takeForeign ps entityName = takeRefTable
   where
     errorPrefix :: String
-    errorPrefix = "invalid foreign key constraint on table[" ++ show (unEntityNameHS entityName) ++ "] "
+    errorPrefix =
+        "invalid foreign key constraint on table["
+            ++ show (unEntityNameHS entityName)
+            ++ "] "
 
     takeRefTable :: [Text] -> UnboundForeignDef
     takeRefTable [] =
         error $ errorPrefix ++ " expecting foreign table name"
-    takeRefTable (refTableName:restLine) =
+    takeRefTable (refTableName : restLine) =
         go restLine Nothing Nothing
       where
         go :: [Text] -> Maybe CascadeAction -> Maybe CascadeAction -> UnboundForeignDef
-        go (constraintNameText:rest) onDelete onUpdate
+        go (constraintNameText : rest) onDelete onUpdate
             | not (T.null constraintNameText) && isLower (T.head constraintNameText) =
                 UnboundForeignDef
                     { unboundForeignFields =
@@ -1471,32 +1238,37 @@ takeForeign ps entityName = takeRefTable
                                 | flen == plen ->
                                     (ffs, pfs)
                             (flen, plen) ->
-                                error $ errorPrefix ++ concat
-                                    [ "Found " , show flen
-                                    , " foreign fields but "
-                                    , show plen, " parent fields"
-                                    ]
-
+                                error $
+                                    errorPrefix
+                                        ++ concat
+                                            [ "Found "
+                                            , show flen
+                                            , " foreign fields but "
+                                            , show plen
+                                            , " parent fields"
+                                            ]
         go ((parseCascadeAction CascadeDelete -> Just cascadingAction) : rest) onDelete' onUpdate =
             case onDelete' of
                 Nothing ->
                     go rest (Just cascadingAction) onUpdate
                 Just _ ->
                     error $ errorPrefix ++ "found more than one OnDelete actions"
-
         go ((parseCascadeAction CascadeUpdate -> Just cascadingAction) : rest) onDelete onUpdate' =
             case onUpdate' of
                 Nothing ->
                     go rest onDelete (Just cascadingAction)
                 Just _ ->
                     error $ errorPrefix ++ "found more than one OnUpdate actions"
+        go xs _ _ =
+            error $
+                errorPrefix
+                    ++ "expecting a lower case constraint name or a cascading action xs="
+                    ++ show xs
 
-        go xs _ _ = error $ errorPrefix ++ "expecting a lower case constraint name or a cascading action xs=" ++ show xs
-
-toFKConstraintNameDB :: PersistSettings -> EntityNameHS -> ConstraintNameHS -> ConstraintNameDB
+toFKConstraintNameDB
+    :: PersistSettings -> EntityNameHS -> ConstraintNameHS -> ConstraintNameDB
 toFKConstraintNameDB ps entityName constraintName =
     ConstraintNameDB $ psToDBName ps (psToFKName ps entityName constraintName)
-
 data CascadePrefix = CascadeUpdate | CascadeDelete
 
 parseCascade :: [Text] -> (FieldCascade, [Text])
@@ -1547,7 +1319,7 @@ parseCascadeAction prfx text = do
             CascadeDelete -> "Delete"
 
 takeDerives :: [Text] -> Maybe [Text]
-takeDerives ("deriving":rest) = Just rest
+takeDerives ("deriving" : rest) = Just rest
 takeDerives _ = Nothing
 
 -- | Returns 'True' if the 'UnboundFieldDef' does not have a 'MigrationOnly' or
@@ -1556,8 +1328,8 @@ takeDerives _ = Nothing
 -- @since 2.13.0.0
 isHaskellUnboundField :: UnboundFieldDef -> Bool
 isHaskellUnboundField fd =
-    FieldAttrMigrationOnly `notElem` unboundFieldAttrs fd &&
-    FieldAttrSafeToRemove `notElem` unboundFieldAttrs fd
+    FieldAttrMigrationOnly `notElem` unboundFieldAttrs fd
+        && FieldAttrSafeToRemove `notElem` unboundFieldAttrs fd
 
 -- |  Return the 'EntityNameHS' for an 'UnboundEntityDef'.
 --
@@ -1565,5 +1337,5 @@ isHaskellUnboundField fd =
 getUnboundEntityNameHS :: UnboundEntityDef -> EntityNameHS
 getUnboundEntityNameHS = entityHaskell . unboundEntityDef
 
-readMaybe :: Read a => Text -> Maybe a
+readMaybe :: (Read a) => Text -> Maybe a
 readMaybe = R.readMaybe . T.unpack

@@ -280,9 +280,13 @@ embedEntityDefsMap existingEnts rawEnts =
 -- In 2.13.0.0, this was changed to splice in @['UnboundEntityDef']@
 -- instead of @['EntityDef']@.
 --
--- @since 2.5.3
+-- @since 2.16.0.0
 parseReferences :: PersistSettings -> [(Maybe SourceLoc, Text)] -> Q Exp
-parseReferences ps s = lift $ parse ps s
+parseReferences ps s = do
+  let cpr = parse ps s
+  case cpr of
+    Left errs -> fail $ renderErrors errs
+    Right res -> lift res
 
 preprocessUnboundDefs
     :: [EntityDef]
