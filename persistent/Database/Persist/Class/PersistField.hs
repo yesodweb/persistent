@@ -11,11 +11,11 @@ module Database.Persist.Class.PersistField
 
 import Control.Arrow (second)
 import Control.Monad ((<=<))
-import Control.Applicative ((<|>))
 import qualified Data.Aeson as A
 import Data.ByteString.Char8 (ByteString, unpack, readInt)
 import qualified Data.ByteString.Lazy as L
 import Data.Fixed
+import Data.Foldable (asum)
 import Data.Int (Int8, Int16, Int32, Int64)
 import qualified Data.IntMap as IM
 import qualified Data.List.NonEmpty as NonEmpty
@@ -332,7 +332,7 @@ utcTimeFromPersistText  t =
         in
           case NonEmpty.nonEmpty (reads s) of
             Nothing ->
-                case parse8601 s <|> parsePretty s of
+                case asum [parse8601 s, parse8601NoTimezone s, parsePretty s, parsePrettyNoTimezone s] of
                     Nothing -> Left $ fromPersistValueParseError "UTCTime" x
                     Just x' -> Right x'
             Just matches ->
@@ -345,7 +345,16 @@ utcTimeFromPersistText  t =
       where
         parse8601 = parseTime' "%FT%T%Q"
         parsePretty = parseTime' "%F %T%Q"
-        parseTime' = parseTimeM True defaultTimeLocale
+        parse8601 = parseTime' "%FT%T%QZ"
+        parsePretty = parseTime' "%F %T%QZ"
+        -- Before 2.13.3.1 persistent-sqlite was missing the timezone "Z" for UTC,
+        -- which was only implicit, so these functions ensure backwards-compatibility.
+        parse8601NoTimezone = parseTime' "%FT%T%Q"
+        parsePrettyNoTimezone = parseTime' "%F %T%Q"
+    fromPersistValue x@(PersistByteString s) =
+        case reads $ unpack s of
+            (d, _):_ -> Right d
+            _ -> Left $ fromPersistValueParseError "UTCTime" x
 
 
 -- | Prior to @persistent-2.11.0@, we provided an instance of

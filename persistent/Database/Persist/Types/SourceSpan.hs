@@ -1,6 +1,6 @@
 {-# LANGUAGE DeriveLift #-}
 
-module Database.Persist.Types.Span (Span (..)) where
+module Database.Persist.Types.SourceSpan (SourceSpan (..)) where
 
 import Data.Text (Text)
 import Language.Haskell.TH.Syntax (Lift)
@@ -9,12 +9,12 @@ import Language.Haskell.TH.Syntax (Lift)
 -- be one past the final character (i.e. the span (1,1)->(1,1) is zero
 -- characters long).
 --
--- Spans are 1-indexed in both lines and columns.
+-- SourceSpans are 1-indexed in both lines and columns.
 --
 -- Conceptually identical to GHC's @RealSourceSpan@.
 --
--- @since 2.15.0.0
-data Span = Span
+-- @since 2.16.0.0
+data SourceSpan = SourceSpan
     { spanFile :: !Text
     , spanStartLine :: !Int
     , spanStartCol :: !Int

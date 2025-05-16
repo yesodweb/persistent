@@ -13,7 +13,7 @@ module Database.Persist.Types.Base
     , PersistValue(..)
     , fromPersistValueText
     , LiteralType(..)
-    , Span(..)
+    , SourceSpan(..)
     ) where
 
 import Control.Exception (Exception)
@@ -39,7 +39,7 @@ import Instances.TH.Lift ()
 
 import Database.Persist.Names
 import Database.Persist.PersistValue
-import Database.Persist.Types.Span (Span(..))
+import Database.Persist.Types.SourceSpan (SourceSpan(..))
 
 -- | A 'Checkmark' should be used as a field type whenever a
 -- uniqueness constraint should guarantee that a certain kind of
@@ -157,7 +157,7 @@ data EntityDef = EntityDef
     -- ^ Optional comments on the entity.
     --
     -- @since 2.10.0
-    , entitySpan :: !(Maybe Span)
+    , entitySpan :: !(Maybe SourceSpan)
     -- ^ Source code span occupied by this entity. May be absent if it is not
     -- known.
     --

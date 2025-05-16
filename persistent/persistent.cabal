@@ -1,5 +1,5 @@
 name:               persistent
-version:            2.15.1.0
+version:            2.16.0.0
 license:            MIT
 license-file:       LICENSE
 author:             Michael Snoyman <michael@snoyman.com>
@@ -36,9 +36,11 @@ library
     , fast-logger           >=2.4
     , http-api-data         >=0.3
     , lift-type             >=0.1.0.0  && <0.2.0.0
+    , megaparsec
     , monad-logger          >=0.3.28
     , mtl
     , path-pieces           >=0.2
+    , replace-megaparsec
     , resource-pool         >=0.2.3
     , resourcet             >=1.1.10
     , scientific
@@ -79,6 +81,7 @@ library
     Database.Persist.PersistValue
     Database.Persist.Quasi
     Database.Persist.Quasi.Internal
+    Database.Persist.Quasi.Internal.ModelParser
     Database.Persist.Sql
     Database.Persist.Sql.Migration
     Database.Persist.Sql.Types.Internal
@@ -96,6 +99,7 @@ library
     Database.Persist.TH
     Database.Persist.TH.Internal
     Database.Persist.Types
+    Database.Persist.Types.SourceSpan
 
   other-modules:
     Database.Persist.Sql.Class
@@ -107,7 +111,6 @@ library
     Database.Persist.Sql.Run
     Database.Persist.Sql.Types
     Database.Persist.Types.Base
-    Database.Persist.Types.Span
 
   -- These modules only make sense for compilers with access to DerivingVia
   if impl(ghc >=8.6.1)
@@ -135,6 +138,7 @@ test-suite test
     , fast-logger
     , hspec                 >=2.4
     , http-api-data
+    , megaparsec
     , monad-logger
     , mtl
     , path-pieces

@@ -45,6 +45,7 @@ import Test.QuickCheck.Gen (Gen)
 import Database.Persist
 import Database.Persist.EntityDef.Internal
 import Database.Persist.Quasi.Internal (SourceLoc(..), sourceLocFromTHLoc)
+import Database.Persist.Types.SourceSpan
 import Database.Persist.Sql
 import Database.Persist.Sql.Util
 import Database.Persist.TH

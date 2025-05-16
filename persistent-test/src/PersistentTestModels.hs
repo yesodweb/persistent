@@ -110,9 +110,8 @@ share [mkPersist persistSettings { mpsGeneric = True },  mkMigrate "testMigrate"
     deriving Eq Show
 
   -- | This is a doc comment for a relationship.
-  -- | You need to put the pipe character for each line of documentation.
-  -- Lines without a pipe are omitted.
-  -- | But you can resume the doc comments afterwards.
+  -- Only the first line requires a pipe.
+  -- | Pipes are optional on subsequent lines.
   Relationship
       -- | Fields should be documentable.
       name String
