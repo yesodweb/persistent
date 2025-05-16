@@ -302,7 +302,7 @@ instance PersistField TimeOfDay where
 
 instance PersistField UTCTime where
     toPersistValue = PersistUTCTime
-    fromPersistValue  = utcTimeFromPersistValue
+    fromPersistValue = utcTimeFromPersistValue
 
 #ifdef HIGH_PRECISION_DATE
 utcTimeFromPersistValue :: PersistValue -> Either Text UTCTime
