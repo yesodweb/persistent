@@ -343,19 +343,20 @@ utcTimeFromPersistText  t =
                 -- precision parsed as posssible.
                 Right $ fst $ NonEmpty.last matches
       where
-        parse8601 = parseTime' "%FT%T%Q"
-        parsePretty = parseTime' "%F %T%Q"
         parse8601 = parseTime' "%FT%T%QZ"
         parsePretty = parseTime' "%F %T%QZ"
         -- Before 2.13.3.1 persistent-sqlite was missing the timezone "Z" for UTC,
         -- which was only implicit, so these functions ensure backwards-compatibility.
         parse8601NoTimezone = parseTime' "%FT%T%Q"
         parsePrettyNoTimezone = parseTime' "%F %T%Q"
-    fromPersistValue x@(PersistByteString s) =
-        case reads $ unpack s of
-            (d, _):_ -> Right d
-            _ -> Left $ fromPersistValueParseError "UTCTime" x
 
+#if MIN_VERSION_time(1,5,0)
+parseTime' :: String -> String -> Maybe UTCTime
+parseTime' = parseTimeM True defaultTimeLocale
+#else
+parseTime' :: String -> String -> Maybe UTCTime
+parseTime' = parseTime defaultTimeLocale
+#endif
 
 -- | Prior to @persistent-2.11.0@, we provided an instance of
 -- 'PersistField' for the 'Natural' type. This was in error, because
