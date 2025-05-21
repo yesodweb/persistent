@@ -6,7 +6,7 @@ Description: QuasiQuoters for performing raw sql queries
 
 This module exports convenient QuasiQuoters to perform raw SQL queries.
 All QuasiQuoters follow the same pattern and are analogous to the similar named
-functions exported from 'Database.Persist.Sql.Raw'. Neither the quoted
+functions exported from 'Database.Persist.Sql'. Neither the quoted
 function's behaviour, nor it's return value is altered during the translation
 and all documentation provided with it holds.
 
@@ -158,7 +158,7 @@ makeQQ x = QuasiQuoter
     (error "Cannot use qc as a dec")
 
 -- | QuasiQuoter for performing raw sql queries, analoguous to
--- 'Database.Persist.Sql.Raw.rawSql'
+-- 'Database.Persist.Sql.rawSql'
 --
 -- This and the following are convenient QuasiQuoters to perform raw SQL
 -- queries.  They each follow the same pattern and are analogous to
@@ -207,25 +207,25 @@ makeQQ x = QuasiQuoter
 sqlQQ :: QuasiQuoter
 sqlQQ = makeQQ [| rawSql |]
 
--- | Analoguous to 'Database.Persist.Sql.Raw.rawExecute'
+-- | Analoguous to 'Database.Persist.Sql.rawExecute'
 --
 -- @since 2.9.0
 executeQQ :: QuasiQuoter
 executeQQ = makeQQ [| rawExecute |]
 
--- | Analoguous to 'Database.Persist.Sql.Raw.rawExecuteCount'
+-- | Analoguous to 'Database.Persist.Sql.rawExecuteCount'
 --
 -- @since 2.9.0
 executeCountQQ :: QuasiQuoter
 executeCountQQ = makeQQ [| rawExecuteCount |]
 
--- | Analoguous to 'Database.Persist.Sql.Raw.rawQuery'
+-- | Analoguous to 'Database.Persist.Sql.rawQuery'
 --
 -- @since 2.9.0
 queryQQ :: QuasiQuoter
 queryQQ = makeQQ [| rawQuery |]
 
--- | Analoguous to 'Database.Persist.Sql.Raw.rawQueryRes'
+-- | Analoguous to 'Database.Persist.Sql.rawQueryRes'
 --
 -- @since 2.9.0
 queryResQQ :: QuasiQuoter
