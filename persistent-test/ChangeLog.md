@@ -1,5 +1,9 @@
 ## Unreleased changes
 
+## 2.13.1.4
+
+* Support `persistent-2.17`
+
 ## 2.13.1.3
 
 * Support persistent-2.14 with `SafeToInsert` class

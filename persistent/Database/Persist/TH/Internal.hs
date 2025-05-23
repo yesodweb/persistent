@@ -2477,11 +2477,18 @@ mkEntity embedEntityMap entityMap mps preDef = do
             if isEntitySum $ unboundEntityDef entDef
                 then [|error "tabulateEntityApply does not make sense for sum type"|]
                 else
-                    [|
-                        Entity
-                            <$> $(varE fromFieldName) $(conE primaryKeyField)
-                            <*> $(pure mkEntityVal)
-                        |]
+                    if null names'types
+                        then
+                            [|
+                                (\k -> Entity k $(conE (mkEntityNameHSName entName)))
+                                    <$> $(varE fromFieldName) $(conE primaryKeyField)
+                                |]
+                        else
+                            [|
+                                Entity
+                                    <$> $(varE fromFieldName) $(conE primaryKeyField)
+                                    <.> $(pure mkEntityVal)
+                                |]
 
         pure $
             FunD
