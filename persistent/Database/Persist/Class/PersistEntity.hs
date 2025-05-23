@@ -167,7 +167,7 @@ class ( PersistField (Key record), ToJSON (Key record), FromJSON (Key record)
     --
     -- @since 2.17.0.0
     tabulateEntityApply
-        :: Apply f
+        :: (Apply f)
         => (forall a. EntityField record a -> f a)
         -> f (Entity record)
 
