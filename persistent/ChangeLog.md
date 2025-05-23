@@ -1,5 +1,10 @@
 # Changelog for persistent
 
+# 2.17.0.0
+
+* []()
+    * Add `tabulateEntityApply`, all
+
 # 2.16.0.0
 
 * [#1584](https://github.com/yesodweb/persistent/pull/1584)

@@ -79,6 +79,7 @@ module Database.Persist.TH.Internal
 
 import Prelude hiding (concat, exp, splitAt, take, (++))
 
+import Data.Functor.Apply ((<.>))
 import Control.Monad
 import Data.Aeson
        ( FromJSON(..)
@@ -2138,6 +2139,51 @@ mkEntity embedEntityMap entityMap mps preDef = do
         allEntDefClauses =
             entityFieldTHClause <$> efthAllFields fields
 
+    mkTabulateApply <- do
+        fromFieldName <- newName "fromField"
+        let names'types =
+                filter (\(n, _) -> n /= mkName "Id") $ map (getConNameAndType . entityFieldTHCon) $ entityFieldsTHFields fields
+            getConNameAndType = \case
+                ForallC [] [EqualityT `AppT` _ `AppT` fieldTy] (NormalC conName []) ->
+                    (conName, fieldTy)
+                other ->
+                    error $ mconcat
+                        [ "persistent internal error: field constructor did not have xpected shape. \n"
+                        , "Expected: \n"
+                        , "    ForallC [] [EqualityT `AppT` _ `AppT` fieldTy] (NormalC name [])\n"
+                        , "Got: \n"
+                        , "    " <> show other
+                        ]
+            mkEntityVal =
+                fst $
+                List.foldl'
+                    (\(acc, op) (n, _) ->
+                        ( InfixE
+                                (Just acc)
+                                op
+                                (Just (VarE fromFieldName `AppE` ConE n))
+                        , VarE '(<.>)
+                        )
+                    )
+                    (ConE (mkEntityNameHSName entName), VarE '(<$>))
+                    names'types
+            primaryKeyField =
+                fst $ getConNameAndType $ entityFieldTHCon $ entityFieldsTHPrimary fields
+        body <-
+            if isEntitySum $ unboundEntityDef entDef
+            then [| error "tabulateEntityApply does not make sense for sum type" |]
+            else
+                [|
+                    Entity
+                        <$> $(varE fromFieldName) $(conE primaryKeyField)
+                        <*> $(pure mkEntityVal)
+                |]
+
+
+        pure $
+          FunD 'tabulateEntityA
+            [ Clause [VarP fromFieldName] (NormalB body) []
+            ]
     mkTabulateA <- do
         fromFieldName <- newName "fromField"
         let names'types =
@@ -2192,6 +2238,7 @@ mkEntity embedEntityMap entityMap mps preDef = do
         , keyFromValues'
         , keyFromRecordM'
         , mkTabulateA
+        , mkTabulateApply
         , FunD 'entityDef [normalClause [WildP] entityDefExp]
         , tpf
         , FunD 'fromPersistValues fpv

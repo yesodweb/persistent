@@ -41,6 +41,7 @@ module Database.Persist.Class.PersistEntity
     ) where
 
 import Data.Functor.Constant
+import Data.Functor.Apply (Apply)
 
 import Data.Aeson
        ( FromJSON(..)
@@ -158,6 +159,16 @@ class ( PersistField (Key record), ToJSON (Key record), FromJSON (Key record)
         => (forall a. EntityField record a -> f a)
         -- ^ A function that builds a fragment of a record in an
         -- 'Applicative' context.
+        -> f (Entity record)
+
+    -- | Like 'tabulateEntityA', but works with any 'Apply' f. This works
+    -- because all entities have at least one field, and so we can tabulate
+    -- things into semigroup-like shapes instead.
+    --
+    -- @since 2.17.0.0
+    tabulateEntityApply
+        :: Apply f
+        => (forall a. EntityField record a -> f a)
         -> f (Entity record)
 
     -- | Unique keys besides the 'Key'.
