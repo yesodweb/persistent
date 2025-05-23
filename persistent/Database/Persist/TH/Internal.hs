@@ -2485,9 +2485,10 @@ mkEntity embedEntityMap entityMap mps preDef = do
 
         pure $
             FunD
-                'tabulateEntityA
+                'tabulateEntityApply
                 [ Clause [VarP fromFieldName] (NormalB body) []
                 ]
+
     mkTabulateA <- do
         fromFieldName <- newName "fromField"
         let
