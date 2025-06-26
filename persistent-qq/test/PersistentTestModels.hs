@@ -38,7 +38,7 @@ share
     -- Indented comment
   Person json
     name Text
-    age Int "some ignored -- \" attribute"
+    age Int some="ignored -- \" attribute"
     color Text Maybe -- this is a comment sql=foobarbaz
     PersonNameKey name -- this is a comment sql=foobarbaz
     deriving Show Eq

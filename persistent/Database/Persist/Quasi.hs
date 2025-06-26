@@ -186,7 +186,7 @@ User sql=big_user_table
 This will alter the generated SQL to be:
 
 @
-CREATE TABEL big_user_table (
+CREATE TABLE big_user_table (
     id      SERIAL PRIMARY KEY,
     name    VARCHAR,
     age     INT
@@ -784,9 +784,9 @@ check = do
 convert
     :: (Entity Vehicle, Maybe (Entity Bicycle), Maybe (Entity Car))
     -> Vehicle'
-convert (Entity _ (VehicycleBicycleSum _), Just (Entity _ (Bicycle brand)), _) =
+convert (Entity _ (VehicleBicycleSum _), Just (Entity _ (Bicycle brand)), _) =
     Bike brand
-convert (Entity _ (VehicycleCarSum _), _, Just (Entity _ (Car make model))) =
+convert (Entity _ (VehicleCarSum _), _, Just (Entity _ (Car make model))) =
     Car make model
 convert _ =
     error "The database preconditions have been violated!"
@@ -931,6 +931,8 @@ module Database.Persist.Quasi
     , setPsIdName
     , getPsTabErrorLevel
     , setPsTabErrorLevel
+    , getPsQuotedFieldAttributeErrorLevel
+    , setPsQuotedFieldAttributeErrorLevel
     ) where
 
 import Database.Persist.Quasi.PersistSettings

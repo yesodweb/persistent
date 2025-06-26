@@ -20,6 +20,7 @@ import Database.Persist.Quasi.PersistSettings
 import Database.Persist.Quasi.PersistSettings.Internal (psTabErrorLevel)
 import Database.Persist.Quasi.Internal
 import Database.Persist.Quasi.Internal.ModelParser
+import Database.Persist.Quasi.Internal.TypeParser
 import Database.Persist.Types
 import Test.Hspec
 import Test.QuickCheck
@@ -111,18 +112,79 @@ spec = describe "Quasi" $ do
                         , unboundFieldGenerated = Nothing
                         }
 
-    describe "tokenization" $ do
+    describe "type parsing" $ do
+      let
+          parseType :: String -> ParseResult TypeExpr
+          parseType s = do
+                let
+                  (warnings, res) = runConfiguredParser defaultPersistSettings initialExtraState innerTypeExpr "" s
+                case res of
+                  Left peb -> (warnings, Left peb)
+                  Right (te, _acc) -> (warnings, Right te)
+
+          isType typeStr expectedTypeExpr = do
+            let (_warnings, Right te) = parseType typeStr
+            te `shouldBe` expectedTypeExpr
+            typeExprContent te `shouldBe` T.pack typeStr
+
+          -- these are some helper functions to make expectations less verbose
+          simpleType s = (TypeApplication (TypeConstructorExpr (TypeConstructor s)) [])
+          typeApp s ts = (TypeApplication (TypeConstructorExpr (TypeConstructor s)) ts)
+          listOf t = (TypeApplication (TypeConstructorExpr ListConstructor) [t])
+
+      it "parses types of kind '*'" $ do
+          "String" `isType` simpleType "String"
+
+      it "parses type constructors with dots" $ do
+          "ThisIs.AType" `isType` simpleType "ThisIs.AType"
+
+      it "parses higher-kinded types" $ do
+          "Maybe String" `isType` typeApp "Maybe" [simpleType "String"]
+
+      it "is greedy when parsing arguments to a type constructor" $ do
+          "Map String Int" `isType` typeApp "Map" [simpleType "String", simpleType "Int"]
+
+      it "parses higher-kinded types when parameterized by complex types (1)" $ do
+        "Map String (Maybe [Int])" `isType`
+          typeApp "Map" [simpleType "String", typeApp "Maybe" [listOf (simpleType "Int")]]
+
+      it "parses higher-kinded types when parameterized by complex types (2)" $ do
+        "Map (Maybe Int) [Int]" `isType`
+          typeApp "Map" [(typeApp "Maybe" [simpleType "Int"]), listOf (simpleType "Int")]
+
+      it "parses type expressions constructed by a partially parameterized type" $ do
+        "(Map String) [Int]" `isType`
+          TypeApplication (typeApp "Map" [(simpleType "String")]) [listOf (simpleType "Int")]
+
+      it "parses lists of lists" $ do
+        "[[Maybe String]]" `isType` listOf (listOf (typeApp "Maybe" [simpleType "String"]))
+
+      it "parses list types of complex types" $ do
+        "[(Map String) [Int]]" `isType`
+          listOf (TypeApplication (typeApp "Map" [(simpleType "String")]) [listOf (simpleType "Int")])
+
+      it "parses type-level String literals" $ do
+        "Labelled \"abcd\"" `isType` typeApp "Labelled" [TypeLitString "abcd"]
+
+      it "parses type-level Int literals" $ do
+        "Val 3" `isType` typeApp "Val" [TypeLitInt "3"]
+
+      it "parses promoted type constructors" $ do
+        "'Maybe" `isType` TypeLitPromotedConstructor (TypeConstructor "Maybe")
+
+    describe "attribute parsing" $ do
         let
-            tokenize :: String -> ParseResult [Token]
-            tokenize s = do
-              let (warnings, res) = runConfiguredParser defaultPersistSettings initialExtraState (some anyToken) "" s
+            parseAttributes :: String -> ParseResult [Attribute]
+            parseAttributes s = do
+              let
+                (warnings, res) = runConfiguredParser defaultPersistSettings initialExtraState (some attribute) "" s
               case res of
                 Left peb ->
                   (warnings, Left peb)
                 Right (tokens, _acc) -> (warnings, Right tokens)
 
         it "handles normal words" $
-            tokenize "foo   bar  baz"
+            parseAttributes "foo   bar  baz"
                 `shouldBe` ([], Right
                              ( [ PText "foo"
                                , PText "bar"
@@ -132,7 +194,7 @@ spec = describe "Quasi" $ do
                            )
 
         it "handles numbers" $
-            tokenize "one (Finite 1)"
+            parseAttributes "one (Finite 1)"
                 `shouldBe` ([], Right
                              ( [ PText "one"
                                , Parenthetical "Finite 1"
@@ -141,65 +203,58 @@ spec = describe "Quasi" $ do
                            )
 
         it "handles quotes" $
-            tokenize "\"foo bar\" \"baz\""
+            parseAttributes "abc=\"foo bar\" def=\"baz\""
                 `shouldBe` ([], Right
-                             ( [ Quotation "foo bar"
-                               , Quotation "baz"
+                             ( [ Assignment "abc" "foo bar"
+                               , Assignment "def" "baz"
                                ]
                              )
                            )
 
         it "handles SQL literals with no specified type" $
-            tokenize "attr='[\"ab\\'cd\", 1, 2]'"
+            parseAttributes "attr='[\"ab\\'cd\", 1, 2]'"
                 `shouldBe` ([], Right
-                             ( [Equality "attr" "'[\"ab'cd\", 1, 2]'"]
+                             ( [Assignment "attr" "'[\"ab'cd\", 1, 2]'"]
                              )
                            )
 
         it "handles SQL literals with a specified type" $
-            tokenize "attr='{\"\\'a\\'\": [1, 2.2, \"\\'3\\'\"]}'::type_name"
+            parseAttributes "attr='{\"\\'a\\'\": [1, 2.2, \"\\'3\\'\"]}'::type_name"
                 `shouldBe` ([], Right
-                             ( [Equality "attr" "'{\"'a'\": [1, 2.2, \"'3'\"]}'::type_name"]
-                             )
-                           )
-
-        it "should error if quotes are unterminated" $ do
-          (fmap . first) errorBundlePretty (tokenize "\"foo bar")
-                `shouldBe` ([], Left
-                             ( "1:9:\n  |\n1 | \"foo bar\n  |         ^\nunexpected end of input\nexpecting '\"' or literal character\n"
+                             ( [Assignment "attr" "'{\"'a'\": [1, 2.2, \"'3'\"]}'::type_name"]
                              )
                            )
 
         it "handles commas in tokens" $
-            tokenize "x=COALESCE(left,right)  \"baz\""
+            parseAttributes "x=COALESCE(left,right)  baz"
                 `shouldBe` ([], Right
-                             ( [ Equality "x" "COALESCE(left,right)"
-                               , Quotation "baz"
+                             ( [ Assignment "x" "COALESCE(left,right)"
+                               , PText "baz"
                                ]
                              )
                            )
 
         it "handles quotes mid-token" $
-            tokenize "x=\"foo bar\"  \"baz\""
+            parseAttributes "x=\"foo bar\"  baz"
                 `shouldBe` ([], Right
-                             ( [ Equality "x" "foo bar"
-                               , Quotation "baz"
+                             ( [ Assignment "x" "foo bar"
+                               , PText "baz"
                                ]
                              )
                            )
 
         it "handles escaped quotes mid-token" $
-            tokenize "x=\\\"foo bar\"  \"baz\""
+            parseAttributes "x=\\\"foo bar\"  baz"
                 `shouldBe` ([], Right
-                             ( [ Equality "x" "\\\"foo"
+                             ( [ Assignment "x" "\\\"foo"
                                , PText "bar\""
-                               , Quotation "baz"
+                               , PText "baz"
                                ]
                              )
                            )
 
         it "handles unnested parentheses" $
-            tokenize "(foo bar)  (baz)"
+            parseAttributes "(foo bar)  (baz)"
                 `shouldBe` ([], Right
                              ( [ Parenthetical "foo bar"
                                , Parenthetical "baz"
@@ -208,16 +263,16 @@ spec = describe "Quasi" $ do
                            )
 
         it "handles unnested parentheses mid-token" $
-            tokenize "x=(foo bar)  (baz)"
+            parseAttributes "x=(foo bar)  (baz)"
                 `shouldBe` ([], Right
-                             ( [ Equality "x" "foo bar"
+                             ( [ Assignment "x" "foo bar"
                                , Parenthetical "baz"
                                ]
                              )
                            )
 
         it "handles nested parentheses" $
-            tokenize "(foo (bar))  (baz)"
+            parseAttributes "(foo (bar))  (baz)"
                 `shouldBe` ([], Right
                              ( [ Parenthetical "foo (bar)"
                                , Parenthetical "baz"
@@ -226,7 +281,7 @@ spec = describe "Quasi" $ do
                            )
 
         it "handles escaped quotation marks in plain tokens" $
-            tokenize "foo bar\\\"baz"
+            parseAttributes "foo bar\\\"baz"
                 `shouldBe` ([], Right
                              ( [ PText "foo"
                                , PText "bar\\\"baz"
@@ -235,24 +290,24 @@ spec = describe "Quasi" $ do
                            )
 
         it "handles escaped quotation marks in quotations" $
-            tokenize "foo \"bar\\\"baz\""
+            parseAttributes "foo bar=\"baz\\\"quux\""
                 `shouldBe` ([], Right
                              ( [ PText "foo"
-                               , Quotation "bar\"baz"
+                               , Assignment "bar" "baz\"quux"
                                ]
                              )
                            )
 
         it "handles escaped quotation marks in equalities" $
-            tokenize "y=\"baz\\\"\""
+            parseAttributes "y=\"baz\\\"\""
                 `shouldBe` ([], Right
-                             ( [ Equality "y" "baz\""
+                             ( [ Assignment "y" "baz\""
                                ]
                              )
                            )
 
         it "handles escaped quotation marks in parentheticals" $
-            tokenize "(foo \\\"bar)"
+            parseAttributes "(foo \\\"bar)"
                 `shouldBe` ([], Right
                              ( [ Parenthetical "foo \\\"bar"
                                ]
@@ -260,16 +315,16 @@ spec = describe "Quasi" $ do
                            )
 
         it "handles escaped parentheses in quotations" $
-            tokenize "foo \"bar\\(baz\""
+            parseAttributes "foo bar=\"baz\\(quux\""
                 `shouldBe` ([], Right
                              ( [ PText "foo"
-                               , Quotation "bar(baz"
+                               , Assignment "bar" "baz(quux"
                                ]
                              )
                            )
 
         it "handles escaped parentheses in plain tokens" $
-            tokenize "foo bar\\(baz"
+            parseAttributes "foo bar\\(baz"
                 `shouldBe` ([], Right
                              ( [ PText "foo"
                                , PText "bar(baz"
@@ -278,7 +333,7 @@ spec = describe "Quasi" $ do
                            )
 
         it "handles escaped parentheses in parentheticals" $
-            tokenize "(foo \\(bar)"
+            parseAttributes "(foo \\(bar)"
                 `shouldBe` ([], Right
                              ( [ Parenthetical "foo (bar"
                                ]
@@ -286,43 +341,97 @@ spec = describe "Quasi" $ do
                            )
 
         it "handles escaped parentheses in equalities" $
-            tokenize "y=baz\\("
+            parseAttributes "y=baz\\("
                 `shouldBe` ([], Right
-                             ( [ Equality "y" "baz("
+                             ( [ Assignment "y" "baz("
                                ]
                              )
                            )
 
         it "handles mid-token quote in later token" $
-            tokenize "foo bar baz=(bin\")"
+            parseAttributes "foo bar baz=(bin\")"
                 `shouldBe` ([], Right
                              ( [ PText "foo"
                                , PText "bar"
-                               , Equality "baz" "bin\""
+                               , Assignment "baz" "bin\""
                                ]
                              )
                            )
 
-    describe "parser settings" $ do
+    describe "entity field parsing" $ do
+        let
+            parseField :: String -> ParseResult ()
+            parseField s = do
+              let
+                (warnings, res) = runConfiguredParser defaultPersistSettings initialExtraState entityField "" s
+              case res of
+                Left peb ->
+                  (warnings, Left peb)
+                Right (_, _) -> (warnings, Right ())
+
+        it "should error if quotes are unterminated in an attribute" $ do
+            (fmap . first) errorBundlePretty (parseField "field String sql=\"foo bar")
+                  `shouldBe` ([], Left
+                               ("1:17:\n  |\n1 | field String sql=\"foo bar\n  |                 ^\nunexpected '='\nexpecting '!', '\"', ''', ',', '-', '.', ':', '[', '\\', ']', '_', '~', alphanumeric character, assignment expression, end of input, newline, parenthetical, or plain attribute\n"
+                               )
+                             )
+
+        it "should error if quotes are unterminated in a type" $ do
+            (fmap . first) errorBundlePretty (parseField "field (Label \"unterminated)")
+                  `shouldBe` ([], Left
+                               ("1:28:\n  |\n1 | field (Label \"unterminated)\n  |                            ^\nunexpected end of input\nexpecting '\"' or literal character\n"
+                               )
+                             )
+
+    describe "tab error level setting" $ do
       let definitions = T.pack "User\n\tId Text\n\tname String"
 
       describe "when configured to permit tabs" $ do
         let
-            [user] = defsWithSettings lowerCaseSettings{ psTabErrorLevel = Nothing } definitions
+          (warnings, [user]) = defsWithWarnings lowerCaseSettings{ psTabErrorLevel = Nothing } definitions
+
         it "permits tab indentation" $
           getUnboundEntityNameHS user `shouldBe` EntityNameHS "User"
+
+        it "doesn't generate a warning" $
+          warnings `shouldBe` []
 
       describe "when configured to warn on tabs" $ do
         let
             (warnings, [user]) = defsWithWarnings lowerCaseSettings{ psTabErrorLevel = Just LevelWarning } definitions
+
         it "permits tab indentation" $
           getUnboundEntityNameHS user `shouldBe` EntityNameHS "User"
+
+        it "generates one warning per line with tabs" $
+          length warnings `shouldBe` 2
 
       describe "when configured to disallow tabs" $ do
         let
           [user] = defsWithSettings lowerCaseSettings{ psTabErrorLevel = Just LevelError } definitions
+
         it "rejects tab indentation" $
           evaluate (unboundEntityDef user) `shouldErrorWithMessage` "2:1:\n  |\n2 |  Id Text\n  | ^\nunexpected tab\nexpecting valid whitespace\n\n3:1:\n  |\n3 |  name String\n  | ^\nunexpected tab\nexpecting valid whitespace\n"
+
+    describe "quoted attribute error level setting" $ do
+      let definitions = T.pack "User\n name String \"Maybe\""
+
+      describe "when configured to warn on quoted attriutes" $ do
+        let
+            (warnings, [user]) = defsWithWarnings lowerCaseSettings{ psTabErrorLevel = Just LevelWarning } definitions
+
+        it "permits quoted attributes" $
+            (unboundFieldAttrs <$> unboundEntityFields user) `shouldBe` [[FieldAttrMaybe]]
+
+        it "generates a warning" $
+          length warnings `shouldBe` 1
+
+      describe "when configured to disallow quoted attriutes" $ do
+        let
+            (warnings, [user]) = defsWithWarnings lowerCaseSettings{ psTabErrorLevel = Just LevelWarning } definitions
+
+        it "rejects quoted attributes" $
+            (unboundFieldAttrs <$> unboundEntityFields user) `shouldBe` [[FieldAttrMaybe]]
 
     describe "parse" $ do
         let
@@ -390,6 +499,23 @@ Car
               `shouldBe` [ (ConstraintNameHS "UniqueModel", [(FieldNameHS "model", FieldNameDB "model")])
                          ]
             (simplifyUnique <$> entityUniques (unboundEntityDef vehicle)) `shouldBe` []
+
+        it "should parse quoted attributes" $ do
+            let [precompiledCacheParent] = defs [st|
+                                                   PrecompiledCacheParent sql="precompiled_cache"
+                                                     platformGhcDir FilePath "default=(hex(randomblob(16)))"
+                                                     deriving Show
+                                                |]
+            (unboundFieldAttrs <$> unboundEntityFields precompiledCacheParent)
+                `shouldBe` [[FieldAttrDefault "(hex(randomblob(16)))"]]
+
+        it "should parse entity block attributes with nested parens on equality rhs" $ do
+            let [precompiledCacheParent] = defs [st|
+                                                   PrecompiledCacheParent sql="precompiled_cache"
+                                                     platformGhcDir FilePath default=(hex(randomblob(16)))
+                                                |]
+            (unboundFieldAttrs <$> unboundEntityFields precompiledCacheParent)
+                `shouldBe` [[FieldAttrDefault "hex(randomblob(16))"]]
 
         it "should parse the `entityForeigns` field" $ do
             let
@@ -462,7 +588,7 @@ User
             let
                 [user] = defs definitions
             evaluate (unboundEntityDef user)
-                `shouldErrorWithMessage` "4:20:\n  |\n4 |     age  (Maybe Int\n  |                    ^\nunexpected newline\nexpecting '!', '\"', ''', '(', ')', ',', '-', '.', ':', '[', '\\', ']', '_', '~', alphanumeric character, space, or tab\n"
+                `shouldErrorWithMessage` "4:20:\n  |\n4 |     age  (Maybe Int\n  |                    ^\nunexpected newline\nexpecting ''', ')', '.', alphanumeric character, type expression, or white space\n"
 
         it "errors on duplicate cascade update declarations" $ do
             let

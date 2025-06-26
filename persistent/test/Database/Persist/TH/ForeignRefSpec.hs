@@ -128,7 +128,7 @@ spec = describe "ForeignRefSpec" $ do
                             pure ()
                         as ->
                             expectationFailure . mconcat $
-                                [ "Expected one foreign reference on childDef, "
+                                [ "(Explicit) Expected one foreign reference on childDef, "
                                 , "got: "
                                 , show as
                                 ]
@@ -172,7 +172,7 @@ spec = describe "ForeignRefSpec" $ do
                                 ForeignRef (EntityNameHS "ParentImplicit")
                     as ->
                         error . mconcat $
-                            [ "Expected one foreign reference on childDef, "
+                            [ "(Implicit) Expected one foreign reference on childDef, "
                             , "got: "
                             , show as
                             ]

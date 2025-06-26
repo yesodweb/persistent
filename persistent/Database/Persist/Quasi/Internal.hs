@@ -16,7 +16,7 @@ module Database.Persist.Quasi.Internal
     , PersistSettings (..)
     , upperCaseSettings
     , lowerCaseSettings
-    , Token (..)
+    , Attribute (..)
     , SourceLoc (..)
     , sourceLocFromTHLoc
     , parseFieldType
@@ -206,7 +206,7 @@ entityNamesFromParsedDef ps parsedEntDef = (entNameHS, entNameDB)
             getDbName
                 ps
                 (unEntityNameHS entNameHS)
-                (parsedEntityDefEntityAttributes parsedEntDef)
+                (attributeContent <$> parsedEntityDefEntityAttributes parsedEntDef)
 
 -- | This type represents an @Id@ declaration in the QuasiQuoted syntax.
 --
@@ -527,12 +527,11 @@ mkUnboundEntityDef ps parsedEntDef =
                     EntityIdField $
                         maybe autoIdField (unboundIdDefToFieldDef (defaultIdName ps) entNameHS) idField
                 , entityAttrs =
-                    parsedEntityDefEntityAttributes parsedEntDef
-                , entityFields =
-                    []
+                    attributeContent <$> parsedEntityDefEntityAttributes parsedEntDef
+                , entityFields = []
                 , entityUniques = entityConstraintDefsUniquesList entityConstraintDefs
                 , entityForeigns = []
-                , entityDerives = concat $ mapMaybe takeDerives textAttribs
+                , entityDerives = concat $ mapMaybe takeDerives (textAttribs ++ textDirectives)
                 , entityExtra = parsedEntityDefExtras parsedEntDef
                 , entitySum = parsedEntityDefIsSum parsedEntDef
                 , entityComments =
@@ -546,19 +545,22 @@ mkUnboundEntityDef ps parsedEntDef =
     (entNameHS, entNameDB) =
         entityNamesFromParsedDef ps parsedEntDef
 
-    attribs =
-        parsedEntityDefFieldAttributes parsedEntDef
+    fields = parsedEntityDefFields parsedEntDef
+    directives = parsedEntityDefDirectives parsedEntDef
 
     cols :: [UnboundFieldDef]
-    cols = foldMap (toList . commentedField ps) attribs
+    cols = foldMap (toList . commentedField ps) fields
 
     textAttribs :: [[Text]]
-    textAttribs = fmap tokenContent . fst <$> attribs
+    textAttribs = entityFieldContent . fst <$> fields
+
+    textDirectives :: [[Text]]
+    textDirectives = directiveContent . fst <$> directives
 
     entityConstraintDefs =
         foldMap
             (maybe mempty (takeConstraint ps entNameHS cols) . NEL.nonEmpty)
-            textAttribs
+            (textAttribs ++ textDirectives)
 
     idField =
         case entityConstraintDefsIdField entityConstraintDefs of
@@ -574,10 +576,10 @@ mkUnboundEntityDef ps parsedEntDef =
 
     commentedField
         :: PersistSettings
-        -> ([Token], Maybe Text)
+        -> (EntityField, Maybe Text)
         -> Maybe UnboundFieldDef
-    commentedField s (tokens, mCommentText) = do
-        unb <- takeColsEx s (tokenContent <$> tokens)
+    commentedField s (field, mCommentText) = do
+        unb <- takeColsEx s (entityFieldContent field)
         pure $ unb{unboundFieldComments = mCommentText}
 
     autoIdField :: FieldDef
