@@ -17,7 +17,7 @@ import qualified Data.Text as T
 import Database.Persist.EntityDef.Internal
 import Database.Persist.Quasi
 import Database.Persist.Quasi.PersistSettings
-import Database.Persist.Quasi.PersistSettings.Internal (psTabErrorLevel)
+import Database.Persist.Quasi.PersistSettings.Internal (psTabErrorLevel, psQuotedArgumentErrorLevel)
 import Database.Persist.Quasi.Internal
 import Database.Persist.Quasi.Internal.ModelParser
 import Database.Persist.Quasi.Internal.TypeParser
@@ -411,14 +411,17 @@ spec = describe "Quasi" $ do
           [user] = defsWithSettings lowerCaseSettings{ psTabErrorLevel = Just LevelError } definitions
 
         it "rejects tab indentation" $
-          evaluate (unboundEntityDef user) `shouldErrorWithMessage` "2:1:\n  |\n2 |  Id Text\n  | ^\nunexpected tab\nexpecting valid whitespace\n\n3:1:\n  |\n3 |  name String\n  | ^\nunexpected tab\nexpecting valid whitespace\n"
+          evaluate (unboundEntityDef user)
+            `shouldErrorWithMessage`
+            "2:1:\n  |\n2 |  Id Text\n  | ^\nunexpected tab\nexpecting valid whitespace\n\n3:1:\n  |\n3 |  name String\n  | ^\nunexpected tab\nexpecting valid whitespace\n"
+
 
     describe "quoted attribute error level setting" $ do
       let definitions = T.pack "User\n name String \"Maybe\""
 
-      describe "when configured to warn on quoted attriutes" $ do
+      describe "when configured to warn on quoted attributes" $ do
         let
-            (warnings, [user]) = defsWithWarnings lowerCaseSettings{ psTabErrorLevel = Just LevelWarning } definitions
+            (warnings, [user]) = defsWithWarnings lowerCaseSettings{ psQuotedArgumentErrorLevel = Just LevelWarning } definitions
 
         it "permits quoted attributes" $
             (unboundFieldAttrs <$> unboundEntityFields user) `shouldBe` [[FieldAttrMaybe]]
@@ -426,12 +429,36 @@ spec = describe "Quasi" $ do
         it "generates a warning" $
           length warnings `shouldBe` 1
 
-      describe "when configured to disallow quoted attriutes" $ do
+      describe "when configured to disallow quoted attributes" $ do
         let
-            (warnings, [user]) = defsWithWarnings lowerCaseSettings{ psTabErrorLevel = Just LevelWarning } definitions
+            (warnings, [user]) = defsWithWarnings lowerCaseSettings{ psQuotedArgumentErrorLevel = Just LevelError } definitions
 
         it "rejects quoted attributes" $
-            (unboundFieldAttrs <$> unboundEntityFields user) `shouldBe` [[FieldAttrMaybe]]
+          evaluate (unboundEntityDef user)
+            `shouldErrorWithMessage`
+             "2:14:\n  |\n2 |  name String \"Maybe\"\n  |              ^\nUnexpected quotation mark in entity field attribute\n"
+
+    describe "quoted directive argument error level setting" $ do
+      let definitions = T.pack "User\n name String\n deriving \"Show\""
+
+      describe "when configured to warn on quoted arguments" $ do
+        let
+            (warnings, [user]) = defsWithWarnings lowerCaseSettings{ psQuotedArgumentErrorLevel = Just LevelWarning } definitions
+
+        it "permits quoted attributes" $
+            getUnboundEntityNameHS user `shouldBe` EntityNameHS "User"
+
+        it "generates a warning" $
+          length warnings `shouldBe` 1
+
+      describe "when configured to disallow quoted arguments" $ do
+        let
+            (warnings, [user]) = defsWithWarnings lowerCaseSettings{ psQuotedArgumentErrorLevel = Just LevelError } definitions
+
+        it "rejects quoted arguments" $
+          evaluate (unboundEntityDef user)
+            `shouldErrorWithMessage`
+            "3:11:\n  |\n3 |  deriving \"Show\"\n  |           ^\nUnexpected quotation mark in directive argument\n"
 
     describe "parse" $ do
         let

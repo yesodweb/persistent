@@ -38,8 +38,9 @@ data PersistSettings = PersistSettings
     -- ^ Whether and with what severity to disallow tabs in entity source text.
     --
     -- @since 2.16.0.0
-    , psQuotedFieldAttributeErrorLevel :: Maybe ParserErrorLevel
-    -- ^ Whether and with what severity to disallow quoted entity field attributes.
+    , psQuotedArgumentErrorLevel :: Maybe ParserErrorLevel
+    -- ^ Whether and with what severity to disallow quoted entity field attributes
+    -- and quoted directive arguments.
     --
     -- @since 2.17.1.0
     }
@@ -52,7 +53,7 @@ defaultPersistSettings =
         , psStrictFields = True
         , psIdName = "id"
         , psTabErrorLevel = Just LevelWarning
-        , psQuotedFieldAttributeErrorLevel = Just LevelWarning
+        , psQuotedArgumentErrorLevel = Just LevelWarning
         }
 upperCaseSettings = defaultPersistSettings
 lowerCaseSettings =
@@ -188,18 +189,20 @@ setPsTabErrorLevel
 setPsTabErrorLevel l ps = ps{psTabErrorLevel = l}
 
 -- | Retrieve the severity of the error generated when the parser encounters a
--- quoted entity field attribute.
--- If it is @Nothing@, quoted attributes are permitted in entity field definitions.
+-- quoted entity field attribute or quoted directive argument.
+-- If it is @Nothing@, quoted arguments are permitted in both entity field
+-- definitions and directives.
 --
 -- @since 2.17.1.0
-getPsQuotedFieldAttributeErrorLevel :: PersistSettings -> Maybe ParserErrorLevel
-getPsQuotedFieldAttributeErrorLevel = psQuotedFieldAttributeErrorLevel
+getPsQuotedArgumentErrorLevel :: PersistSettings -> Maybe ParserErrorLevel
+getPsQuotedArgumentErrorLevel = psQuotedArgumentErrorLevel
 
 -- | Set the severity of the error generated when the parser encounters a
 -- quoted entity field attribute.
--- If set to @Nothing@, quoted attributes are permitted in entity field definitions.
+-- If set to @Nothing@, quoted arguments are permitted in both entity field
+-- definitions and directives.
 --
 -- @since 2.17.1.0
-setPsQuotedFieldAttributeErrorLevel
+setPsQuotedArgumentErrorLevel
   :: Maybe ParserErrorLevel -> PersistSettings -> PersistSettings
-setPsQuotedFieldAttributeErrorLevel l ps = ps{psQuotedFieldAttributeErrorLevel = l}
+setPsQuotedArgumentErrorLevel l ps = ps{psQuotedArgumentErrorLevel = l}

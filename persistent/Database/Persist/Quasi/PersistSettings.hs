@@ -20,8 +20,8 @@ module Database.Persist.Quasi.PersistSettings
     , setPsIdName
     , getPsTabErrorLevel
     , setPsTabErrorLevel
-    , getPsQuotedFieldAttributeErrorLevel
-    , setPsQuotedFieldAttributeErrorLevel
+    , getPsQuotedArgumentErrorLevel
+    , setPsQuotedArgumentErrorLevel
     ) where
 
 import Database.Persist.Quasi.PersistSettings.Internal

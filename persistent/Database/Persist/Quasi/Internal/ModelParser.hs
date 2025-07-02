@@ -268,6 +268,16 @@ data Attribute
       Quotation Text
     deriving (Eq, Ord, Show)
 
+-- | An argument to an entity field directive.
+--
+-- @since 2.17.1.0
+data DirectiveArgument
+    = -- This is too unstructured. We should rework directive parsing and make this smarter.
+      DText Text
+    | -- | Quoted directive arguments are deprecated since 2.17.1.0.
+      DQuotation Text
+    deriving (Eq, Ord, Show)
+
 -- | The name of an entity block or extra block.
 --
 -- @since 2.17.1.0
@@ -298,7 +308,7 @@ attributeContent = \case
 --
 -- @since 2.17.1.0
 directiveContent :: Directive -> [Text]
-directiveContent = fmap Text.pack . directiveTokens
+directiveContent d = directiveArgumentContent <$> directiveArguments d
 
 entityFieldContent :: EntityField -> [Text]
 entityFieldContent f =
@@ -313,6 +323,8 @@ blockKeyContent (BlockKey t) = t
 -- | Generates the field name of an EntityField, accompanied by
 -- its strictness sigil, if one is present.
 -- This is only needed temporarily, and can eventually be refactored away.
+--
+-- @since 2.17.1.0
 fieldNameAndStrictnessAsText :: EntityField -> Text
 fieldNameAndStrictnessAsText f =
     let
@@ -334,10 +346,10 @@ quotedAttributeErrorMessage = "Unexpected quotation mark in entity field attribu
 
 attribute :: Parser Attribute
 attribute = do
-    quotedFieldAttributeErrorLevel <- asks psQuotedFieldAttributeErrorLevel
+    quotedFieldAttributeErrorLevel <- asks psQuotedArgumentErrorLevel
     tryOrReport
         quotedFieldAttributeErrorLevel
-        "Quoted attributes are deprecated."
+        "Quoted field attributes are deprecated since 2.17.1.0, and will be removed in or after 2.18.0.0"
         isQuotedAttributeError
         attribute'
         (Quotation . Text.pack <$> quotation)
@@ -661,7 +673,7 @@ data EntityField = EntityField
 
 data Directive = Directive
     { directiveDocCommentBlock :: Maybe DocCommentBlock
-    , directiveTokens :: [String]
+    , directiveArguments :: [DirectiveArgument]
     , directivePos :: SourcePos
     }
     deriving (Show)
@@ -830,14 +842,65 @@ directiveName =
         rl <- many alphaNumChar
         pure (fl : rl)
 
+quotedArgumentErrorMessage :: String
+quotedArgumentErrorMessage = "Unexpected quotation mark in directive argument"
+
 -- Parses an argument to an entity definition directive. It's somewhat naive about it,
 -- and we should refine this in the future.
-directiveArgument :: Parser String
-directiveArgument =
-    choice
-        [ parenthetical'
-        , some $ contentChar <|> char '='
-        ]
+directiveArgument :: Parser DirectiveArgument
+directiveArgument = do
+    quotedArgumentErrorLevel <- asks psQuotedArgumentErrorLevel
+    tryOrReport
+        quotedArgumentErrorLevel
+        "Quoted directive arguments are deprecated since 2.17.1.0, and will be removed in or after 2.18.0.0"
+        isQuotedArgumentError
+        directiveArgument'
+        (DQuotation . Text.pack <$> quotation)
+  where
+    isQuotedArgumentError (FancyError _ s) = s == Set.singleton (ErrorFail quotedArgumentErrorMessage)
+    isQuotedArgumentError _ = False
+    directiveArgument' = do
+        q <- lookAhead (optional $ char '"')
+        case q of
+            Just _ -> fail quotedArgumentErrorMessage
+            Nothing ->
+                choice
+                    [ DText . Text.pack <$> parenthetical'
+                    , DText . Text.pack <$> some directiveArgumentChar
+                    ]
+    -- This big random-looking character class is a sign that the parser is too lax.
+    -- When we improve directive parsing, we'll eliminate this.
+    -- Note that this character class is not identical to the class parsed by the top-level function `contentChar`.
+    directiveArgumentChar =
+        choice
+            [ alphaNumChar
+            , char '.'
+            , char '['
+            , char ']'
+            , char '_'
+            , char '\''
+            , char '!'
+            , char '~'
+            , char '-'
+            , char ':'
+            , char ','
+            , char '='
+            , do
+                backslash <- char '\\'
+                nextChar <- lookAhead anySingle
+                if nextChar == '(' || nextChar == ')'
+                    then single nextChar
+                    else pure backslash
+            ]
+
+-- | Converts a directive argument into a Text representation for second-stage
+-- parsing or presentation to the user
+--
+-- @since 2.17.1.0
+directiveArgumentContent :: DirectiveArgument -> Text
+directiveArgumentContent = \case
+    DText t -> t
+    DQuotation t -> t
 
 directive :: Parser Member
 directive = do
@@ -851,7 +914,7 @@ directive = do
         MemberDirective
             Directive
                 { directiveDocCommentBlock = dcb
-                , directiveTokens = dn : args
+                , directiveArguments = DText (Text.pack dn) : args
                 , directivePos = pos
                 }
 

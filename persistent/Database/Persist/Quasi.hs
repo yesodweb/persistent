@@ -931,8 +931,8 @@ module Database.Persist.Quasi
     , setPsIdName
     , getPsTabErrorLevel
     , setPsTabErrorLevel
-    , getPsQuotedFieldAttributeErrorLevel
-    , setPsQuotedFieldAttributeErrorLevel
+    , getPsQuotedArgumentErrorLevel
+    , setPsQuotedArgumentErrorLevel
     ) where
 
 import Database.Persist.Quasi.PersistSettings
