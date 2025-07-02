@@ -172,6 +172,25 @@ spec = describe "Quasi" $ do
       it "parses promoted type constructors" $ do
         "'Maybe" `isType` TypeLitPromotedConstructor (TypeConstructor "Maybe")
 
+    describe "field name parsing" $ do
+        let
+            parseFieldName :: String -> ParseResult FieldName
+            parseFieldName s = do
+              let
+                (warnings, res) = runConfiguredParser defaultPersistSettings initialExtraState fieldName "" s
+              case res of
+                Left peb ->
+                  (warnings, Left peb)
+                Right (fn, _acc) -> (warnings, Right fn)
+
+        it "parses alphanumeric field names" $
+            parseFieldName "asdf100"
+                `shouldBe` ([], Right (FieldName "asdf100"))
+
+        it "parses alphanumeric field names with underscores" $
+            parseFieldName "asdf_100"
+                `shouldBe` ([], Right (FieldName "asdf_100"))
+
     describe "attribute parsing" $ do
         let
             parseAttributes :: String -> ParseResult [Attribute]
@@ -188,6 +207,16 @@ spec = describe "Quasi" $ do
                 `shouldBe` ([], Right
                              ( [ PText "foo"
                                , PText "bar"
+                               , PText "baz"
+                               ]
+                             )
+                           )
+
+        it "handles bangs" $
+            parseAttributes "foo   !bar  baz"
+                `shouldBe` ([], Right
+                             ( [ PText "foo"
+                               , PText "!bar"
                                , PText "baz"
                                ]
                              )
@@ -229,6 +258,24 @@ spec = describe "Quasi" $ do
             parseAttributes "x=COALESCE(left,right)  baz"
                 `shouldBe` ([], Right
                              ( [ Assignment "x" "COALESCE(left,right)"
+                               , PText "baz"
+                               ]
+                             )
+                           )
+
+        it "handles single quotes in tokens" $
+            parseAttributes "x=blorp('blap')  baz"
+                `shouldBe` ([], Right
+                             ( [ Assignment "x" "blorp('blap')"
+                               , PText "baz"
+                               ]
+                             )
+                           )
+
+        it "handles spaces in assignment RHSes" $
+            parseAttributes "sql=blorp('blap', 'blip')  baz"
+                `shouldBe` ([], Right
+                             ( [ Assignment "sql" "blorp('blap', 'blip')"
                                , PText "baz"
                                ]
                              )
@@ -436,7 +483,7 @@ spec = describe "Quasi" $ do
         it "rejects quoted attributes" $
           evaluate (unboundEntityDef user)
             `shouldErrorWithMessage`
-             "2:14:\n  |\n2 |  name String \"Maybe\"\n  |              ^\nUnexpected quotation mark in entity field attribute\n"
+             "2:14:\n  |\n2 |  name String \"Maybe\"\n  |              ^\nUnexpected quotation mark in field or directive attribute\n"
 
         describe "and the definition has quotation marks in the type" $ do
           let definitionsWithTypeLevelString = T.pack "User\n name \"String\"\n deriving Show"
@@ -464,7 +511,7 @@ spec = describe "Quasi" $ do
         it "rejects quoted arguments" $
           evaluate (unboundEntityDef user)
             `shouldErrorWithMessage`
-            "3:11:\n  |\n3 |  deriving \"Show\"\n  |           ^\nUnexpected quotation mark in directive argument\n"
+            "3:11:\n  |\n3 |  deriving \"Show\"\n  |           ^\nUnexpected quotation mark in field or directive attribute\n"
 
     describe "parse" $ do
         let

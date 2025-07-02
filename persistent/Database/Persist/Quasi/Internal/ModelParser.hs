@@ -17,6 +17,8 @@ module Database.Persist.Quasi.Internal.ModelParser
     , EntityField (..)
     , entityField
     , entityFieldContent
+    , FieldName (..)
+    , fieldName
     , ParsedEntityDef (..)
     , parseSource
     , memberEntityFields
@@ -257,7 +259,7 @@ data SourceLoc = SourceLoc
     }
     deriving (Show, Lift)
 
--- | An attribute of an entity field definition.
+-- | An attribute of an entity field definition or a directive.
 --
 -- @since 2.17.1.0
 data Attribute
@@ -266,16 +268,6 @@ data Attribute
     | PText Text
     | -- | Quoted field attributes are deprecated since 2.17.1.0.
       Quotation Text
-    deriving (Eq, Ord, Show)
-
--- | An argument to an entity field directive.
---
--- @since 2.17.1.0
-data DirectiveArgument
-    = -- This is too unstructured. We should rework directive parsing and make this smarter.
-      DText Text
-    | -- | Quoted directive arguments are deprecated since 2.17.1.0.
-      DQuotation Text
     deriving (Eq, Ord, Show)
 
 -- | The name of an entity block or extra block.
@@ -308,7 +300,9 @@ attributeContent = \case
 --
 -- @since 2.17.1.0
 directiveContent :: Directive -> [Text]
-directiveContent d = directiveArgumentContent <$> directiveArguments d
+directiveContent d =
+    [directiveNameContent $ directiveName d]
+        <> (attributeContent <$> directiveAttributes d)
 
 entityFieldContent :: EntityField -> [Text]
 entityFieldContent f =
@@ -319,6 +313,9 @@ entityFieldContent f =
 
 blockKeyContent :: BlockKey -> Text
 blockKeyContent (BlockKey t) = t
+
+directiveNameContent :: DirectiveName -> Text
+directiveNameContent (DirectiveName t) = t
 
 -- | Generates the field name of an EntityField, accompanied by
 -- its strictness sigil, if one is present.
@@ -342,7 +339,7 @@ commentContent = \case
     DocComment s -> s
 
 quotedAttributeErrorMessage :: String
-quotedAttributeErrorMessage = "Unexpected quotation mark in entity field attribute"
+quotedAttributeErrorMessage = "Unexpected quotation mark in field or directive attribute"
 
 attribute :: Parser Attribute
 attribute = do
@@ -501,6 +498,7 @@ assignment = label "assignment expression" $ do
                 [ quotation
                 , sqlLiteral
                 , parentheticalInner
+                , try sqlFunctionApplication
                 , some $ contentChar <|> char '(' <|> char ')'
                 ]
         pure $ Assignment (Text.pack lhs) (Text.pack rhs)
@@ -508,6 +506,10 @@ assignment = label "assignment expression" $ do
     parentheticalInner = do
         str <- parenthetical'
         pure . init . drop 1 $ str
+    sqlFunctionApplication = do
+        fn <- some contentChar
+        argString <- parentheticalInner
+        pure $ mconcat [fn, "(", argString, ")"]
 
 sqlTypeName :: Parser String
 sqlTypeName =
@@ -565,15 +567,18 @@ fieldStrictness = label "strictness sigil" $ do
 fieldName :: Parser FieldName
 fieldName = label "field name" $ do
     fl <- lowerChar
-    rl <- many alphaNumChar
+    rl <- many fieldNameChar
     pure . FieldName . Text.pack $ fl : rl
+  where
+    fieldNameChar =
+        choice
+            [ alphaNumChar
+            , char '_'
+            ]
 
 ptext :: Parser Attribute
 ptext = label "plain attribute" $ do
-    str <- L.lexeme spaceConsumer $ do
-        first <- alphaNumChar
-        rest <- many contentChar
-        pure (first : rest)
+    str <- L.lexeme spaceConsumer $ some contentChar
     pure . PText . Text.pack $ str
 
 data ParsedEntityDef = ParsedEntityDef
@@ -659,7 +664,10 @@ data FieldStrictness = Strict | Lazy
     deriving (Show)
 
 newtype FieldName = FieldName Text
-    deriving (Show)
+    deriving (Show, Eq)
+
+newtype DirectiveName = DirectiveName Text
+    deriving (Show, Eq)
 
 data EntityField = EntityField
     { entityFieldDocCommentBlock :: Maybe DocCommentBlock
@@ -673,7 +681,8 @@ data EntityField = EntityField
 
 data Directive = Directive
     { directiveDocCommentBlock :: Maybe DocCommentBlock
-    , directiveArguments :: [DirectiveArgument]
+    , directiveName :: DirectiveName
+    , directiveAttributes :: [Attribute]
     , directivePos :: SourcePos
     }
     deriving (Show)
@@ -829,92 +838,34 @@ entityField = do
                 , entityFieldPos = pos
                 }
 
-directiveName :: Parser String
-directiveName =
+directiveNameP :: Parser DirectiveName
+directiveNameP =
     label "directive name" $
-        choice
-            [ string "deriving"
-            , directiveName'
-            ]
+        DirectiveName . Text.pack
+            <$> choice
+                [ string "deriving"
+                , directiveName'
+                ]
   where
     directiveName' = do
         fl <- upperChar
         rl <- many alphaNumChar
         pure (fl : rl)
 
-quotedArgumentErrorMessage :: String
-quotedArgumentErrorMessage = "Unexpected quotation mark in directive argument"
-
--- Parses an argument to an entity definition directive. It's somewhat naive about it,
--- and we should refine this in the future.
-directiveArgument :: Parser DirectiveArgument
-directiveArgument = do
-    quotedArgumentErrorLevel <- asks psQuotedArgumentErrorLevel
-    tryOrReport
-        quotedArgumentErrorLevel
-        "Quoted directive arguments are deprecated since 2.17.1.0, and will be removed in or after 2.18.0.0"
-        isQuotedArgumentError
-        directiveArgument'
-        (DQuotation . Text.pack <$> quotation)
-  where
-    isQuotedArgumentError (FancyError _ s) = s == Set.singleton (ErrorFail quotedArgumentErrorMessage)
-    isQuotedArgumentError _ = False
-    directiveArgument' = do
-        q <- lookAhead (optional $ char '"')
-        case q of
-            Just _ -> fail quotedArgumentErrorMessage
-            Nothing ->
-                choice
-                    [ DText . Text.pack <$> parenthetical'
-                    , DText . Text.pack <$> some directiveArgumentChar
-                    ]
-    -- This big random-looking character class is a sign that the parser is too lax.
-    -- When we improve directive parsing, we'll eliminate this.
-    -- Note that this character class is not identical to the class parsed by the top-level function `contentChar`.
-    directiveArgumentChar =
-        choice
-            [ alphaNumChar
-            , char '.'
-            , char '['
-            , char ']'
-            , char '_'
-            , char '\''
-            , char '!'
-            , char '~'
-            , char '-'
-            , char ':'
-            , char ','
-            , char '='
-            , do
-                backslash <- char '\\'
-                nextChar <- lookAhead anySingle
-                if nextChar == '(' || nextChar == ')'
-                    then single nextChar
-                    else pure backslash
-            ]
-
--- | Converts a directive argument into a Text representation for second-stage
--- parsing or presentation to the user
---
--- @since 2.17.1.0
-directiveArgumentContent :: DirectiveArgument -> Text
-directiveArgumentContent = \case
-    DText t -> t
-    DQuotation t -> t
-
 directive :: Parser Member
 directive = do
     dcb <- getDcb
     pos <- getSourcePos
-    dn <- L.lexeme spaceConsumer directiveName
-    args <- some $ L.lexeme spaceConsumer directiveArgument
+    dn <- L.lexeme spaceConsumer directiveNameP
+    args <- some $ L.lexeme spaceConsumer attribute
     _ <- setLastDocumentablePosition
     lookAhead (void newline <|> eof)
     pure $
         MemberDirective
             Directive
                 { directiveDocCommentBlock = dcb
-                , directiveArguments = DText (Text.pack dn) : args
+                , directiveName = dn
+                , directiveAttributes = args
                 , directivePos = pos
                 }
 

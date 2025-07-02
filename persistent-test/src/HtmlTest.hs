@@ -15,7 +15,7 @@ import Init
 share [mkPersist persistSettings { mpsGeneric = True }, mkMigrate "htmlMigrate"] [persistLowerCase|
 HtmlTable
     html Html
-    deriving
+    deriving Show
 |]
 
 cleanDB :: Runner backend m => ReaderT backend m ()
