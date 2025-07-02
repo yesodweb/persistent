@@ -32,7 +32,7 @@ module Database.Persist.Quasi.Internal.ModelParser
     ) where
 
 import Control.Applicative (Alternative)
-import Control.Monad (MonadPlus, void, when)
+import Control.Monad (MonadPlus, void)
 import Control.Monad.Reader (MonadReader, ReaderT, asks, runReaderT)
 import Control.Monad.State
 import Control.Monad.Writer
