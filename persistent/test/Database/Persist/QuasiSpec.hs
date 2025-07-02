@@ -438,6 +438,12 @@ spec = describe "Quasi" $ do
             `shouldErrorWithMessage`
              "2:14:\n  |\n2 |  name String \"Maybe\"\n  |              ^\nUnexpected quotation mark in entity field attribute\n"
 
+        describe "and the definition has quotation marks in the type" $ do
+          let definitionsWithTypeLevelString = T.pack "User\n name \"String\"\n deriving Show"
+              (warnings2, [user]) = defsWithWarnings lowerCaseSettings{ psQuotedArgumentErrorLevel = Just LevelError } definitionsWithTypeLevelString
+          it "parses successfully" $
+            getUnboundEntityNameHS user `shouldBe` EntityNameHS "User"
+
     describe "quoted directive argument error level setting" $ do
       let definitions = T.pack "User\n name String\n deriving \"Show\""
 
