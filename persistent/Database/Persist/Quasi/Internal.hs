@@ -531,7 +531,7 @@ mkUnboundEntityDef ps parsedEntDef =
                 , entityFields = []
                 , entityUniques = entityConstraintDefsUniquesList entityConstraintDefs
                 , entityForeigns = []
-                , entityDerives = concat $ mapMaybe takeDerives (textAttribs ++ textDirectives)
+                , entityDerives = concat $ mapMaybe takeDerives (textFields ++ textDirectives)
                 , entityExtra = parsedEntityDefExtras parsedEntDef
                 , entitySum = parsedEntityDefIsSum parsedEntDef
                 , entityComments =
@@ -551,8 +551,8 @@ mkUnboundEntityDef ps parsedEntDef =
     cols :: [UnboundFieldDef]
     cols = foldMap (toList . commentedField ps) fields
 
-    textAttribs :: [[Text]]
-    textAttribs = entityFieldContent . fst <$> fields
+    textFields :: [[Text]]
+    textFields = entityFieldContent . fst <$> fields
 
     textDirectives :: [[Text]]
     textDirectives = directiveContent . fst <$> directives
@@ -560,7 +560,7 @@ mkUnboundEntityDef ps parsedEntDef =
     entityConstraintDefs =
         foldMap
             (maybe mempty (takeConstraint ps entNameHS cols) . NEL.nonEmpty)
-            (textAttribs ++ textDirectives)
+            (textFields ++ textDirectives)
 
     idField =
         case entityConstraintDefsIdField entityConstraintDefs of
