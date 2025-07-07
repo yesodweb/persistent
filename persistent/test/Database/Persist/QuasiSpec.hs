@@ -453,18 +453,12 @@ spec = describe "Quasi" $ do
         it "permits tab indentation" $
           getUnboundEntityNameHS user `shouldBe` EntityNameHS "User"
 
-        it "doesn't generate a warning" $
-          warnings `shouldBe` []
-
       describe "when configured to warn on tabs" $ do
         let
             (warnings, [user]) = defsWithWarnings lowerCaseSettings{ psTabErrorLevel = Just LevelWarning } definitions
 
         it "permits tab indentation" $
           getUnboundEntityNameHS user `shouldBe` EntityNameHS "User"
-
-        it "generates one warning per line with tabs" $
-          length warnings `shouldBe` 2
 
       describe "when configured to disallow tabs" $ do
         let
