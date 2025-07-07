@@ -3,8 +3,8 @@
 # 2.17.1.0
 
 * [#1601](https://github.com/yesodweb/persistent/pull/1601)
-  * Fix parsing of quoted attributes
-  * Add and enforce `psQuotedAttributeErrorLevel`
+  * Fix parsing of quoted entity field attributes
+  * Add and enforce `psQuotedAttributeErrorLevel` to deprecate quoted entity field attributes
   * Improve parsing of types and entity fields
 
 # 2.17.0.0
