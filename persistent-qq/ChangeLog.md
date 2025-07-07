@@ -1,5 +1,9 @@
 # Changelog for persistent-qq
 
+## 2.12.0.7
+* [#1601](https://github.com/yesodweb/persistent/pull/1601)
+  * Adjust a test to avoid deprecated entity definition syntax
+
 ## 2.12.0.6
 
 * Fix test compilation by importing `Control.Monad` explicitly [#1487](https://github.com/yesodweb/persistent/pull/1487)
