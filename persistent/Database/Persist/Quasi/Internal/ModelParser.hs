@@ -821,7 +821,7 @@ entityField = do
     ss <- optional fieldStrictness
     fn <- L.lexeme spaceConsumer fieldName
     ft <- L.lexeme spaceConsumer typeExpr -- Note that `typeExpr` consumes outer parentheses.
-    fa <- optional $ L.lexeme spaceConsumer (many attribute)
+    fa <- L.lexeme spaceConsumer (many attribute)
     _ <- setLastDocumentablePosition
     lookAhead (void newline <|> eof)
     pure $
@@ -831,7 +831,7 @@ entityField = do
                 , entityFieldStrictness = ss
                 , entityFieldName = fn
                 , entityFieldType = ft
-                , entityFieldAttributes = fromMaybe [] fa
+                , entityFieldAttributes = fa
                 , entityFieldPos = pos
                 }
 
