@@ -857,7 +857,7 @@ directive = do
     dcb <- getDcb
     pos <- getSourcePos
     dn <- L.lexeme spaceConsumer directiveNameP
-    args <- some $ L.lexeme spaceConsumer attribute
+    args <- many $ L.lexeme spaceConsumer attribute
     _ <- setLastDocumentablePosition
     lookAhead (void newline <|> eof)
     pure $
