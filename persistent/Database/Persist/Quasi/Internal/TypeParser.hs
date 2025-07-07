@@ -50,25 +50,24 @@ data TypeConstructor
 --
 -- @since 2.17.1.0
 typeExpr :: ((MonadParsec e String) m) => m TypeExpr
-typeExpr = typeExpr' False
+typeExpr = typeExpr' Outer
 
 -- | Parses a type expression in non-top-level contexts, where an unparenthesized type constructor
 -- application is acceptable.
 --
 -- @since 2.17.1.0
 innerTypeExpr :: ((MonadParsec e String) m) => m TypeExpr
-innerTypeExpr = typeExpr' True
+innerTypeExpr = typeExpr' Inner
 
-typeExpr' :: ((MonadParsec e String) m) => Bool -> m TypeExpr
+data IsInner = Inner | Outer
+
+typeExpr' :: ((MonadParsec e String) m) => IsInner -> m TypeExpr
 typeExpr' isInner = label "type expression" $ do
-    let
-        validEmbeddedApplications =
-            if isInner
-                then
-                    [ simpleTypeApplication
+    let validEmbeddedApplications = case isInner of
+          Inner ->  [ simpleTypeApplication
                     , complexTypeApplication
                     ]
-                else [nullaryTypeApplication]
+          Outer -> [nullaryTypeApplication]
     choice $
         validEmbeddedApplications
             ++ [ whitespaceBetween '(' ')' innerTypeExpr
