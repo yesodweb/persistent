@@ -16,16 +16,19 @@ import qualified Data.Set as Set
 import qualified Data.Text as T
 import Database.Persist.EntityDef.Internal
 import Database.Persist.Quasi
-import Database.Persist.Quasi.PersistSettings
-import Database.Persist.Quasi.PersistSettings.Internal (psTabErrorLevel, psQuotedArgumentErrorLevel)
 import Database.Persist.Quasi.Internal
 import Database.Persist.Quasi.Internal.ModelParser
 import Database.Persist.Quasi.Internal.TypeParser
+import Database.Persist.Quasi.PersistSettings
+import Database.Persist.Quasi.PersistSettings.Internal
+    ( psQuotedArgumentErrorLevel
+    , psTabErrorLevel
+    )
 import Database.Persist.Types
 import Test.Hspec
 import Test.QuickCheck
-import Text.Shakespeare.Text (st)
 import Text.Megaparsec (errorBundlePretty, some)
+import Text.Shakespeare.Text (st)
 
 defs :: T.Text -> [UnboundEntityDef]
 defs = defsWithSettings lowerCaseSettings
@@ -33,10 +36,11 @@ defs = defsWithSettings lowerCaseSettings
 defsSnake :: T.Text -> [UnboundEntityDef]
 defsSnake = defsWithSettings $ setPsUseSnakeCaseForeignKeys lowerCaseSettings
 
-defsWithWarnings :: PersistSettings -> T.Text -> (Set ParserWarning, [UnboundEntityDef])
+defsWithWarnings
+    :: PersistSettings -> T.Text -> (Set ParserWarning, [UnboundEntityDef])
 defsWithWarnings ps t = case cpr of
-                           (warnings, Right res) -> (warnings, res)
-                           (_warnings, Left errs) -> error $ renderErrors errs
+    (warnings, Right res) -> (warnings, res)
+    (_warnings, Left errs) -> error $ renderErrors errs
   where
     cpr = parse ps [(Nothing, t)]
 
@@ -126,75 +130,84 @@ spec = describe "Quasi" $ do
                         }
 
     describe "type parsing" $ do
-      let
-          parseType :: String -> ParseResult TypeExpr
-          parseType s = do
+        let
+            parseType :: String -> ParseResult TypeExpr
+            parseType s = do
                 let
-                  (warnings, res) = runConfiguredParser defaultPersistSettings initialExtraState innerTypeExpr "" s
+                    (warnings, res) =
+                        runConfiguredParser defaultPersistSettings initialExtraState innerTypeExpr "" s
                 case res of
-                  Left peb -> (warnings, Left peb)
-                  Right (te, _acc) -> (warnings, Right te)
+                    Left peb -> (warnings, Left peb)
+                    Right (te, _acc) -> (warnings, Right te)
 
-          isType typeStr expectedTypeExpr = do
-            let (_warnings, Right te) = parseType typeStr
-            te `shouldBe` expectedTypeExpr
-            typeExprContent te `shouldBe` T.pack typeStr
+            isType typeStr expectedTypeExpr = do
+                let
+                    (_warnings, Right te) = parseType typeStr
+                te `shouldBe` expectedTypeExpr
+                typeExprContent te `shouldBe` T.pack typeStr
 
-          -- these are some helper functions to make expectations less verbose
-          simpleType s = (TypeApplication (TypeConstructorExpr (TypeConstructor s)) [])
-          typeApp s ts = (TypeApplication (TypeConstructorExpr (TypeConstructor s)) ts)
-          listOf t = (TypeApplication (TypeConstructorExpr ListConstructor) [t])
+            -- these are some helper functions to make expectations less verbose
+            simpleType s = (TypeApplication (TypeConstructorExpr (TypeConstructor s)) [])
+            typeApp s ts = (TypeApplication (TypeConstructorExpr (TypeConstructor s)) ts)
+            listOf t = (TypeApplication (TypeConstructorExpr ListConstructor) [t])
 
-      it "parses types of kind '*'" $ do
-          "String" `isType` simpleType "String"
+        it "parses types of kind '*'" $ do
+            "String" `isType` simpleType "String"
 
-      it "parses type constructors with dots" $ do
-          "ThisIs.AType" `isType` simpleType "ThisIs.AType"
+        it "parses type constructors with dots" $ do
+            "ThisIs.AType" `isType` simpleType "ThisIs.AType"
 
-      it "parses higher-kinded types" $ do
-          "Maybe String" `isType` typeApp "Maybe" [simpleType "String"]
+        it "parses higher-kinded types" $ do
+            "Maybe String" `isType` typeApp "Maybe" [simpleType "String"]
 
-      it "is greedy when parsing arguments to a type constructor" $ do
-          "Map String Int" `isType` typeApp "Map" [simpleType "String", simpleType "Int"]
+        it "is greedy when parsing arguments to a type constructor" $ do
+            "Map String Int" `isType` typeApp "Map" [simpleType "String", simpleType "Int"]
 
-      it "parses higher-kinded types when parameterized by complex types (1)" $ do
-        "Map String (Maybe [Int])" `isType`
-          typeApp "Map" [simpleType "String", typeApp "Maybe" [listOf (simpleType "Int")]]
+        it "parses higher-kinded types when parameterized by complex types (1)" $ do
+            "Map String (Maybe [Int])"
+                `isType` typeApp "Map" [simpleType "String", typeApp "Maybe" [listOf (simpleType "Int")]]
 
-      it "parses higher-kinded types when parameterized by complex types (2)" $ do
-        "Map (Maybe Int) [Int]" `isType`
-          typeApp "Map" [(typeApp "Maybe" [simpleType "Int"]), listOf (simpleType "Int")]
+        it "parses higher-kinded types when parameterized by complex types (2)" $ do
+            "Map (Maybe Int) [Int]"
+                `isType` typeApp "Map" [(typeApp "Maybe" [simpleType "Int"]), listOf (simpleType "Int")]
 
-      it "parses type expressions constructed by a partially parameterized type" $ do
-        "(Map String) [Int]" `isType`
-          TypeApplication (typeApp "Map" [(simpleType "String")]) [listOf (simpleType "Int")]
+        it "parses type expressions constructed by a partially parameterized type" $ do
+            "(Map String) [Int]"
+                `isType` TypeApplication
+                    (typeApp "Map" [(simpleType "String")])
+                    [listOf (simpleType "Int")]
 
-      it "parses lists of lists" $ do
-        "[[Maybe String]]" `isType` listOf (listOf (typeApp "Maybe" [simpleType "String"]))
+        it "parses lists of lists" $ do
+            "[[Maybe String]]"
+                `isType` listOf (listOf (typeApp "Maybe" [simpleType "String"]))
 
-      it "parses list types of complex types" $ do
-        "[(Map String) [Int]]" `isType`
-          listOf (TypeApplication (typeApp "Map" [(simpleType "String")]) [listOf (simpleType "Int")])
+        it "parses list types of complex types" $ do
+            "[(Map String) [Int]]"
+                `isType` listOf
+                    ( TypeApplication
+                        (typeApp "Map" [(simpleType "String")])
+                        [listOf (simpleType "Int")]
+                    )
 
-      it "parses type-level String literals" $ do
-        "Labelled \"abcd\"" `isType` typeApp "Labelled" [TypeLitString "abcd"]
+        it "parses type-level String literals" $ do
+            "Labelled \"abcd\"" `isType` typeApp "Labelled" [TypeLitString "abcd"]
 
-      it "parses type-level Int literals" $ do
-        "Val 3" `isType` typeApp "Val" [TypeLitInt "3"]
+        it "parses type-level Int literals" $ do
+            "Val 3" `isType` typeApp "Val" [TypeLitInt "3"]
 
-      it "parses promoted type constructors" $ do
-        "'Maybe" `isType` TypeLitPromotedConstructor (TypeConstructor "Maybe")
+        it "parses promoted type constructors" $ do
+            "'Maybe" `isType` TypeLitPromotedConstructor (TypeConstructor "Maybe")
 
     describe "field name parsing" $ do
         let
             parseFieldName :: String -> ParseResult FieldName
             parseFieldName s = do
-              let
-                (warnings, res) = runConfiguredParser defaultPersistSettings initialExtraState fieldName "" s
-              case res of
-                Left peb ->
-                  (warnings, Left peb)
-                Right (fn, _acc) -> (warnings, Right fn)
+                let
+                    (warnings, res) = runConfiguredParser defaultPersistSettings initialExtraState fieldName "" s
+                case res of
+                    Left peb ->
+                        (warnings, Left peb)
+                    Right (fn, _acc) -> (warnings, Right fn)
 
         it "parses alphanumeric field names" $
             parseFieldName "asdf100"
@@ -208,311 +221,363 @@ spec = describe "Quasi" $ do
         let
             parseAttributes :: String -> ParseResult [Attribute]
             parseAttributes s = do
-              let
-                (warnings, res) = runConfiguredParser defaultPersistSettings initialExtraState (some attribute) "" s
-              case res of
-                Left peb ->
-                  (warnings, Left peb)
-                Right (tokens, _acc) -> (warnings, Right tokens)
+                let
+                    (warnings, res) =
+                        runConfiguredParser
+                            defaultPersistSettings
+                            initialExtraState
+                            (some attribute)
+                            ""
+                            s
+                case res of
+                    Left peb ->
+                        (warnings, Left peb)
+                    Right (tokens, _acc) -> (warnings, Right tokens)
 
         it "handles normal words" $
             parseAttributes "foo   bar  baz"
-                `shouldBe` ([], Right
-                             ( [ PText "foo"
-                               , PText "bar"
-                               , PText "baz"
-                               ]
-                             )
+                `shouldBe` ( []
+                           , Right
+                                ( [ PText "foo"
+                                  , PText "bar"
+                                  , PText "baz"
+                                  ]
+                                )
                            )
 
         it "handles bangs" $
             parseAttributes "foo   !bar  baz"
-                `shouldBe` ([], Right
-                             ( [ PText "foo"
-                               , PText "!bar"
-                               , PText "baz"
-                               ]
-                             )
+                `shouldBe` ( []
+                           , Right
+                                ( [ PText "foo"
+                                  , PText "!bar"
+                                  , PText "baz"
+                                  ]
+                                )
                            )
 
         it "handles numbers" $
             parseAttributes "one (Finite 1)"
-                `shouldBe` ([], Right
-                             ( [ PText "one"
-                               , Parenthetical "Finite 1"
-                               ]
-                             )
+                `shouldBe` ( []
+                           , Right
+                                ( [ PText "one"
+                                  , Parenthetical "Finite 1"
+                                  ]
+                                )
                            )
 
         it "handles quotes" $
             parseAttributes "abc=\"foo bar\" def=\"baz\""
-                `shouldBe` ([], Right
-                             ( [ Assignment "abc" "foo bar"
-                               , Assignment "def" "baz"
-                               ]
-                             )
+                `shouldBe` ( []
+                           , Right
+                                ( [ Assignment "abc" "foo bar"
+                                  , Assignment "def" "baz"
+                                  ]
+                                )
                            )
 
         it "handles SQL literals with no specified type" $
             parseAttributes "attr='[\"ab\\'cd\", 1, 2]'"
-                `shouldBe` ([], Right
-                             ( [Assignment "attr" "'[\"ab'cd\", 1, 2]'"]
-                             )
+                `shouldBe` ( []
+                           , Right
+                                ( [Assignment "attr" "'[\"ab'cd\", 1, 2]'"]
+                                )
                            )
 
         it "handles SQL literals with a specified type" $
             parseAttributes "attr='{\"\\'a\\'\": [1, 2.2, \"\\'3\\'\"]}'::type_name"
-                `shouldBe` ([], Right
-                             ( [Assignment "attr" "'{\"'a'\": [1, 2.2, \"'3'\"]}'::type_name"]
-                             )
+                `shouldBe` ( []
+                           , Right
+                                ( [Assignment "attr" "'{\"'a'\": [1, 2.2, \"'3'\"]}'::type_name"]
+                                )
                            )
 
         it "handles commas in tokens" $
             parseAttributes "x=COALESCE(left,right)  baz"
-                `shouldBe` ([], Right
-                             ( [ Assignment "x" "COALESCE(left,right)"
-                               , PText "baz"
-                               ]
-                             )
+                `shouldBe` ( []
+                           , Right
+                                ( [ Assignment "x" "COALESCE(left,right)"
+                                  , PText "baz"
+                                  ]
+                                )
                            )
 
         it "handles single quotes in tokens" $
             parseAttributes "x=blorp('blap')  baz"
-                `shouldBe` ([], Right
-                             ( [ Assignment "x" "blorp('blap')"
-                               , PText "baz"
-                               ]
-                             )
+                `shouldBe` ( []
+                           , Right
+                                ( [ Assignment "x" "blorp('blap')"
+                                  , PText "baz"
+                                  ]
+                                )
                            )
 
         it "handles spaces in assignment RHSes" $
             parseAttributes "sql=blorp('blap', 'blip')  baz"
-                `shouldBe` ([], Right
-                             ( [ Assignment "sql" "blorp('blap', 'blip')"
-                               , PText "baz"
-                               ]
-                             )
+                `shouldBe` ( []
+                           , Right
+                                ( [ Assignment "sql" "blorp('blap', 'blip')"
+                                  , PText "baz"
+                                  ]
+                                )
                            )
 
         it "handles quotes mid-token" $
             parseAttributes "x=\"foo bar\"  baz"
-                `shouldBe` ([], Right
-                             ( [ Assignment "x" "foo bar"
-                               , PText "baz"
-                               ]
-                             )
+                `shouldBe` ( []
+                           , Right
+                                ( [ Assignment "x" "foo bar"
+                                  , PText "baz"
+                                  ]
+                                )
                            )
 
         it "handles escaped quotes mid-token" $
             parseAttributes "x=\\\"foo bar\"  baz"
-                `shouldBe` ([], Right
-                             ( [ Assignment "x" "\\\"foo"
-                               , PText "bar\""
-                               , PText "baz"
-                               ]
-                             )
+                `shouldBe` ( []
+                           , Right
+                                ( [ Assignment "x" "\\\"foo"
+                                  , PText "bar\""
+                                  , PText "baz"
+                                  ]
+                                )
                            )
 
         it "handles unnested parentheses" $
             parseAttributes "(foo bar)  (baz)"
-                `shouldBe` ([], Right
-                             ( [ Parenthetical "foo bar"
-                               , Parenthetical "baz"
-                               ]
-                             )
+                `shouldBe` ( []
+                           , Right
+                                ( [ Parenthetical "foo bar"
+                                  , Parenthetical "baz"
+                                  ]
+                                )
                            )
 
         it "handles unnested parentheses mid-token" $
             parseAttributes "x=(foo bar)  (baz)"
-                `shouldBe` ([], Right
-                             ( [ Assignment "x" "foo bar"
-                               , Parenthetical "baz"
-                               ]
-                             )
+                `shouldBe` ( []
+                           , Right
+                                ( [ Assignment "x" "foo bar"
+                                  , Parenthetical "baz"
+                                  ]
+                                )
                            )
 
         it "handles nested parentheses" $
             parseAttributes "(foo (bar))  (baz)"
-                `shouldBe` ([], Right
-                             ( [ Parenthetical "foo (bar)"
-                               , Parenthetical "baz"
-                               ]
-                             )
+                `shouldBe` ( []
+                           , Right
+                                ( [ Parenthetical "foo (bar)"
+                                  , Parenthetical "baz"
+                                  ]
+                                )
                            )
 
         it "handles escaped quotation marks in plain tokens" $
             parseAttributes "foo bar\\\"baz"
-                `shouldBe` ([], Right
-                             ( [ PText "foo"
-                               , PText "bar\\\"baz"
-                               ]
-                             )
+                `shouldBe` ( []
+                           , Right
+                                ( [ PText "foo"
+                                  , PText "bar\\\"baz"
+                                  ]
+                                )
                            )
 
         it "handles escaped quotation marks in quotations" $
             parseAttributes "foo bar=\"baz\\\"quux\""
-                `shouldBe` ([], Right
-                             ( [ PText "foo"
-                               , Assignment "bar" "baz\"quux"
-                               ]
-                             )
+                `shouldBe` ( []
+                           , Right
+                                ( [ PText "foo"
+                                  , Assignment "bar" "baz\"quux"
+                                  ]
+                                )
                            )
 
         it "handles escaped quotation marks in equalities" $
             parseAttributes "y=\"baz\\\"\""
-                `shouldBe` ([], Right
-                             ( [ Assignment "y" "baz\""
-                               ]
-                             )
+                `shouldBe` ( []
+                           , Right
+                                ( [ Assignment "y" "baz\""
+                                  ]
+                                )
                            )
 
         it "handles escaped quotation marks in parentheticals" $
             parseAttributes "(foo \\\"bar)"
-                `shouldBe` ([], Right
-                             ( [ Parenthetical "foo \\\"bar"
-                               ]
-                             )
+                `shouldBe` ( []
+                           , Right
+                                ( [ Parenthetical "foo \\\"bar"
+                                  ]
+                                )
                            )
 
         it "handles escaped parentheses in quotations" $
             parseAttributes "foo bar=\"baz\\(quux\""
-                `shouldBe` ([], Right
-                             ( [ PText "foo"
-                               , Assignment "bar" "baz(quux"
-                               ]
-                             )
+                `shouldBe` ( []
+                           , Right
+                                ( [ PText "foo"
+                                  , Assignment "bar" "baz(quux"
+                                  ]
+                                )
                            )
 
         it "handles escaped parentheses in plain tokens" $
             parseAttributes "foo bar\\(baz"
-                `shouldBe` ([], Right
-                             ( [ PText "foo"
-                               , PText "bar(baz"
-                               ]
-                             )
+                `shouldBe` ( []
+                           , Right
+                                ( [ PText "foo"
+                                  , PText "bar(baz"
+                                  ]
+                                )
                            )
 
         it "handles escaped parentheses in parentheticals" $
             parseAttributes "(foo \\(bar)"
-                `shouldBe` ([], Right
-                             ( [ Parenthetical "foo (bar"
-                               ]
-                             )
+                `shouldBe` ( []
+                           , Right
+                                ( [ Parenthetical "foo (bar"
+                                  ]
+                                )
                            )
 
         it "handles escaped parentheses in equalities" $
             parseAttributes "y=baz\\("
-                `shouldBe` ([], Right
-                             ( [ Assignment "y" "baz("
-                               ]
-                             )
+                `shouldBe` ( []
+                           , Right
+                                ( [ Assignment "y" "baz("
+                                  ]
+                                )
                            )
 
         it "handles mid-token quote in later token" $
             parseAttributes "foo bar baz=(bin\")"
-                `shouldBe` ([], Right
-                             ( [ PText "foo"
-                               , PText "bar"
-                               , Assignment "baz" "bin\""
-                               ]
-                             )
+                `shouldBe` ( []
+                           , Right
+                                ( [ PText "foo"
+                                  , PText "bar"
+                                  , Assignment "baz" "bin\""
+                                  ]
+                                )
                            )
 
     describe "entity field parsing" $ do
         let
             parseField :: String -> ParseResult ()
             parseField s = do
-              let
-                (warnings, res) = runConfiguredParser defaultPersistSettings initialExtraState entityField "" s
-              case res of
-                Left peb ->
-                  (warnings, Left peb)
-                Right (_, _) -> (warnings, Right ())
+                let
+                    (warnings, res) = runConfiguredParser defaultPersistSettings initialExtraState entityField "" s
+                case res of
+                    Left peb ->
+                        (warnings, Left peb)
+                    Right (_, _) -> (warnings, Right ())
 
         it "should error if quotes are unterminated in an attribute" $ do
             (fmap . first) errorBundlePretty (parseField "field String sql=\"foo bar")
-                  `shouldBe` ([], Left
-                               ("1:17:\n  |\n1 | field String sql=\"foo bar\n  |                 ^\nunexpected '='\nexpecting '!', '\"', ''', ',', '-', '.', ':', '[', '\\', ']', '_', '~', alphanumeric character, assignment expression, end of input, newline, parenthetical, or plain attribute\n"
-                               )
-                             )
+                `shouldBe` ( []
+                           , Left
+                                ( "1:17:\n  |\n1 | field String sql=\"foo bar\n  |                 ^\nunexpected '='\nexpecting '!', '\"', ''', ',', '-', '.', ':', '[', '\\', ']', '_', '~', alphanumeric character, assignment expression, end of input, newline, parenthetical, or plain attribute\n"
+                                )
+                           )
 
         it "should error if quotes are unterminated in a type" $ do
             (fmap . first) errorBundlePretty (parseField "field (Label \"unterminated)")
-                  `shouldBe` ([], Left
-                               ("1:28:\n  |\n1 | field (Label \"unterminated)\n  |                            ^\nunexpected end of input\nexpecting '\"' or literal character\n"
-                               )
-                             )
+                `shouldBe` ( []
+                           , Left
+                                ( "1:28:\n  |\n1 | field (Label \"unterminated)\n  |                            ^\nunexpected end of input\nexpecting '\"' or literal character\n"
+                                )
+                           )
 
     describe "tab error level setting" $ do
-      let definitions = T.pack "User\n\tId Text\n\tname String"
-
-      describe "when configured to permit tabs" $ do
         let
-          (warnings, [user]) = defsWithWarnings lowerCaseSettings{ psTabErrorLevel = Nothing } definitions
+            definitions = T.pack "User\n\tId Text\n\tname String"
 
-        it "permits tab indentation" $
-          getUnboundEntityNameHS user `shouldBe` EntityNameHS "User"
+        describe "when configured to permit tabs" $ do
+            let
+                (warnings, [user]) = defsWithWarnings lowerCaseSettings{psTabErrorLevel = Nothing} definitions
 
-      describe "when configured to warn on tabs" $ do
-        let
-            (warnings, [user]) = defsWithWarnings lowerCaseSettings{ psTabErrorLevel = Just LevelWarning } definitions
+            it "permits tab indentation" $
+                getUnboundEntityNameHS user `shouldBe` EntityNameHS "User"
 
-        it "permits tab indentation" $
-          getUnboundEntityNameHS user `shouldBe` EntityNameHS "User"
+        describe "when configured to warn on tabs" $ do
+            let
+                (warnings, [user]) =
+                    defsWithWarnings
+                        lowerCaseSettings{psTabErrorLevel = Just LevelWarning}
+                        definitions
 
-      describe "when configured to disallow tabs" $ do
-        let
-          [user] = defsWithSettings lowerCaseSettings{ psTabErrorLevel = Just LevelError } definitions
+            it "permits tab indentation" $
+                getUnboundEntityNameHS user `shouldBe` EntityNameHS "User"
 
-        it "rejects tab indentation" $
-          evaluate (unboundEntityDef user)
-            `shouldErrorWithMessage`
-            "2:1:\n  |\n2 |  Id Text\n  | ^\nunexpected tab\nexpecting valid whitespace\n\n3:1:\n  |\n3 |  name String\n  | ^\nunexpected tab\nexpecting valid whitespace\n"
+        describe "when configured to disallow tabs" $ do
+            let
+                [user] =
+                    defsWithSettings
+                        lowerCaseSettings{psTabErrorLevel = Just LevelError}
+                        definitions
 
+            it "rejects tab indentation" $
+                evaluate (unboundEntityDef user)
+                    `shouldErrorWithMessage` "2:1:\n  |\n2 |  Id Text\n  | ^\nunexpected tab\nexpecting valid whitespace\n\n3:1:\n  |\n3 |  name String\n  | ^\nunexpected tab\nexpecting valid whitespace\n"
 
     describe "quoted attribute error level setting" $ do
-      let definitions = T.pack "User\n name String \"Maybe\""
-
-      describe "when configured to warn on quoted attributes" $ do
         let
-            (warnings, [user]) = defsWithWarnings lowerCaseSettings{ psQuotedArgumentErrorLevel = Just LevelWarning } definitions
+            definitions = T.pack "User\n name String \"Maybe\""
 
-        it "permits quoted attributes" $
-            (unboundFieldAttrs <$> unboundEntityFields user) `shouldBe` [[FieldAttrMaybe]]
+        describe "when configured to warn on quoted attributes" $ do
+            let
+                (warnings, [user]) =
+                    defsWithWarnings
+                        lowerCaseSettings{psQuotedArgumentErrorLevel = Just LevelWarning}
+                        definitions
 
-      describe "when configured to disallow quoted attributes" $ do
-        let
-            (warnings, [user]) = defsWithWarnings lowerCaseSettings{ psQuotedArgumentErrorLevel = Just LevelError } definitions
+            it "permits quoted attributes" $
+                (unboundFieldAttrs <$> unboundEntityFields user) `shouldBe` [[FieldAttrMaybe]]
 
-        it "rejects quoted attributes" $
-          evaluate (unboundEntityDef user)
-            `shouldErrorWithMessage`
-             "2:14:\n  |\n2 |  name String \"Maybe\"\n  |              ^\nUnexpected quotation mark in field or directive attribute\n"
+        describe "when configured to disallow quoted attributes" $ do
+            let
+                (warnings, [user]) =
+                    defsWithWarnings
+                        lowerCaseSettings{psQuotedArgumentErrorLevel = Just LevelError}
+                        definitions
 
-        describe "and the definition has quotation marks in the type" $ do
-          let definitionsWithTypeLevelString = T.pack "User\n name \"String\"\n deriving Show"
-              (warnings2, [user]) = defsWithWarnings lowerCaseSettings{ psQuotedArgumentErrorLevel = Just LevelError } definitionsWithTypeLevelString
-          it "parses successfully" $
-            getUnboundEntityNameHS user `shouldBe` EntityNameHS "User"
+            it "rejects quoted attributes" $
+                evaluate (unboundEntityDef user)
+                    `shouldErrorWithMessage` "2:14:\n  |\n2 |  name String \"Maybe\"\n  |              ^\nUnexpected quotation mark in field or directive attribute\n"
+
+            describe "and the definition has quotation marks in the type" $ do
+                let
+                    definitionsWithTypeLevelString = T.pack "User\n name \"String\"\n deriving Show"
+                    (warnings2, [user]) =
+                        defsWithWarnings
+                            lowerCaseSettings{psQuotedArgumentErrorLevel = Just LevelError}
+                            definitionsWithTypeLevelString
+                it "parses successfully" $
+                    getUnboundEntityNameHS user `shouldBe` EntityNameHS "User"
 
     describe "quoted directive argument error level setting" $ do
-      let definitions = T.pack "User\n name String\n deriving \"Show\""
-
-      describe "when configured to warn on quoted arguments" $ do
         let
-            (warnings, [user]) = defsWithWarnings lowerCaseSettings{ psQuotedArgumentErrorLevel = Just LevelWarning } definitions
+            definitions = T.pack "User\n name String\n deriving \"Show\""
 
-        it "permits quoted attributes" $
-            getUnboundEntityNameHS user `shouldBe` EntityNameHS "User"
+        describe "when configured to warn on quoted arguments" $ do
+            let
+                (warnings, [user]) =
+                    defsWithWarnings
+                        lowerCaseSettings{psQuotedArgumentErrorLevel = Just LevelWarning}
+                        definitions
 
-      describe "when configured to disallow quoted arguments" $ do
-        let
-            (warnings, [user]) = defsWithWarnings lowerCaseSettings{ psQuotedArgumentErrorLevel = Just LevelError } definitions
+            it "permits quoted attributes" $
+                getUnboundEntityNameHS user `shouldBe` EntityNameHS "User"
 
-        it "rejects quoted arguments" $
-          evaluate (unboundEntityDef user)
-            `shouldErrorWithMessage`
-            "3:11:\n  |\n3 |  deriving \"Show\"\n  |           ^\nUnexpected quotation mark in field or directive attribute\n"
+        describe "when configured to disallow quoted arguments" $ do
+            let
+                (warnings, [user]) =
+                    defsWithWarnings
+                        lowerCaseSettings{psQuotedArgumentErrorLevel = Just LevelError}
+                        definitions
+
+            it "rejects quoted arguments" $
+                evaluate (unboundEntityDef user)
+                    `shouldErrorWithMessage` "3:11:\n  |\n3 |  deriving \"Show\"\n  |           ^\nUnexpected quotation mark in field or directive attribute\n"
 
     describe "parse" $ do
         let
@@ -573,16 +638,19 @@ Car
 
         it "should parse the `entityUniques` field" $ do
             let
-              simplifyUnique unique =
-                (uniqueHaskell unique, uniqueFields unique)
+                simplifyUnique unique =
+                    (uniqueHaskell unique, uniqueFields unique)
             (simplifyUnique <$> entityUniques (unboundEntityDef bicycle)) `shouldBe` []
             (simplifyUnique <$> entityUniques (unboundEntityDef car))
-              `shouldBe` [ (ConstraintNameHS "UniqueModel", [(FieldNameHS "model", FieldNameDB "model")])
-                         ]
+                `shouldBe` [ (ConstraintNameHS "UniqueModel", [(FieldNameHS "model", FieldNameDB "model")])
+                           ]
             (simplifyUnique <$> entityUniques (unboundEntityDef vehicle)) `shouldBe` []
 
         it "should parse quoted attributes" $ do
-            let [precompiledCacheParent] = defs [st|
+            let
+                [precompiledCacheParent] =
+                    defs
+                        [st|
                                                    PrecompiledCacheParent sql="precompiled_cache"
                                                      platformGhcDir FilePath "default=(hex(randomblob(16)))"
                                                      deriving Show
@@ -591,7 +659,10 @@ Car
                 `shouldBe` [[FieldAttrDefault "(hex(randomblob(16)))"]]
 
         it "should parse entity block attributes with nested parens on equality rhs" $ do
-            let [precompiledCacheParent] = defs [st|
+            let
+                [precompiledCacheParent] =
+                    defs
+                        [st|
                                                    PrecompiledCacheParent sql="precompiled_cache"
                                                      platformGhcDir FilePath default=(hex(randomblob(16)))
                                                 |]
