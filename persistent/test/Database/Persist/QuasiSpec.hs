@@ -280,16 +280,14 @@ spec = describe "Quasi" $ do
             parseAttributes "attr='[\"ab\\'cd\", 1, 2]'"
                 `shouldBe` ( []
                            , Right
-                                ( [Assignment "attr" "'[\"ab'cd\", 1, 2]'"]
-                                )
+                                ([Assignment "attr" "'[\"ab'cd\", 1, 2]'"])
                            )
 
         it "handles SQL literals with a specified type" $
             parseAttributes "attr='{\"\\'a\\'\": [1, 2.2, \"\\'3\\'\"]}'::type_name"
                 `shouldBe` ( []
                            , Right
-                                ( [Assignment "attr" "'{\"'a'\": [1, 2.2, \"'3'\"]}'::type_name"]
-                                )
+                                ([Assignment "attr" "'{\"'a'\": [1, 2.2, \"'3'\"]}'::type_name"])
                            )
 
         it "handles commas in tokens" $
@@ -1146,8 +1144,7 @@ WithFinite
         it "application" $
             parseFieldType "Foo Bar"
                 `shouldBe` Right
-                    ( FTTypeCon Nothing "Foo" `FTApp` FTTypeCon Nothing "Bar"
-                    )
+                    (FTTypeCon Nothing "Foo" `FTApp` FTTypeCon Nothing "Bar")
         it "application multiple" $
             parseFieldType "Foo Bar Baz"
                 `shouldBe` Right
@@ -1161,8 +1158,7 @@ WithFinite
                 baz = FTTypeCon Nothing "Baz"
             parseFieldType "Foo (Bar Baz)"
                 `shouldBe` Right
-                    ( foo `FTApp` (bar `FTApp` baz)
-                    )
+                    (foo `FTApp` (bar `FTApp` baz))
         it "lists" $ do
             let
                 foo = FTTypeCon Nothing "Foo"
@@ -1171,8 +1167,7 @@ WithFinite
                 baz = FTTypeCon Nothing "Baz"
             parseFieldType "Foo [Bar] Baz"
                 `shouldBe` Right
-                    ( foo `FTApp` bars `FTApp` baz
-                    )
+                    (foo `FTApp` bars `FTApp` baz)
         it "numeric type literals" $ do
             let
                 expected = FTApp (FTTypeCon Nothing "Finite") (FTLit (IntTypeLit 1))
