@@ -47,15 +47,28 @@ defsWithSettings ps t = snd $ defsWithWarnings ps t
 warningSpecs :: Spec
 warningSpecs =
   describe "Quasi" $ do
-      describe "parser settings" $ do
+      describe "psTabErrorLevel parser setting" $ do
           let
               definitions = T.pack "User\n\tId Text\n\tname String"
-              (warnings, [user]) = defsWithWarnings lowerCaseSettings{ psTabErrorLevel = Just LevelWarning } definitions
+              (warnings, [user]) =
+                defsWithWarnings lowerCaseSettings { psTabErrorLevel = Just LevelWarning
+                                                   }
+                                 definitions
           it "generates warnings" $ do
             Set.map parserWarningMessage warnings
               `shouldBe` [ "use spaces instead of tabs\n2:1:\n  |\n2 |  Id Text\n  | ^\nunexpected tab\nexpecting valid whitespace\n"
                          , "use spaces instead of tabs\n3:1:\n  |\n3 |  name String\n  | ^\nunexpected tab\nexpecting valid whitespace\n"
                          ]
+      describe "psQuotedArgumentErrorLevel parser setting" $ do
+          let
+              definitions = T.pack "User\n Id \"Text\"\n name String\n deriving \"Eq\""
+              (warnings, [user]) =
+                defsWithWarnings lowerCaseSettings { psQuotedArgumentErrorLevel = Just LevelWarning
+                                                   }
+                                 definitions
+          it "generates warnings" $ do
+            Set.map parserWarningMessage warnings
+              `shouldBe` ["Quoted field attributes are deprecated since 2.17.1.0, and will be removed in or after 2.18.0.0\n2:5:\n  |\n2 | Id \"Text\"\n  |     ^\nUnexpected quotation mark in field or directive attribute\n","Quoted field attributes are deprecated since 2.17.1.0, and will be removed in or after 2.18.0.0\n4:11:\n  |\n4 | deriving \"Eq\"\n  |           ^\nUnexpected quotation mark in field or directive attribute\n"]
 #else
 warningSpecs :: Spec
 warningSpecs = pure ()
@@ -473,9 +486,6 @@ spec = describe "Quasi" $ do
         it "permits quoted attributes" $
             (unboundFieldAttrs <$> unboundEntityFields user) `shouldBe` [[FieldAttrMaybe]]
 
-        it "generates a warning" $
-          length warnings `shouldBe` 1
-
       describe "when configured to disallow quoted attributes" $ do
         let
             (warnings, [user]) = defsWithWarnings lowerCaseSettings{ psQuotedArgumentErrorLevel = Just LevelError } definitions
@@ -500,9 +510,6 @@ spec = describe "Quasi" $ do
 
         it "permits quoted attributes" $
             getUnboundEntityNameHS user `shouldBe` EntityNameHS "User"
-
-        it "generates a warning" $
-          length warnings `shouldBe` 1
 
       describe "when configured to disallow quoted arguments" $ do
         let
