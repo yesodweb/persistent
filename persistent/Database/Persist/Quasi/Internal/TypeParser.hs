@@ -63,11 +63,13 @@ data IsInner = Inner | Outer
 
 typeExpr' :: ((MonadParsec e String) m) => IsInner -> m TypeExpr
 typeExpr' isInner = label "type expression" $ do
-    let validEmbeddedApplications = case isInner of
-          Inner ->  [ simpleTypeApplication
-                    , complexTypeApplication
-                    ]
-          Outer -> [nullaryTypeApplication]
+    let
+        validEmbeddedApplications = case isInner of
+            Inner ->
+                [ simpleTypeApplication
+                , complexTypeApplication
+                ]
+            Outer -> [nullaryTypeApplication]
     choice $
         validEmbeddedApplications
             ++ [ whitespaceBetween '(' ')' innerTypeExpr
