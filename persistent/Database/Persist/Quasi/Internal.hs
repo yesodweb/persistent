@@ -61,13 +61,14 @@ import Data.Monoid (mappend)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Database.Persist.EntityDef.Internal
-import Database.Persist.Quasi.PersistSettings
-import Database.Persist.Quasi.PersistSettings.Internal ( psToFKName
-                                                       , psToDBName
-                                                       , psIdName
-                                                       , psStrictFields
-                                                       )
 import Database.Persist.Quasi.Internal.ModelParser
+import Database.Persist.Quasi.PersistSettings
+import Database.Persist.Quasi.PersistSettings.Internal
+    ( psIdName
+    , psStrictFields
+    , psToDBName
+    , psToFKName
+    )
 import Database.Persist.Types
 import Database.Persist.Types.Base
 import Language.Haskell.TH.Syntax (Lift, Loc (..))
@@ -185,14 +186,14 @@ sourceLocFromTHLoc Loc{loc_filename = filename, loc_start = start} =
 
 -- | Parses a quasi-quoted syntax into a list of entity definitions.
 parse
-  :: PersistSettings
-  -> [(Maybe SourceLoc, Text)]
-  -> CumulativeParseResult [UnboundEntityDef]
+    :: PersistSettings
+    -> [(Maybe SourceLoc, Text)]
+    -> CumulativeParseResult [UnboundEntityDef]
 parse ps chunks = toCumulativeParseResult $ map parseChunk chunks
   where
     parseChunk :: (Maybe SourceLoc, Text) -> ParseResult [UnboundEntityDef]
     parseChunk (mSourceLoc, source) =
-      (fmap . fmap) (mkUnboundEntityDef ps) <$> parseSource ps mSourceLoc source
+        (fmap . fmap) (mkUnboundEntityDef ps) <$> parseSource ps mSourceLoc source
 
 entityNamesFromParsedDef
     :: PersistSettings -> ParsedEntityDef -> (EntityNameHS, EntityNameDB)

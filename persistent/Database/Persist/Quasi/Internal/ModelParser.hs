@@ -557,8 +557,9 @@ blockKey = label "block key" $ do
     pure . BlockKey . Text.pack $ fl : rl
 
 fieldStrictness :: Parser FieldStrictness
-fieldStrictness = label "strictness sigil" $
-  (Strict <$ char '!') <|> (Lazy <$ char '~')
+fieldStrictness =
+    label "strictness sigil" $
+        (Strict <$ char '!') <|> (Lazy <$ char '~')
 
 fieldName :: Parser FieldName
 fieldName = label "field name" $ do

@@ -204,5 +204,5 @@ getPsQuotedArgumentErrorLevel = psQuotedArgumentErrorLevel
 --
 -- @since 2.17.1.0
 setPsQuotedArgumentErrorLevel
-  :: Maybe ParserErrorLevel -> PersistSettings -> PersistSettings
+    :: Maybe ParserErrorLevel -> PersistSettings -> PersistSettings
 setPsQuotedArgumentErrorLevel l ps = ps{psQuotedArgumentErrorLevel = l}
