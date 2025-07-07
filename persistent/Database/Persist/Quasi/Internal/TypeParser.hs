@@ -131,12 +131,12 @@ listType = do
 --
 -- @since 2.17.1.0
 typeExprContent :: TypeExpr -> Text
-typeExprContent = typeExprContent' False
+typeExprContent = typeExprContent' Outer
 
 -- This is a little gnarly-looking. That's mostly due to attempting to avoid inserting
 -- superfluous parentheses.
-typeExprContent' :: Bool -> TypeExpr -> Text
-typeExprContent' wrapped = \case
+typeExprContent' :: IsInner -> TypeExpr -> Text
+typeExprContent' isInner = \case
     TypeLitString s ->
         mconcat
             [ "\""
@@ -144,37 +144,37 @@ typeExprContent' wrapped = \case
             , "\""
             ]
     TypeLitInt s -> T.pack s
-    TypeLitPromotedConstructor tc -> "'" <> typeExprContent' wrapped (TypeConstructorExpr tc)
+    TypeLitPromotedConstructor tc -> "'" <> typeExprContent' isInner (TypeConstructorExpr tc)
     TypeConstructorExpr (TypeConstructor s) -> T.pack s
     TypeConstructorExpr ListConstructor -> "List"
-    TypeApplication (TypeConstructorExpr tc) args -> simpleTypeApplicationContent tc args wrapped
+    TypeApplication (TypeConstructorExpr tc) args -> simpleTypeApplicationContent tc args isInner
     TypeApplication t exps ->
         mconcat
-            [ typeExprContent' True t
+            [ typeExprContent' Inner t
             , " "
             , T.intercalate " " $ fmap typeExprContent exps
             ]
   where
-    typeArgsListContent :: Bool -> [TypeExpr] -> Text
-    typeArgsListContent wrapped exps = T.intercalate " " $ fmap (typeExprContent' wrapped) exps
+    typeArgsListContent :: IsInner -> [TypeExpr] -> Text
+    typeArgsListContent i exps = T.intercalate " " $ fmap (typeExprContent' i) exps
 
-    simpleTypeApplicationContent :: TypeConstructor -> [TypeExpr] -> Bool -> Text
+    simpleTypeApplicationContent :: TypeConstructor -> [TypeExpr] -> IsInner -> Text
     simpleTypeApplicationContent ListConstructor args _ =
         mconcat
             [ "["
-            , typeArgsListContent False args
+            , typeArgsListContent Outer args
             , "]"
             ]
     simpleTypeApplicationContent (TypeConstructor s) [] _ = T.pack s
-    simpleTypeApplicationContent (TypeConstructor s) exps True =
+    simpleTypeApplicationContent (TypeConstructor s) exps Inner =
         mconcat
             [ "("
-            , simpleTypeApplicationContent (TypeConstructor s) exps False
+            , simpleTypeApplicationContent (TypeConstructor s) exps Outer
             , ")"
             ]
-    simpleTypeApplicationContent (TypeConstructor s) exps False =
+    simpleTypeApplicationContent (TypeConstructor s) exps Outer =
         mconcat
             [ T.pack s
             , " "
-            , typeArgsListContent True exps
+            , typeArgsListContent Inner exps
             ]
