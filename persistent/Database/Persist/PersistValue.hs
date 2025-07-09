@@ -1,33 +1,33 @@
-{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE PatternSynonyms #-}
 
 -- | This module contains an intermediate representation of values before the
 -- backends serialize them into explicit database types.
 --
 -- @since 2.13.0.0
 module Database.Persist.PersistValue
-    ( PersistValue(.., PersistLiteral, PersistLiteralEscaped, PersistDbSpecific)
+    ( PersistValue (.., PersistLiteral, PersistLiteralEscaped, PersistDbSpecific)
     , fromPersistValueText
-    , LiteralType(..)
+    , LiteralType (..)
     ) where
 
 import Control.DeepSeq
+import qualified Data.Aeson as A
+import Data.Bits (shiftL, shiftR)
+import Data.ByteString as BS (ByteString, foldl')
+import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base64 as B64
-import qualified Data.Text.Encoding as TE
 import qualified Data.ByteString.Char8 as BS8
-import qualified Data.Vector as V
 import Data.Int (Int64)
 import qualified Data.Scientific
-import Data.Text.Encoding.Error (lenientDecode)
-import Data.Bits (shiftL, shiftR)
-import Numeric (readHex, showHex)
-import qualified Data.Text as Text
 import Data.Text (Text)
-import Data.ByteString as BS (ByteString, foldl')
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as TE
+import Data.Text.Encoding.Error (lenientDecode)
 import Data.Time (Day, TimeOfDay, UTCTime)
-import Web.PathPieces (PathPiece(..))
-import qualified Data.Aeson as A
-import qualified Data.ByteString as BS
+import qualified Data.Vector as V
+import Numeric (readHex, showHex)
+import Web.PathPieces (PathPiece (..))
 
 #if MIN_VERSION_aeson(2,0,0)
 import qualified Data.Aeson.Key as K
@@ -37,11 +37,11 @@ import qualified Data.HashMap.Strict as AM
 #endif
 
 import Web.HttpApiData
-       ( FromHttpApiData(..)
-       , ToHttpApiData(..)
-       , parseUrlPieceMaybe
-       , readTextData
-       )
+    ( FromHttpApiData (..)
+    , ToHttpApiData (..)
+    , parseUrlPieceMaybe
+    , readTextData
+    )
 
 -- | A raw value which can be stored in any backend and can be marshalled to
 -- and from a 'PersistField'.
@@ -58,62 +58,61 @@ data PersistValue
     | PersistNull
     | PersistList [PersistValue]
     | PersistMap [(Text, PersistValue)]
-    | PersistObjectId ByteString
-    -- ^ Intended especially for MongoDB backend
-    | PersistArray [PersistValue]
-    -- ^ Intended especially for PostgreSQL backend for text arrays
-    | PersistLiteral_ LiteralType ByteString
-    -- ^ This constructor is used to specify some raw literal value for the
-    -- backend. The 'LiteralType' value specifies how the value should be
-    -- escaped. This can be used to make special, custom types avaialable
-    -- in the back end.
-    --
-    -- @since 2.12.0.0
+    | -- | Intended especially for MongoDB backend
+      PersistObjectId ByteString
+    | -- | Intended especially for PostgreSQL backend for text arrays
+      PersistArray [PersistValue]
+    | -- | This constructor is used to specify some raw literal value for the
+      -- backend. The 'LiteralType' value specifies how the value should be
+      -- escaped. This can be used to make special, custom types avaialable
+      -- in the back end.
+      --
+      -- @since 2.12.0.0
+      PersistLiteral_ LiteralType ByteString
     deriving (Show, Read, Eq, Ord)
 
 -- |
 -- @since 2.14.4.0
 instance NFData PersistValue where
-  rnf val = case val of
-    PersistText txt -> rnf txt
-    PersistByteString bs -> rnf bs
-    PersistInt64 i -> rnf i
-    PersistDouble d -> rnf d
-    PersistRational q -> rnf q
-    PersistBool b -> rnf b
-    PersistDay d -> rnf d
-    PersistTimeOfDay t -> rnf t
-    PersistUTCTime t -> rnf t
-    PersistNull -> ()
-    PersistList vals -> rnf vals
-    PersistMap vals -> rnf vals
-    PersistObjectId bs -> rnf bs
-    PersistArray vals -> rnf vals
-    PersistLiteral_ ty bs -> ty `seq` rnf bs
-
+    rnf val = case val of
+        PersistText txt -> rnf txt
+        PersistByteString bs -> rnf bs
+        PersistInt64 i -> rnf i
+        PersistDouble d -> rnf d
+        PersistRational q -> rnf q
+        PersistBool b -> rnf b
+        PersistDay d -> rnf d
+        PersistTimeOfDay t -> rnf t
+        PersistUTCTime t -> rnf t
+        PersistNull -> ()
+        PersistList vals -> rnf vals
+        PersistMap vals -> rnf vals
+        PersistObjectId bs -> rnf bs
+        PersistArray vals -> rnf vals
+        PersistLiteral_ ty bs -> ty `seq` rnf bs
 
 -- | A type that determines how a backend should handle the literal.
 --
 -- @since 2.12.0.0
 data LiteralType
-    = Escaped
-    -- ^ The accompanying value will be escaped before inserting into the
-    -- database. This is the correct default choice to use.
-    --
-    -- @since 2.12.0.0
-    | Unescaped
-    -- ^ The accompanying value will not be escaped when inserting into the
-    -- database. This is potentially dangerous - use this with care.
-    --
-    -- @since 2.12.0.0
-    | DbSpecific
-    -- ^ The 'DbSpecific' constructor corresponds to the legacy
-    -- 'PersistDbSpecific' constructor. We need to keep this around because
-    -- old databases may have serialized JSON representations that
-    -- reference this. We don't want to break the ability of a database to
-    -- load rows.
-    --
-    -- @since 2.12.0.0
+    = -- | The accompanying value will be escaped before inserting into the
+      -- database. This is the correct default choice to use.
+      --
+      -- @since 2.12.0.0
+      Escaped
+    | -- | The accompanying value will not be escaped when inserting into the
+      -- database. This is potentially dangerous - use this with care.
+      --
+      -- @since 2.12.0.0
+      Unescaped
+    | -- | The 'DbSpecific' constructor corresponds to the legacy
+      -- 'PersistDbSpecific' constructor. We need to keep this around because
+      -- old databases may have serialized JSON representations that
+      -- reference this. We don't want to break the ability of a database to
+      -- load rows.
+      --
+      -- @since 2.12.0.0
+      DbSpecific
     deriving (Show, Read, Eq, Ord)
 
 -- | This pattern synonym used to be a data constructor for the
@@ -129,8 +128,9 @@ data LiteralType
 --
 -- @since 2.12.0.0
 pattern PersistDbSpecific :: ByteString -> PersistValue
-pattern PersistDbSpecific bs <- PersistLiteral_ _ bs where
-    PersistDbSpecific bs = PersistLiteral_ DbSpecific bs
+pattern PersistDbSpecific bs <- PersistLiteral_ _ bs
+    where
+        PersistDbSpecific bs = PersistLiteral_ DbSpecific bs
 
 -- | This pattern synonym used to be a data constructor on 'PersistValue',
 -- but was changed into a catch-all pattern synonym to allow backwards
@@ -139,8 +139,9 @@ pattern PersistDbSpecific bs <- PersistLiteral_ _ bs where
 --
 -- @since 2.12.0.0
 pattern PersistLiteralEscaped :: ByteString -> PersistValue
-pattern PersistLiteralEscaped bs <- PersistLiteral_ _ bs where
-    PersistLiteralEscaped bs = PersistLiteral_ Escaped bs
+pattern PersistLiteralEscaped bs <- PersistLiteral_ _ bs
+    where
+        PersistLiteralEscaped bs = PersistLiteral_ Escaped bs
 
 -- | This pattern synonym used to be a data constructor on 'PersistValue',
 -- but was changed into a catch-all pattern synonym to allow backwards
@@ -149,10 +150,14 @@ pattern PersistLiteralEscaped bs <- PersistLiteral_ _ bs where
 --
 -- @since 2.12.0.0
 pattern PersistLiteral :: ByteString -> PersistValue
-pattern PersistLiteral bs <- PersistLiteral_ _ bs where
-    PersistLiteral bs = PersistLiteral_ Unescaped bs
+pattern PersistLiteral bs <- PersistLiteral_ _ bs
+    where
+        PersistLiteral bs = PersistLiteral_ Unescaped bs
 
-{-# DEPRECATED PersistDbSpecific "Deprecated since 2.11 because of inconsistent escaping behavior across backends. The Postgres backend escapes these values, while the MySQL backend does not. If you are using this, please switch to 'PersistLiteral_' and provide a relevant 'LiteralType' for your conversion." #-}
+{-# DEPRECATED
+    PersistDbSpecific
+    "Deprecated since 2.11 because of inconsistent escaping behavior across backends. The Postgres backend escapes these values, while the MySQL backend does not. If you are using this, please switch to 'PersistLiteral_' and provide a relevant 'LiteralType' for your conversion."
+    #-}
 
 keyToText :: Key -> Text
 keyFromText :: Text -> Key
@@ -169,22 +174,25 @@ keyFromText = id
 instance ToHttpApiData PersistValue where
     toUrlPiece val =
         case fromPersistValueText val of
-            Left  e -> error $ Text.unpack e
+            Left e -> error $ Text.unpack e
             Right y -> y
 
 instance FromHttpApiData PersistValue where
     parseUrlPiece input =
-          PersistInt64 <$> parseUrlPiece input
-      <!> PersistList  <$> readTextData input
-      <!> PersistText  <$> return input
+        PersistInt64
+            <$> parseUrlPiece input
+                <!> PersistList
+            <$> readTextData input
+                <!> PersistText
+            <$> return input
       where
         infixl 3 <!>
         Left _ <!> y = y
-        x      <!> _ = x
+        x <!> _ = x
 
 instance PathPiece PersistValue where
-  toPathPiece   = toUrlPiece
-  fromPathPiece = parseUrlPieceMaybe
+    toPathPiece = toUrlPiece
+    fromPathPiece = parseUrlPieceMaybe
 
 fromPersistValueText :: PersistValue -> Either Text Text
 fromPersistValueText (PersistText s) = Right s
@@ -217,9 +225,11 @@ instance A.ToJSON PersistValue where
     toJSON PersistNull = A.Null
     toJSON (PersistList l) = A.Array $ V.fromList $ map A.toJSON l
     toJSON (PersistMap m) = A.object $ map go m
-        where go (k, v) = (keyFromText k, A.toJSON v)
+      where
+        go (k, v) = (keyFromText k, A.toJSON v)
     toJSON (PersistLiteral_ litTy b) =
-        let encoded = TE.decodeUtf8 $ B64.encode b
+        let
+            encoded = TE.decodeUtf8 $ B64.encode b
             prefix =
                 case litTy of
                     DbSpecific -> 'p'
@@ -229,63 +239,80 @@ instance A.ToJSON PersistValue where
             A.String $ Text.cons prefix encoded
     toJSON (PersistArray a) = A.Array $ V.fromList $ map A.toJSON a
     toJSON (PersistObjectId o) =
-      A.toJSON $ showChar 'o' $ showHexLen 8 (bs2i four) $ showHexLen 16 (bs2i eight) ""
-        where
-         (four, eight) = BS8.splitAt 4 o
+        A.toJSON $
+            showChar 'o' $
+                showHexLen 8 (bs2i four) $
+                    showHexLen 16 (bs2i eight) ""
+      where
+        (four, eight) = BS8.splitAt 4 o
 
-         -- taken from crypto-api
-         bs2i :: ByteString -> Integer
-         bs2i bs = BS.foldl' (\i b -> (i `shiftL` 8) + fromIntegral b) 0 bs
-         {-# INLINE bs2i #-}
+        -- taken from crypto-api
+        bs2i :: ByteString -> Integer
+        bs2i bs = BS.foldl' (\i b -> (i `shiftL` 8) + fromIntegral b) 0 bs
+        {-# INLINE bs2i #-}
 
-         -- showHex of n padded with leading zeros if necessary to fill d digits
-         -- taken from Data.BSON
-         showHexLen :: (Show n, Integral n) => Int -> n -> ShowS
-         showHexLen d n = showString (replicate (d - sigDigits n) '0') . showHex n  where
-             sigDigits 0 = 1
-             sigDigits n' = truncate (logBase (16 :: Double) $ fromIntegral n') + 1
+        -- showHex of n padded with leading zeros if necessary to fill d digits
+        -- taken from Data.BSON
+        showHexLen :: (Show n, Integral n) => Int -> n -> ShowS
+        showHexLen d n = showString (replicate (d - sigDigits n) '0') . showHex n
+          where
+            sigDigits 0 = 1
+            sigDigits n' = truncate (logBase (16 :: Double) $ fromIntegral n') + 1
 
 instance A.FromJSON PersistValue where
     parseJSON (A.String t0) =
         case Text.uncons t0 of
             Nothing -> fail "Null string"
-            Just ('p', t) -> either (\_ -> fail "Invalid base64") (return . PersistDbSpecific)
-                           $ B64.decode $ TE.encodeUtf8 t
-            Just ('l', t) -> either (\_ -> fail "Invalid base64") (return . PersistLiteral)
-                           $ B64.decode $ TE.encodeUtf8 t
-            Just ('e', t) -> either (\_ -> fail "Invalid base64") (return . PersistLiteralEscaped)
-                           $ B64.decode $ TE.encodeUtf8 t
+            Just ('p', t) ->
+                either (\_ -> fail "Invalid base64") (return . PersistDbSpecific) $
+                    B64.decode $
+                        TE.encodeUtf8 t
+            Just ('l', t) ->
+                either (\_ -> fail "Invalid base64") (return . PersistLiteral) $
+                    B64.decode $
+                        TE.encodeUtf8 t
+            Just ('e', t) ->
+                either (\_ -> fail "Invalid base64") (return . PersistLiteralEscaped) $
+                    B64.decode $
+                        TE.encodeUtf8 t
             Just ('s', t) -> return $ PersistText t
-            Just ('b', t) -> either (\_ -> fail "Invalid base64") (return . PersistByteString)
-                           $ B64.decode $ TE.encodeUtf8 t
+            Just ('b', t) ->
+                either (\_ -> fail "Invalid base64") (return . PersistByteString) $
+                    B64.decode $
+                        TE.encodeUtf8 t
             Just ('t', t) -> PersistTimeOfDay <$> readMay t
             Just ('u', t) -> PersistUTCTime <$> readMay t
             Just ('d', t) -> PersistDay <$> readMay t
             Just ('r', t) -> PersistRational <$> readMay t
-            Just ('o', t) -> maybe
-                (fail "Invalid base64")
-                (return . PersistObjectId . i2bs (8 * 12) . fst)
-                $ headMay $ readHex $ Text.unpack t
+            Just ('o', t) ->
+                maybe
+                    (fail "Invalid base64")
+                    (return . PersistObjectId . i2bs (8 * 12) . fst)
+                    $ headMay
+                    $ readHex
+                    $ Text.unpack t
             Just (c, _) -> fail $ "Unknown prefix: " ++ [c]
       where
-        headMay []    = Nothing
-        headMay (x:_) = Just x
+        headMay [] = Nothing
+        headMay (x : _) = Just x
         readMay t =
             case reads $ Text.unpack t of
-                (x, _):_ -> return x
+                (x, _) : _ -> return x
                 [] -> fail "Could not read"
 
         -- taken from crypto-api
-        -- |@i2bs bitLen i@ converts @i@ to a 'ByteString' of @bitLen@ bits (must be a multiple of 8).
+        -- \|@i2bs bitLen i@ converts @i@ to a 'ByteString' of @bitLen@ bits (must be a multiple of 8).
         i2bs :: Int -> Integer -> ByteString
-        i2bs l i = BS.unfoldr (\l' -> if l' < 0 then Nothing else Just (fromIntegral (i `shiftR` l'), l' - 8)) (l-8)
+        i2bs l i =
+            BS.unfoldr
+                (\l' -> if l' < 0 then Nothing else Just (fromIntegral (i `shiftR` l'), l' - 8))
+                (l - 8)
         {-# INLINE i2bs #-}
-
-
-    parseJSON (A.Number n) = return $
-        if fromInteger (floor n) == n
-            then PersistInt64 $ floor n
-            else PersistDouble $ fromRational $ toRational n
+    parseJSON (A.Number n) =
+        return $
+            if fromInteger (floor n) == n
+                then PersistInt64 $ floor n
+                else PersistDouble $ fromRational $ toRational n
     parseJSON (A.Bool b) = return $ PersistBool b
     parseJSON A.Null = return PersistNull
     parseJSON (A.Array a) = fmap PersistList (mapM A.parseJSON $ V.toList a)
@@ -293,4 +320,3 @@ instance A.FromJSON PersistValue where
         fmap PersistMap $ mapM go $ AM.toList o
       where
         go (k, v) = (,) (keyToText k) <$> A.parseJSON v
-

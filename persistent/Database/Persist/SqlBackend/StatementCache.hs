@@ -1,20 +1,21 @@
 {-# LANGUAGE RecordWildCards #-}
+
 module Database.Persist.SqlBackend.StatementCache
-  ( StatementCache
-  , StatementCacheKey
-  , mkCacheKeyFromQuery
-  , MkStatementCache(..)
-  , mkSimpleStatementCache
-  , mkStatementCache
-  ) where
+    ( StatementCache
+    , StatementCacheKey
+    , mkCacheKeyFromQuery
+    , MkStatementCache (..)
+    , mkSimpleStatementCache
+    , mkStatementCache
+    ) where
 
 import Data.Foldable
 import Data.IORef
+import Data.Map (Map)
 import qualified Data.Map as Map
+import Data.Text (Text)
 import Database.Persist.SqlBackend.Internal.Statement
 import Database.Persist.SqlBackend.Internal.StatementCache
-import Data.Map (Map)
-import Data.Text (Text)
 
 -- | Configuration parameters for creating a custom statement cache
 --
@@ -43,7 +44,6 @@ data MkStatementCache = MkStatementCache
     -- @since 2.13.3
     }
 
-
 -- | Make a simple statement cache that will cache statements if they are not currently cached.
 --
 -- @since 2.13.3
@@ -54,7 +54,8 @@ mkSimpleStatementCache stmtMap =
         , statementCacheInsert = \sql stmt ->
             modifyIORef' stmtMap (Map.insert (cacheKey sql) stmt)
         , statementCacheClear = do
-            oldStatements <- atomicModifyIORef' stmtMap (\oldStatements -> (Map.empty, oldStatements))
+            oldStatements <-
+                atomicModifyIORef' stmtMap (\oldStatements -> (Map.empty, oldStatements))
             traverse_ stmtFinalize oldStatements
         , statementCacheSize = Map.size <$> readIORef stmtMap
         }
@@ -63,4 +64,4 @@ mkSimpleStatementCache stmtMap =
 --
 -- @since 2.13.0
 mkStatementCache :: MkStatementCache -> StatementCache
-mkStatementCache MkStatementCache{..} = StatementCache { .. }
+mkStatementCache MkStatementCache{..} = StatementCache{..}

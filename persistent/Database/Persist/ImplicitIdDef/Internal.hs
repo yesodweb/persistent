@@ -4,7 +4,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StrictData #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE TypeOperators #-}
 
 -- | WARNING: This is an @Internal@ module. As such, breaking changes to the API
@@ -16,14 +15,14 @@
 -- @since 2.13.0.0
 module Database.Persist.ImplicitIdDef.Internal where
 
+import Data.Foldable (asum)
 import Data.Proxy
 import Data.Text (Text)
 import qualified Data.Text as Text
+import Data.Typeable (eqT)
 import Language.Haskell.TH (Type)
 import LiftType
 import Type.Reflection
-import Data.Typeable (eqT)
-import Data.Foldable (asum)
 
 import Database.Persist.Class.PersistField (PersistField)
 import Database.Persist.Names
@@ -152,7 +151,8 @@ data ImplicitIdDef = ImplicitIdDef
 --
 -- @since 2.13.0.0
 mkImplicitIdDef
-    :: forall t. (Typeable t, PersistFieldSql t)
+    :: forall t
+     . (Typeable t, PersistFieldSql t)
     => Text
     -- ^ The default expression to use for columns. Should be valid SQL in the
     -- language you're using.
@@ -186,7 +186,7 @@ setImplicitIdDefMaxLen
     :: Integer
     -> ImplicitIdDef
     -> ImplicitIdDef
-setImplicitIdDefMaxLen i iid = iid { iidMaxLen = Just i }
+setImplicitIdDefMaxLen i iid = iid{iidMaxLen = Just i}
 
 -- |  This function converts a 'Typeable' type into a @persistent@
 -- representation of the type of a field - 'FieldTyp'.
@@ -224,4 +224,4 @@ fieldTypeFromTypeable = go (typeRep @t)
 --
 -- @since 2.13.0.0
 unsafeClearDefaultImplicitId :: ImplicitIdDef -> ImplicitIdDef
-unsafeClearDefaultImplicitId iid = iid { iidDefault = Nothing }
+unsafeClearDefaultImplicitId iid = iid{iidDefault = Nothing}

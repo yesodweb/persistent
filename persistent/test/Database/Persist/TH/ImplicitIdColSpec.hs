@@ -24,11 +24,13 @@ import Database.Persist.ImplicitIdDef.Internal (fieldTypeFromTypeable)
 do
     let
         uuidDef =
-           mkImplicitIdDef @Text "uuid_generate_v1mc()"
+            mkImplicitIdDef @Text "uuid_generate_v1mc()"
         settings =
             setImplicitIdDef uuidDef sqlSettings
 
-    mkPersist settings [persistLowerCase|
+    mkPersist
+        settings
+        [persistLowerCase|
 
         User
             name    String
@@ -60,5 +62,4 @@ spec = describe "ImplicitIdColSpec" $ do
         it "has Text FieldType" $ asIO $ do
             pendingWith "currently returns UserId, may not be an issue"
             fieldType idField
-                `shouldBe`
-                    fieldTypeFromTypeable @Text
+                `shouldBe` fieldTypeFromTypeable @Text

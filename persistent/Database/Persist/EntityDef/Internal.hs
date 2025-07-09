@@ -7,13 +7,13 @@
 --
 -- @since 2.13.0.0
 module Database.Persist.EntityDef.Internal
-    ( EntityDef(..)
+    ( EntityDef (..)
     , entityPrimary
     , entitiesPrimary
     , keyAndEntityFields
     , keyAndEntityFieldsDatabase
     , toEmbedEntityDef
-    , EntityIdDef(..)
+    , EntityIdDef (..)
     ) where
 
 import Database.Persist.Types.Base

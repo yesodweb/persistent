@@ -2,13 +2,13 @@
 --
 -- @since 2.13.0.0
 module Database.Persist.FieldDef.Internal
-    ( FieldDef(..)
+    ( FieldDef (..)
     , isFieldNotGenerated
-    , FieldCascade(..)
+    , FieldCascade (..)
     , renderFieldCascade
     , renderCascadeAction
     , noCascade
-    , CascadeAction(..)
+    , CascadeAction (..)
     ) where
 
 import Database.Persist.Types.Base

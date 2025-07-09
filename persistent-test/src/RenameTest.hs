@@ -1,10 +1,12 @@
-{-# LANGUAGE TypeApplications, TypeOperators, UndecidableInstances #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module RenameTest where
 
 import qualified Data.Map as Map
 import qualified Data.Text as T
-import Data.Time (getCurrentTime, Day, UTCTime(..))
+import Data.Time (Day, UTCTime (..), getCurrentTime)
 
 import Init
 
@@ -13,7 +15,9 @@ import Init
 type TextId = Text
 
 -- Test lower case names
-share [mkPersist sqlSettings { mpsGeneric = True }, mkMigrate "migration"] [persistLowerCase|
+share
+    [mkPersist sqlSettings{mpsGeneric = True}, mkMigrate "migration"]
+    [persistLowerCase|
 -- This just tests that a field can be named "key"
 KeyTable
     key Text
@@ -53,47 +57,51 @@ ForeignIdTable
 |]
 
 cleanDB
-    :: forall backend.
-    ( BaseBackend backend ~ backend
-    , PersistQueryWrite backend
-    )
+    :: forall backend
+     . ( BaseBackend backend ~ backend
+       , PersistQueryWrite backend
+       )
     => ReaderT backend IO ()
 cleanDB = do
-  deleteWhere ([] :: [Filter (IdTableGeneric backend)])
-  deleteWhere ([] :: [Filter (LowerCaseTableGeneric backend)])
-  deleteWhere ([] :: [Filter (RefTableGeneric backend)])
+    deleteWhere ([] :: [Filter (IdTableGeneric backend)])
+    deleteWhere ([] :: [Filter (LowerCaseTableGeneric backend)])
+    deleteWhere ([] :: [Filter (RefTableGeneric backend)])
 
 specsWith
-    ::
-    ( PersistStoreWrite backend, PersistQueryRead backend
-    , backend ~ BaseBackend backend
-    , MonadIO m, MonadFail m
-    , Eq (BackendKey backend)
-    )
+    :: ( PersistStoreWrite backend
+       , PersistQueryRead backend
+       , backend ~ BaseBackend backend
+       , MonadIO m
+       , MonadFail m
+       , Eq (BackendKey backend)
+       )
     => RunDb backend m
     -> Spec
 specsWith runDb = describe "rename specs" $ do
     describe "LowerCaseTable" $ do
         it "LowerCaseTable has the right sql name" $ do
             fmap fieldDB (getEntityIdField (entityDef (Proxy @LowerCaseTable)))
-                `shouldBe`
-                    Just (FieldNameDB "my_id")
+                `shouldBe` Just (FieldNameDB "my_id")
 
     it "user specified id, insertKey, no default=" $ runDb $ do
-        let rec2 = IdTable "Foo2" Nothing
-        let rec1 = IdTable "Foo1" $ Just rec2
-        let rec  = IdTable "Foo" $ Just rec1
+        let
+            rec2 = IdTable "Foo2" Nothing
+        let
+            rec1 = IdTable "Foo1" $ Just rec2
+        let
+            rec = IdTable "Foo" $ Just rec1
         now <- liftIO getCurrentTime
-        let key = IdTableKey $ utctDay now
+        let
+            key = IdTableKey $ utctDay now
         insertKey key rec
         Just rec' <- get key
         rec' @== rec
-        (Entity key' _):_ <- selectList ([] :: [Filter (IdTableGeneric backend)]) []
+        (Entity key' _) : _ <- selectList ([] :: [Filter (IdTableGeneric backend)]) []
         key' @== key
 
     it "extra blocks" $
-        getEntityExtra (entityDef (Nothing :: Maybe LowerCaseTable)) @?=
-            Map.fromList
+        getEntityExtra (entityDef (Nothing :: Maybe LowerCaseTable))
+            @?= Map.fromList
                 [ ("ExtraBlock", map T.words ["foo bar", "baz", "bin"])
                 , ("ExtraBlock2", map T.words ["something"])
                 ]

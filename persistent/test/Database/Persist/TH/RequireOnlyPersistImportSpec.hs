@@ -18,7 +18,9 @@ import Database.Persist.TH
 -- always explicitly import qualified Hspec in the context of this spec
 import qualified Test.Hspec as HS
 
-mkPersist sqlSettings [persistLowerCase|
+mkPersist
+    sqlSettings
+    [persistLowerCase|
 Plain
     name String
     age  Int
@@ -34,12 +36,14 @@ spec :: HS.Spec
 spec =
     HS.describe "RequireOnlyPersistImport" $ do
         HS.it "Plain" $ do
-            let typeSigPlain :: String -> Int -> Plain
+            let
+                typeSigPlain :: String -> Int -> Plain
                 typeSigPlain = Plain
             compiles
 
         HS.it "JsonEncoded" $ do
-            let typeSigJsonEncoded :: String -> Int -> JsonEncoded
+            let
+                typeSigJsonEncoded :: String -> Int -> JsonEncoded
                 typeSigJsonEncoded = JsonEncoded
             compiles
 

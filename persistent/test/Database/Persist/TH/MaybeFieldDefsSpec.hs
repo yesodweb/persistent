@@ -13,7 +13,9 @@ module Database.Persist.TH.MaybeFieldDefsSpec where
 
 import TemplateTestImports
 
-mkPersist sqlSettings [persistLowerCase|
+mkPersist
+    sqlSettings
+    [persistLowerCase|
 Account
     name    (Maybe String)
     email   String
@@ -22,7 +24,8 @@ Account
 spec :: Spec
 spec = describe "MaybeFieldDefs" $ do
     it "should support literal `Maybe` declaration in entity definition" $ do
-        let mkAccount :: Maybe String -> String -> Account
+        let
+            mkAccount :: Maybe String -> String -> Account
             mkAccount = Account
         compiles
 

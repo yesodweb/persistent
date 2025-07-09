@@ -19,10 +19,11 @@ import Database.Persist.Sql.Types
 import Database.Persist.Sql.Types.Internal
 import Database.Persist.SqlBackend.Internal.StatementCache
 
-rawQuery :: (MonadResource m, MonadReader env m, BackendCompatible SqlBackend env)
-         => Text
-         -> [PersistValue]
-         -> ConduitM () [PersistValue] m ()
+rawQuery
+    :: (MonadResource m, MonadReader env m, BackendCompatible SqlBackend env)
+    => Text
+    -> [PersistValue]
+    -> ConduitM () [PersistValue] m ()
 rawQuery sql vals = do
     srcRes <- liftPersist $ rawQueryRes sql vals
     (releaseKey, src) <- allocateAcquire srcRes
@@ -36,8 +37,10 @@ rawQueryRes
     -> ReaderT env m1 (Acquire (ConduitM () [PersistValue] m2 ()))
 rawQueryRes sql vals = do
     conn <- projectBackend `liftM` ask
-    let make = do
-            runLoggingT (logDebugNS (pack "SQL") $ T.append sql $ pack $ "; " ++ show vals)
+    let
+        make = do
+            runLoggingT
+                (logDebugNS (pack "SQL") $ T.append sql $ pack $ "; " ++ show vals)
                 (connLogFunc conn)
             getStmtConn conn sql
     return $ do
@@ -45,21 +48,28 @@ rawQueryRes sql vals = do
         stmtQuery stmt vals
 
 -- | Execute a raw SQL statement
-rawExecute :: (MonadIO m, BackendCompatible SqlBackend backend)
-           => Text            -- ^ SQL statement, possibly with placeholders.
-           -> [PersistValue]  -- ^ Values to fill the placeholders.
-           -> ReaderT backend m ()
+rawExecute
+    :: (MonadIO m, BackendCompatible SqlBackend backend)
+    => Text
+    -- ^ SQL statement, possibly with placeholders.
+    -> [PersistValue]
+    -- ^ Values to fill the placeholders.
+    -> ReaderT backend m ()
 rawExecute x y = liftM (const ()) $ rawExecuteCount x y
 
 -- | Execute a raw SQL statement and return the number of
 -- rows it has modified.
-rawExecuteCount :: (MonadIO m, BackendCompatible SqlBackend backend)
-                => Text            -- ^ SQL statement, possibly with placeholders.
-                -> [PersistValue]  -- ^ Values to fill the placeholders.
-                -> ReaderT backend m Int64
+rawExecuteCount
+    :: (MonadIO m, BackendCompatible SqlBackend backend)
+    => Text
+    -- ^ SQL statement, possibly with placeholders.
+    -> [PersistValue]
+    -- ^ Values to fill the placeholders.
+    -> ReaderT backend m Int64
 rawExecuteCount sql vals = do
     conn <- projectBackend `liftM` ask
-    runLoggingT (logDebugNS (pack "SQL") $ T.append sql $ pack $ "; " ++ show vals)
+    runLoggingT
+        (logDebugNS (pack "SQL") $ T.append sql $ pack $ "; " ++ show vals)
         (connLogFunc conn)
     stmt <- getStmt sql
     res <- liftIO $ stmtExecute stmt vals
@@ -67,40 +77,44 @@ rawExecuteCount sql vals = do
     return res
 
 getStmt
-  :: (MonadIO m, MonadReader backend m, BackendCompatible SqlBackend backend)
-  => Text -> m Statement
+    :: (MonadIO m, MonadReader backend m, BackendCompatible SqlBackend backend)
+    => Text -> m Statement
 getStmt sql = do
     conn <- projectBackend `liftM` ask
     liftIO $ getStmtConn conn sql
 
 getStmtConn :: SqlBackend -> Text -> IO Statement
 getStmtConn conn sql = do
-    let cacheK = mkCacheKeyFromQuery sql
+    let
+        cacheK = mkCacheKeyFromQuery sql
     mstmt <- statementCacheLookup (connStmtMap conn) cacheK
     stmt <- case mstmt of
         Just stmt -> pure stmt
         Nothing -> do
             stmt' <- liftIO $ connPrepare conn sql
             iactive <- liftIO $ newIORef True
-            let stmt = Statement
-                    { stmtFinalize = do
-                        active <- readIORef iactive
-                        when active $ do stmtFinalize stmt'
-                                         writeIORef iactive False
-                    , stmtReset = do
-                        active <- readIORef iactive
-                        when active $ stmtReset stmt'
-                    , stmtExecute = \x -> do
-                        active <- readIORef iactive
-                        if active
-                            then stmtExecute stmt' x
-                            else throwIO $ StatementAlreadyFinalized sql
-                    , stmtQuery = \x -> do
-                        active <- liftIO $ readIORef iactive
-                        if active
-                            then stmtQuery stmt' x
-                            else liftIO $ throwIO $ StatementAlreadyFinalized sql
-                    }
+            let
+                stmt =
+                    Statement
+                        { stmtFinalize = do
+                            active <- readIORef iactive
+                            when active $ do
+                                stmtFinalize stmt'
+                                writeIORef iactive False
+                        , stmtReset = do
+                            active <- readIORef iactive
+                            when active $ stmtReset stmt'
+                        , stmtExecute = \x -> do
+                            active <- readIORef iactive
+                            if active
+                                then stmtExecute stmt' x
+                                else throwIO $ StatementAlreadyFinalized sql
+                        , stmtQuery = \x -> do
+                            active <- liftIO $ readIORef iactive
+                            if active
+                                then stmtQuery stmt' x
+                                else liftIO $ throwIO $ StatementAlreadyFinalized sql
+                        }
 
             liftIO $ statementCacheInsert (connStmtMap conn) cacheK stmt
             pure stmt
@@ -202,57 +216,69 @@ getStmtConn conn sql = do
 -- >          xs <- getPerson
 -- >          liftIO (print xs)
 -- >
-
-rawSql :: (RawSql a, MonadIO m, BackendCompatible SqlBackend backend)
-       => Text             -- ^ SQL statement, possibly with placeholders.
-       -> [PersistValue]   -- ^ Values to fill the placeholders.
-       -> ReaderT backend m [a]
+rawSql
+    :: (RawSql a, MonadIO m, BackendCompatible SqlBackend backend)
+    => Text
+    -- ^ SQL statement, possibly with placeholders.
+    -> [PersistValue]
+    -- ^ Values to fill the placeholders.
+    -> ReaderT backend m [a]
 rawSql stmt = run
-    where
-      getType :: (x -> m [a]) -> a
-      getType = error "rawSql.getType"
+  where
+    getType :: (x -> m [a]) -> a
+    getType = error "rawSql.getType"
 
-      x = getType run
-      process = rawSqlProcessRow
+    x = getType run
+    process = rawSqlProcessRow
 
-      withStmt' colSubsts params sink = do
-            srcRes <- rawQueryRes sql params
-            liftIO $ with srcRes (\src -> runConduit $ src .| sink)
+    withStmt' colSubsts params sink = do
+        srcRes <- rawQueryRes sql params
+        liftIO $ with srcRes (\src -> runConduit $ src .| sink)
+      where
+        sql = T.concat $ makeSubsts colSubsts $ T.splitOn placeholder stmt
+        placeholder = "??"
+        makeSubsts (s : ss) (t : ts) = t : s : makeSubsts ss ts
+        makeSubsts [] [] = []
+        makeSubsts [] ts = [T.intercalate placeholder ts]
+        makeSubsts ss [] = error (concat err)
           where
-            sql = T.concat $ makeSubsts colSubsts $ T.splitOn placeholder stmt
-            placeholder = "??"
-            makeSubsts (s:ss) (t:ts) = t : s : makeSubsts ss ts
-            makeSubsts []     []     = []
-            makeSubsts []     ts     = [T.intercalate placeholder ts]
-            makeSubsts ss     []     = error (concat err)
-                where
-                  err = [ "rawsql: there are still ", show (length ss)
-                        , "'??' placeholder substitutions to be made "
-                        , "but all '??' placeholders have already been "
-                        , "consumed.  Please read 'rawSql's documentation "
-                        , "on how '??' placeholders work."
-                        ]
+            err =
+                [ "rawsql: there are still "
+                , show (length ss)
+                , "'??' placeholder substitutions to be made "
+                , "but all '??' placeholders have already been "
+                , "consumed.  Please read 'rawSql's documentation "
+                , "on how '??' placeholders work."
+                ]
 
-      run params = do
+    run params = do
         conn <- projectBackend `liftM` ask
-        let (colCount, colSubsts) = rawSqlCols (connEscapeRawName conn) x
+        let
+            (colCount, colSubsts) = rawSqlCols (connEscapeRawName conn) x
         withStmt' colSubsts params $ firstRow colCount
 
-      firstRow colCount = do
+    firstRow colCount = do
         mrow <- await
         case mrow of
-          Nothing -> return []
-          Just row
-              | colCount == length row -> getter mrow
-              | otherwise              -> fail $ concat
-                  [ "rawSql: wrong number of columns, got "
-                  , show (length row), " but expected ", show colCount
-                  , " (", rawSqlColCountReason x, ")." ]
+            Nothing -> return []
+            Just row
+                | colCount == length row -> getter mrow
+                | otherwise ->
+                    fail $
+                        concat
+                            [ "rawSql: wrong number of columns, got "
+                            , show (length row)
+                            , " but expected "
+                            , show colCount
+                            , " ("
+                            , rawSqlColCountReason x
+                            , ")."
+                            ]
 
-      getter = go id
-          where
-            go acc Nothing = return (acc [])
-            go acc (Just row) =
-              case process row of
+    getter = go id
+      where
+        go acc Nothing = return (acc [])
+        go acc (Just row) =
+            case process row of
                 Left err -> fail (T.unpack err)
-                Right r  -> await >>= go (acc . (r:))
+                Right r -> await >>= go (acc . (r :))

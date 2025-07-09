@@ -36,18 +36,21 @@ class PersistConfig c where
     createPoolConfig :: c -> IO (PersistConfigPool c)
 
     -- | Run a database action by taking a connection from the pool.
-    runPool :: MonadUnliftIO m
-            => c
-            -> PersistConfigBackend c m a
-            -> PersistConfigPool c
-            -> m a
+    runPool
+        :: (MonadUnliftIO m)
+        => c
+        -> PersistConfigBackend c m a
+        -> PersistConfigPool c
+        -> m a
 
 instance
-  ( PersistConfig c1
-  , PersistConfig c2
-  , PersistConfigPool c1 ~ PersistConfigPool c2
-  , PersistConfigBackend c1 ~ PersistConfigBackend c2
-  ) => PersistConfig (Either c1 c2) where
+    ( PersistConfig c1
+    , PersistConfig c2
+    , PersistConfigPool c1 ~ PersistConfigPool c2
+    , PersistConfigBackend c1 ~ PersistConfigBackend c2
+    )
+    => PersistConfig (Either c1 c2)
+    where
     type PersistConfigBackend (Either c1 c2) = PersistConfigBackend c1
     type PersistConfigPool (Either c1 c2) = PersistConfigPool c1
 

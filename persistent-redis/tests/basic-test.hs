@@ -1,29 +1,34 @@
-{-# LANGUAGE DataKinds                  #-}
-{-# LANGUAGE DerivingStrategies         #-}
-{-# LANGUAGE ExistentialQuantification  #-}
-{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MultiParamTypeClasses      #-}
-{-# LANGUAGE QuasiQuotes                #-}
-{-# LANGUAGE StandaloneDeriving         #-}
-{-# LANGUAGE TemplateHaskell            #-}
-{-# LANGUAGE TypeFamilies               #-}
-{-# LANGUAGE TypeOperators              #-}
-{-# LANGUAGE TypeSynonymInstances       #-}
-{-# LANGUAGE UndecidableInstances       #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE UndecidableInstances #-}
+
 module Main where
 
-import           Control.Monad.IO.Class     (MonadIO, liftIO)
-import           Data.Text                  (Text, pack, unpack)
-import qualified Database.Redis             as R
-import           Language.Haskell.TH.Syntax
+import Control.Monad.IO.Class (MonadIO, liftIO)
+import Data.Text (Text, pack, unpack)
+import qualified Database.Redis as R
+import Language.Haskell.TH.Syntax
 
-import           Database.Persist
-import           Database.Persist.Redis
-import           Database.Persist.TH
+import Database.Persist
+import Database.Persist.Redis
+import Database.Persist.TH
 
-let redisSettings = mkPersistSettings (ConT ''RedisBackend)
- in share [mkPersist redisSettings] [persistLowerCase|
+let
+    redisSettings = mkPersistSettings (ConT ''RedisBackend)
+ in
+    share
+        [mkPersist redisSettings]
+        [persistLowerCase|
 Person
     name String
     age Int
@@ -42,7 +47,7 @@ redisConf = RedisConf host (R.connectPort d) Nothing 10
 mkKey :: (MonadIO m, PersistEntity val) => Text -> m (Key val)
 mkKey s = case keyFromValues [PersistText s] of
     Right z -> return z
-    Left  a -> liftIO $ fail (unpack a)
+    Left a -> liftIO $ fail (unpack a)
 
 main :: IO ()
 main =

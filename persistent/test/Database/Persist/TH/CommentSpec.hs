@@ -11,7 +11,6 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
-
 {-# OPTIONS_GHC -haddock #-}
 
 module Database.Persist.TH.CommentSpec
@@ -21,10 +20,12 @@ module Database.Persist.TH.CommentSpec
 
 import TemplateTestImports
 
-import Database.Persist.EntityDef.Internal (EntityDef(..))
-import Database.Persist.FieldDef.Internal (FieldDef(..))
+import Database.Persist.EntityDef.Internal (EntityDef (..))
+import Database.Persist.FieldDef.Internal (FieldDef (..))
 
-mkPersist (sqlSettings {mpsEntityHaddocks = True}) [persistLowerCase|
+mkPersist
+    (sqlSettings{mpsEntityHaddocks = True})
+    [persistLowerCase|
 
 -- | Doc comments work.
 -- | Has multiple lines.
@@ -51,10 +52,11 @@ spec = describe "CommentSpec" $ do
     it "has entity comments" $ do
         entityComments ed
             `shouldBe` do
-                Just $ mconcat
-                    [ "Doc comments work.\n"
-                    , "Has multiple lines.\n"
-                    ]
+                Just $
+                    mconcat
+                        [ "Doc comments work.\n"
+                        , "Has multiple lines.\n"
+                        ]
 
     describe "fieldComments" $ do
         let
@@ -63,7 +65,8 @@ spec = describe "CommentSpec" $ do
         it "has the right name comments" $ do
             nameComments
                 `shouldBe` do
-                    Just $ mconcat
-                        [ "First line of comment on column.\n"
-                        , "Second line of comment on column.\n"
-                        ]
+                    Just $
+                        mconcat
+                            [ "First line of comment on column.\n"
+                            , "Second line of comment on column.\n"
+                            ]

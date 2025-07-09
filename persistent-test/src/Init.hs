@@ -8,46 +8,52 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 -- | This will hopefully be the only module with CPP in it.
-module Init (
-  (@/=), (@==), (==@)
-  , asIO
-  , assertNotEqual
-  , assertNotEmpty
-  , assertEmpty
-  , isTravis
-
-  , module Database.Persist.Sql
-  , persistSettings
-  , MkPersistSettings (..)
-  , BackendKey(..)
-  , GenerateKey(..)
-
-  , RunDb
-  , Runner
-   -- re-exports
-  , module Database.Persist
-  , module Test.Hspec
-  , module Test.HUnit
-  , mkPersist, mkMigrate, share, sqlSettings, persistLowerCase, persistUpperCase
-  , Int32, Int64
-  , Text
-  , module Control.Monad.Reader
-  , module Control.Monad
-  , module Control.Monad.IO.Unlift
-  , BS.ByteString
-  , SomeException
-  , MonadFail
-  , TestFn(..)
-  , truncateTimeOfDay
-  , truncateToMicro
-  , truncateUTCTime
-  , arbText
-  , liftA2
-  , changeBackend
-  , Proxy(..)
-  , UUID(..)
-  , sqlSettingsUuid
-  ) where
+module Init
+    ( (@/=)
+    , (@==)
+    , (==@)
+    , asIO
+    , assertNotEqual
+    , assertNotEmpty
+    , assertEmpty
+    , isTravis
+    , module Database.Persist.Sql
+    , persistSettings
+    , MkPersistSettings (..)
+    , BackendKey (..)
+    , GenerateKey (..)
+    , RunDb
+    , Runner
+    -- re-exports
+    , module Database.Persist
+    , module Test.Hspec
+    , module Test.HUnit
+    , mkPersist
+    , mkMigrate
+    , share
+    , sqlSettings
+    , persistLowerCase
+    , persistUpperCase
+    , Int32
+    , Int64
+    , Text
+    , module Control.Monad.Reader
+    , module Control.Monad
+    , module Control.Monad.IO.Unlift
+    , BS.ByteString
+    , SomeException
+    , MonadFail
+    , TestFn (..)
+    , truncateTimeOfDay
+    , truncateToMicro
+    , truncateUTCTime
+    , arbText
+    , liftA2
+    , changeBackend
+    , Proxy (..)
+    , UUID (..)
+    , sqlSettingsUuid
+    ) where
 
 #if !MIN_VERSION_monad_logger(0,3,30)
 -- Needed for GHC versions 7.10.3. Can drop when we drop support for GHC
@@ -72,7 +78,7 @@ import Control.Exception (SomeException)
 import Control.Monad (forM_, liftM, replicateM, void, when)
 import Control.Monad.Fail (MonadFail)
 import Control.Monad.Reader
-import Data.Char (GeneralCategory(..), generalCategory)
+import Data.Char (GeneralCategory (..), generalCategory)
 import Data.Fixed (Micro, Pico)
 import Data.Proxy
 import Data.String (IsString, fromString)
@@ -81,19 +87,19 @@ import Data.Time
 import Test.Hspec
 import Test.QuickCheck.Instances ()
 
-import Data.Aeson (FromJSON, ToJSON, Value(..))
+import Data.Aeson (FromJSON, ToJSON, Value (..))
 import qualified Data.Text.Encoding as TE
 import Database.Persist.ImplicitIdDef (mkImplicitIdDef)
 import Database.Persist.TH
-       ( MkPersistSettings(..)
-       , mkMigrate
-       , mkPersist
-       , persistLowerCase
-       , persistUpperCase
-       , setImplicitIdDef
-       , share
-       , sqlSettings
-       )
+    ( MkPersistSettings (..)
+    , mkMigrate
+    , mkPersist
+    , persistLowerCase
+    , persistUpperCase
+    , setImplicitIdDef
+    , share
+    , sqlSettings
+    )
 import Web.Internal.HttpApiData
 import Web.PathPieces
 
@@ -116,12 +122,11 @@ import Database.Persist.TH ()
 -- Data types
 import Data.Int (Int32, Int64)
 
-
 asIO :: IO a -> IO a
 asIO a = a
 
 (@/=), (@==), (==@) :: (HasCallStack, Eq a, Show a, MonadIO m) => a -> a -> m ()
-infix 1 @/= --, /=@
+infix 1 @/= -- , /=@
 actual @/= expected = liftIO $ assertNotEqual "" expected actual
 
 infix 1 @==, ==@
@@ -132,12 +137,16 @@ expected ==@ actual = liftIO $ expected @=? actual
 expected /=@ actual = liftIO $ assertNotEqual "" expected actual
 -}
 
-
 assertNotEqual :: (Eq a, Show a, HasCallStack) => String -> a -> a -> Assertion
 assertNotEqual preface expected actual =
-  unless (actual /= expected) (assertFailure msg)
-  where msg = (if null preface then "" else preface ++ "\n") ++
-             "expected: " ++ show expected ++ "\n to not equal: " ++ show actual
+    unless (actual /= expected) (assertFailure msg)
+  where
+    msg =
+        (if null preface then "" else preface ++ "\n")
+            ++ "expected: "
+            ++ show expected
+            ++ "\n to not equal: "
+            ++ show actual
 
 assertEmpty :: (MonadIO m) => [a] -> m ()
 assertEmpty xs = liftIO $ assertBool "" (null xs)
@@ -149,25 +158,24 @@ isTravis :: IO Bool
 isTravis = isCI
 
 isCI :: IO Bool
-isCI =  do
+isCI = do
     env <- liftIO getEnvironment
     return $ case lookup "TRAVIS" env <|> lookup "CI" env of
         Just "true" -> True
         _ -> False
 
-
 persistSettings :: MkPersistSettings
-persistSettings = sqlSettings { mpsGeneric = True }
+persistSettings = sqlSettings{mpsGeneric = True}
 
 instance Arbitrary PersistValue where
     arbitrary = PersistInt64 `fmap` choose (0, maxBound)
 
-instance PersistStore backend => Arbitrary (BackendKey backend) where
-  arbitrary = (errorLeft . fromPersistValue) `fmap` arbitrary
-    where
-      errorLeft x = case x of
-          Left e -> error $ unpack e
-          Right r -> r
+instance (PersistStore backend) => Arbitrary (BackendKey backend) where
+    arbitrary = (errorLeft . fromPersistValue) `fmap` arbitrary
+      where
+        errorLeft x = case x of
+            Left e -> error $ unpack e
+            Right r -> r
 
 class GenerateKey backend where
     generateKey :: IO (BackendKey backend)
@@ -199,36 +207,44 @@ data TestFn entity where
 
 truncateTimeOfDay :: TimeOfDay -> Gen TimeOfDay
 truncateTimeOfDay (TimeOfDay h m s) =
-  return $ TimeOfDay h m $ truncateToMicro s
+    return $ TimeOfDay h m $ truncateToMicro s
 
 -- truncate less significant digits
 truncateToMicro :: Pico -> Pico
-truncateToMicro p = let
-  p' = fromRational . toRational $ p  :: Micro
-  in   fromRational . toRational $ p' :: Pico
+truncateToMicro p =
+    let
+        p' = fromRational . toRational $ p :: Micro
+     in
+        fromRational . toRational $ p' :: Pico
 
 truncateUTCTime :: UTCTime -> Gen UTCTime
 truncateUTCTime (UTCTime d dift) = do
-  let pico = fromRational . toRational $ dift :: Pico
-      picoi= truncate . (*1000000000000) . toRational $ truncateToMicro pico :: Integer
-      -- https://github.com/lpsmith/postgresql-simple/issues/123
-      d' = max d $ fromGregorian 1950 1 1
-  return $ UTCTime d' $ picosecondsToDiffTime picoi
+    let
+        pico = fromRational . toRational $ dift :: Pico
+        picoi = truncate . (* 1000000000000) . toRational $ truncateToMicro pico :: Integer
+        -- https://github.com/lpsmith/postgresql-simple/issues/123
+        d' = max d $ fromGregorian 1950 1 1
+    return $ UTCTime d' $ picosecondsToDiffTime picoi
 
-arbText :: IsString s => Gen s
+arbText :: (IsString s) => Gen s
 arbText =
-     fromString
-  .  filter ((`notElem` forbidden) . generalCategory)
-  .  filter (<= '\xFFFF') -- only BMP
-  .  filter (/= '\0')     -- no nulls
-  .  T.unpack
-  <$> arbitrary
-  where forbidden = [NotAssigned, PrivateUse]
+    fromString
+        . filter ((`notElem` forbidden) . generalCategory)
+        . filter (<= '\xFFFF') -- only BMP
+        . filter (/= '\0') -- no nulls
+        . T.unpack
+        <$> arbitrary
+  where
+    forbidden = [NotAssigned, PrivateUse]
 
 type Runner backend m =
-    ( MonadIO m, MonadUnliftIO m, MonadFail m
-    , MonadThrow m, MonadBaseControl IO m
-    , PersistStoreWrite backend, PersistStoreWrite (BaseBackend backend)
+    ( MonadIO m
+    , MonadUnliftIO m
+    , MonadFail m
+    , MonadThrow m
+    , MonadBaseControl IO m
+    , PersistStoreWrite backend
+    , PersistStoreWrite (BaseBackend backend)
     , GenerateKey backend
     , HasPersistBackend backend
     , PersistUniqueWrite backend
@@ -240,7 +256,8 @@ type Runner backend m =
 type RunDb backend m = ReaderT backend m () -> IO ()
 
 changeBackend
-    :: forall backend backend' m. MonadUnliftIO m
+    :: forall backend backend' m
+     . (MonadUnliftIO m)
     => (backend -> backend')
     -> RunDb backend m
     -> RunDb backend' m
@@ -270,7 +287,7 @@ instance MonadBaseControl b m => MonadBaseControl b (ResourceT m) where
 
 -- * For implicit ID spec
 
-newtype UUID = UUID { unUUID :: Text }
+newtype UUID = UUID {unUUID :: Text}
     deriving stock
         (Show, Eq, Ord, Read)
     deriving newtype
@@ -293,7 +310,7 @@ sqlSettingsUuid :: Text -> MkPersistSettings
 sqlSettingsUuid defExpr =
     let
         uuidDef =
-           mkImplicitIdDef @UUID defExpr
+            mkImplicitIdDef @UUID defExpr
         settings =
             setImplicitIdDef uuidDef sqlSettings
      in

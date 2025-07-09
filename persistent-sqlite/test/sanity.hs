@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
+
 import Control.Monad.Logger
 
 import Database.Persist.Sqlite

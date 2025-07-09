@@ -30,7 +30,11 @@ instance PersistField (Labelled n) where
 instance PersistFieldSql (Labelled n) where
     sqlType _ = sqlType (Proxy :: Proxy Int)
 
-share [mkPersist sqlSettings { mpsGeneric = True },  mkMigrate "typeLitFieldDefsMigrate"] [persistLowerCase|
+share
+    [ mkPersist sqlSettings{mpsGeneric = True}
+    , mkMigrate "typeLitFieldDefsMigrate"
+    ]
+    [persistLowerCase|
     TypeLitFieldDefsNumeric
         one    (Finite 1)
         twenty (Finite 20)
@@ -54,7 +58,7 @@ twenty = Finite 20
 twentyLabelled :: Labelled "twenty"
 twentyLabelled = Labelled 20
 
-specsWith :: Runner backend m => RunDb backend m -> Spec
+specsWith :: (Runner backend m) => RunDb backend m -> Spec
 specsWith runDb =
     describe "Type Lit Field Definitions" $ do
         it "runs appropriate migrations" $ runDb $ do

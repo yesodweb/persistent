@@ -14,7 +14,9 @@ module Database.Persist.TH.KindEntitiesSpec where
 import Database.Persist.TH.KindEntitiesSpecImports
 import TemplateTestImports
 
-mkPersist sqlSettings [persistLowerCase|
+mkPersist
+    sqlSettings
+    [persistLowerCase|
 
 Customer
     name    String
@@ -28,7 +30,9 @@ CustomerTransfer
 spec :: Spec
 spec = describe "KindEntities" $ do
     it "should support DataKinds in entity definition" $ do
-        let mkTransfer :: CustomerId -> MoneyAmount 'CustomerOwned 'Debit -> CustomerTransfer
+        let
+            mkTransfer
+                :: CustomerId -> MoneyAmount 'CustomerOwned 'Debit -> CustomerTransfer
             mkTransfer = CustomerTransfer
             getAmount :: CustomerTransfer -> MoneyAmount 'CustomerOwned 'Debit
             getAmount = customerTransferMoneyAmount

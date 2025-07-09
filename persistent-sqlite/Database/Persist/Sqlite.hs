@@ -46,7 +46,7 @@ module Database.Persist.Sqlite
     , mockMigration
     , retryOnBusy
     , waitForDatabase
-    , ForeignKeyViolation(..)
+    , ForeignKeyViolation (..)
     , checkForeignKeys
     , RawSqlite
     , openRawSqliteConn
@@ -63,21 +63,21 @@ import Control.Concurrent (threadDelay)
 import qualified Control.Exception as E
 import Control.Monad (forM_)
 import Control.Monad.IO.Unlift
-       ( MonadIO(..)
-       , MonadUnliftIO
-       , askRunInIO
-       , unliftIO
-       , withRunInIO
-       , withUnliftIO
-       )
+    ( MonadIO (..)
+    , MonadUnliftIO
+    , askRunInIO
+    , unliftIO
+    , withRunInIO
+    , withUnliftIO
+    )
 import Control.Monad.Logger
-       ( MonadLoggerIO
-       , NoLoggingT
-       , askLoggerIO
-       , logWarn
-       , runLoggingT
-       , runNoLoggingT
-       )
+    ( MonadLoggerIO
+    , NoLoggingT
+    , askLoggerIO
+    , logWarn
+    , runLoggingT
+    , runNoLoggingT
+    )
 import Control.Monad.Reader (MonadReader)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT)
 import Control.Monad.Trans.Resource (MonadResource)
@@ -119,8 +119,9 @@ import qualified Database.Sqlite as Sqlite
 -- Note that this should not be used with the @:memory:@ connection string, as
 -- the pool will regularly remove connections, destroying your database.
 -- Instead, use 'withSqliteConn'.
-createSqlitePool :: (MonadLoggerIO m, MonadUnliftIO m)
-                 => Text -> Int -> m (Pool SqlBackend)
+createSqlitePool
+    :: (MonadLoggerIO m, MonadUnliftIO m)
+    => Text -> Int -> m (Pool SqlBackend)
 createSqlitePool = createSqlitePoolFromInfo . conStringToInfo
 
 -- | Create a pool of SQLite connections.
@@ -130,26 +131,33 @@ createSqlitePool = createSqlitePoolFromInfo . conStringToInfo
 -- Instead, use 'withSqliteConn'.
 --
 -- @since 2.6.2
-createSqlitePoolFromInfo :: (MonadLoggerIO m, MonadUnliftIO m)
-                         => SqliteConnectionInfo -> Int -> m (Pool SqlBackend)
+createSqlitePoolFromInfo
+    :: (MonadLoggerIO m, MonadUnliftIO m)
+    => SqliteConnectionInfo -> Int -> m (Pool SqlBackend)
 createSqlitePoolFromInfo connInfo = createSqlPool $ openWith const connInfo
 
 -- | Create a pool of SQLite connections.
 --
 -- @since 2.13.4.0
-createSqlitePoolWithConfig :: (MonadUnliftIO m, MonadLoggerIO m)
-                           => Text -- ^ connection string
-                           -> ConnectionPoolConfig -> m (Pool SqlBackend)
+createSqlitePoolWithConfig
+    :: (MonadUnliftIO m, MonadLoggerIO m)
+    => Text
+    -- ^ connection string
+    -> ConnectionPoolConfig
+    -> m (Pool SqlBackend)
 createSqlitePoolWithConfig connString =
     createSqlPoolWithConfig (openWith const (conStringToInfo connString))
 
 -- | Run the given action with a connection pool.
 --
 -- Like 'createSqlitePool', this should not be used with @:memory:@.
-withSqlitePool :: (MonadUnliftIO m, MonadLoggerIO m)
-               => Text
-               -> Int -- ^ number of connections to open
-               -> (Pool SqlBackend -> m a) -> m a
+withSqlitePool
+    :: (MonadUnliftIO m, MonadLoggerIO m)
+    => Text
+    -> Int
+    -- ^ number of connections to open
+    -> (Pool SqlBackend -> m a)
+    -> m a
 withSqlitePool connInfo = withSqlPool . openWith const $ conStringToInfo connInfo
 
 -- | Run the given action with a connection pool.
@@ -157,28 +165,35 @@ withSqlitePool connInfo = withSqlPool . openWith const $ conStringToInfo connInf
 -- Like 'createSqlitePool', this should not be used with @:memory:@.
 --
 -- @since 2.6.2
-withSqlitePoolInfo :: (MonadUnliftIO m, MonadLoggerIO m)
-                   => SqliteConnectionInfo
-                   -> Int -- ^ number of connections to open
-                   -> (Pool SqlBackend -> m a) -> m a
+withSqlitePoolInfo
+    :: (MonadUnliftIO m, MonadLoggerIO m)
+    => SqliteConnectionInfo
+    -> Int
+    -- ^ number of connections to open
+    -> (Pool SqlBackend -> m a)
+    -> m a
 withSqlitePoolInfo connInfo = withSqlPool $ openWith const connInfo
 
-withSqliteConn :: (MonadUnliftIO m, MonadLoggerIO m)
-               => Text -> (SqlBackend -> m a) -> m a
+withSqliteConn
+    :: (MonadUnliftIO m, MonadLoggerIO m)
+    => Text -> (SqlBackend -> m a) -> m a
 withSqliteConn = withSqliteConnInfo . conStringToInfo
 
 -- | @since 2.6.2
-withSqliteConnInfo :: (MonadUnliftIO m, MonadLoggerIO m)
-                   => SqliteConnectionInfo -> (SqlBackend -> m a) -> m a
+withSqliteConnInfo
+    :: (MonadUnliftIO m, MonadLoggerIO m)
+    => SqliteConnectionInfo -> (SqlBackend -> m a) -> m a
 withSqliteConnInfo = withSqlConn . openWith const
 
-openWith :: (SqlBackend -> Sqlite.Connection -> r)
-         -> SqliteConnectionInfo
-         -> LogFunc
-         -> IO r
+openWith
+    :: (SqlBackend -> Sqlite.Connection -> r)
+    -> SqliteConnectionInfo
+    -> LogFunc
+    -> IO r
 openWith f connInfo logFunc = do
     conn <- Sqlite.open $ _sqlConnectionStr connInfo
-    backend <- wrapConnectionInfo connInfo conn logFunc `E.onException` Sqlite.close conn
+    backend <-
+        wrapConnectionInfo connInfo conn logFunc `E.onException` Sqlite.close conn
     return $ f backend conn
 
 -- | Wrap up a raw 'Sqlite.Connection' as a Persistent SQL 'Connection'.
@@ -233,25 +248,25 @@ wrapConnection = wrapConnectionInfo (mkSqliteConnectionInfo "")
 -- @since 2.9.3
 retryOnBusy :: (MonadUnliftIO m, MonadLoggerIO m) => m a -> m a
 retryOnBusy action =
-  start $ take 20 $ delays 1000
+    start $ take 20 $ delays 1000
   where
     delays x
-      | x >= 1000000 = repeat x
-      | otherwise = x : delays (x * 2)
+        | x >= 1000000 = repeat x
+        | otherwise = x : delays (x * 2)
 
     start [] = do
-      $logWarn "Out of retry attempts"
-      action
-    start (x:xs) = do
-      -- Using try instead of catch to avoid creating a stack overflow
-      eres <- withRunInIO $ \run -> E.try $ run action
-      case eres of
-        Left (Sqlite.SqliteException { Sqlite.seError = Sqlite.ErrorBusy }) -> do
-          $logWarn "Encountered an SQLITE_BUSY, going to retry..."
-          liftIO $ threadDelay x
-          start xs
-        Left e -> liftIO $ E.throwIO e
-        Right y -> return y
+        $logWarn "Out of retry attempts"
+        action
+    start (x : xs) = do
+        -- Using try instead of catch to avoid creating a stack overflow
+        eres <- withRunInIO $ \run -> E.try $ run action
+        case eres of
+            Left (Sqlite.SqliteException{Sqlite.seError = Sqlite.ErrorBusy}) -> do
+                $logWarn "Encountered an SQLITE_BUSY, going to retry..."
+                liftIO $ threadDelay x
+                start xs
+            Left e -> liftIO $ E.throwIO e
+            Right y -> return y
 
 -- | Wait until some noop action on the database does not return an 'Sqlite.ErrorBusy'. See 'retryOnBusy'.
 --
@@ -275,48 +290,50 @@ wrapConnectionInfo connInfo conn logFunc = do
         -- Turn on the write-ahead log
         -- https://github.com/yesodweb/persistent/issues/363
         walPragma
-          | _walEnabled connInfo = (("PRAGMA journal_mode=WAL;", True):)
-          | otherwise = id
+            | _walEnabled connInfo = (("PRAGMA journal_mode=WAL;", True) :)
+            | otherwise = id
 
         -- Turn on foreign key constraints
         -- https://github.com/yesodweb/persistent/issues/646
         fkPragma
-          | _fkEnabled connInfo = (("PRAGMA foreign_keys = on;", False):)
-          | otherwise = id
+            | _fkEnabled connInfo = (("PRAGMA foreign_keys = on;", False) :)
+            | otherwise = id
 
         -- Allow arbitrary additional pragmas to be set
         -- https://github.com/commercialhaskell/stack/issues/4247
-        pragmas = walPragma $ fkPragma $ map (, False) $ _extraPragmas connInfo
+        pragmas = walPragma $ fkPragma $ map (,False) $ _extraPragmas connInfo
 
     forM_ pragmas $ \(pragma, shouldRetry) -> flip runLoggingT logFunc $
-        (if shouldRetry then retryOnBusy else id) $ liftIO $ do
-        stmt <- Sqlite.prepare conn pragma
-        _ <- Sqlite.stepConn conn stmt
-        Sqlite.reset conn stmt
-        Sqlite.finalize stmt
+        (if shouldRetry then retryOnBusy else id) $
+            liftIO $ do
+                stmt <- Sqlite.prepare conn pragma
+                _ <- Sqlite.stepConn conn stmt
+                Sqlite.reset conn stmt
+                Sqlite.finalize stmt
 
     smap <- newIORef mempty
     return $
         setConnMaxParams 999 $
-        setConnPutManySql putManySql $
-        setConnRepsertManySql repsertManySql $
-        mkSqlBackend MkSqlBackendArgs
-            { connPrepare = prepare' conn
-            , connStmtMap = smap
-            , connInsertSql = insertSql'
-            , connClose = Sqlite.close conn
-            , connMigrateSql = migrate'
-            , connBegin = \f _ -> helper "BEGIN" f
-            , connCommit = helper "COMMIT"
-            , connRollback = ignoreExceptions . helper "ROLLBACK"
-            , connEscapeFieldName = escape . unFieldNameDB
-            , connEscapeTableName = escape . unEntityNameDB . getEntityDBName
-            , connEscapeRawName = escape
-            , connNoLimit = "LIMIT -1"
-            , connRDBMS = "sqlite"
-            , connLimitOffset = decorateSQLWithLimitOffset "LIMIT -1"
-            , connLogFunc = logFunc
-            }
+            setConnPutManySql putManySql $
+                setConnRepsertManySql repsertManySql $
+                    mkSqlBackend
+                        MkSqlBackendArgs
+                            { connPrepare = prepare' conn
+                            , connStmtMap = smap
+                            , connInsertSql = insertSql'
+                            , connClose = Sqlite.close conn
+                            , connMigrateSql = migrate'
+                            , connBegin = \f _ -> helper "BEGIN" f
+                            , connCommit = helper "COMMIT"
+                            , connRollback = ignoreExceptions . helper "ROLLBACK"
+                            , connEscapeFieldName = escape . unFieldNameDB
+                            , connEscapeTableName = escape . unEntityNameDB . getEntityDBName
+                            , connEscapeRawName = escape
+                            , connNoLimit = "LIMIT -1"
+                            , connRDBMS = "sqlite"
+                            , connLimitOffset = decorateSQLWithLimitOffset "LIMIT -1"
+                            , connLogFunc = logFunc
+                            }
   where
     helper t getter = do
         stmt <- getter t
@@ -329,45 +346,55 @@ wrapConnectionInfo connInfo conn logFunc = do
 -- that all log messages are discarded.
 --
 -- @since 1.1.4
-runSqlite :: (MonadUnliftIO m)
-          => Text -- ^ connection string
-          -> ReaderT SqlBackend (NoLoggingT (ResourceT m)) a -- ^ database action
-          -> m a
-runSqlite connstr = runResourceT
-                  . runNoLoggingT
-                  . withSqliteConn connstr
-                  . runSqlConn
+runSqlite
+    :: (MonadUnliftIO m)
+    => Text
+    -- ^ connection string
+    -> ReaderT SqlBackend (NoLoggingT (ResourceT m)) a
+    -- ^ database action
+    -> m a
+runSqlite connstr =
+    runResourceT
+        . runNoLoggingT
+        . withSqliteConn connstr
+        . runSqlConn
 
 -- | A convenience helper which creates a new database connection and runs the
 -- given block, handling @MonadResource@ and @MonadLogger@ requirements. Note
 -- that all log messages are discarded.
 --
 -- @since 2.6.2
-runSqliteInfo :: (MonadUnliftIO m)
-              => SqliteConnectionInfo
-              -> ReaderT SqlBackend (NoLoggingT (ResourceT m)) a -- ^ database action
-              -> m a
-runSqliteInfo conInfo = runResourceT
-                      . runNoLoggingT
-                      . withSqliteConnInfo conInfo
-                      . runSqlConn
+runSqliteInfo
+    :: (MonadUnliftIO m)
+    => SqliteConnectionInfo
+    -> ReaderT SqlBackend (NoLoggingT (ResourceT m)) a
+    -- ^ database action
+    -> m a
+runSqliteInfo conInfo =
+    runResourceT
+        . runNoLoggingT
+        . withSqliteConnInfo conInfo
+        . runSqlConn
 
 prepare' :: Sqlite.Connection -> Text -> IO Statement
 prepare' conn sql = do
     stmt <- Sqlite.prepare conn sql
-    return Statement
-        { stmtFinalize = Sqlite.finalize stmt
-        , stmtReset = Sqlite.reset conn stmt
-        , stmtExecute = execute' conn stmt
-        , stmtQuery = withStmt' conn stmt
-        }
+    return
+        Statement
+            { stmtFinalize = Sqlite.finalize stmt
+            , stmtReset = Sqlite.reset conn stmt
+            , stmtExecute = execute' conn stmt
+            , stmtQuery = withStmt' conn stmt
+            }
 
 insertSql' :: EntityDef -> [PersistValue] -> InsertSqlResult
 insertSql' ent vals =
     case getEntityId ent of
         EntityIdNaturalKey _ ->
-          ISRManyKeys sql vals
-            where sql = T.concat
+            ISRManyKeys sql vals
+          where
+            sql =
+                T.concat
                     [ "INSERT INTO "
                     , escapeE $ getEntityDBName ent
                     , "("
@@ -377,28 +404,31 @@ insertSql' ent vals =
                     , ")"
                     ]
         EntityIdField fd ->
-          ISRInsertGet ins sel
-            where
-              sel = T.concat
-                  [ "SELECT "
-                  , escapeF $ fieldDB fd
-                  , " FROM "
-                  , escapeE $ getEntityDBName ent
-                  , " WHERE _ROWID_=last_insert_rowid()"
-                  ]
-              ins = T.concat
-                  [ "INSERT INTO "
-                  , escapeE $ getEntityDBName ent
-                  , if null cols
+            ISRInsertGet ins sel
+          where
+            sel =
+                T.concat
+                    [ "SELECT "
+                    , escapeF $ fieldDB fd
+                    , " FROM "
+                    , escapeE $ getEntityDBName ent
+                    , " WHERE _ROWID_=last_insert_rowid()"
+                    ]
+            ins =
+                T.concat
+                    [ "INSERT INTO "
+                    , escapeE $ getEntityDBName ent
+                    , if null cols
                         then " VALUES(null)"
-                        else T.concat
-                          [ "("
-                          , T.intercalate "," $ map (escapeF . fieldDB) $ cols
-                          , ") VALUES("
-                          , T.intercalate "," (map (const "?") cols)
-                          , ")"
-                          ]
-                  ]
+                        else
+                            T.concat
+                                [ "("
+                                , T.intercalate "," $ map (escapeF . fieldDB) $ cols
+                                , ") VALUES("
+                                , T.intercalate "," (map (const "?") cols)
+                                , ")"
+                                ]
+                    ]
   where
     notGenerated =
         isNothing . fieldGenerated
@@ -412,15 +442,16 @@ execute' conn stmt vals = flip finally (liftIO $ Sqlite.reset conn stmt) $ do
     Sqlite.changes conn
 
 withStmt'
-          :: MonadIO m
-          => Sqlite.Connection
-          -> Sqlite.Statement
-          -> [PersistValue]
-          -> Acquire (ConduitM () [PersistValue] m ())
+    :: (MonadIO m)
+    => Sqlite.Connection
+    -> Sqlite.Statement
+    -> [PersistValue]
+    -> Acquire (ConduitM () [PersistValue] m ())
 withStmt' conn stmt vals = do
-    _ <- mkAcquire
-        (Sqlite.bind stmt vals >> return stmt)
-        (Sqlite.reset conn)
+    _ <-
+        mkAcquire
+            (Sqlite.bind stmt vals >> return stmt)
+            (Sqlite.reset conn)
     return pull
   where
     pull = do
@@ -437,7 +468,8 @@ showSqlType SqlString = "VARCHAR"
 showSqlType SqlInt32 = "INTEGER"
 showSqlType SqlInt64 = "INTEGER"
 showSqlType SqlReal = "REAL"
-showSqlType (SqlNumeric precision scale) = T.concat [ "NUMERIC(", T.pack (show precision), ",", T.pack (show scale), ")" ]
+showSqlType (SqlNumeric precision scale) =
+    T.concat ["NUMERIC(", T.pack (show precision), ",", T.pack (show scale), ")"]
 showSqlType SqlDay = "DATE"
 showSqlType SqlTime = "TIME"
 showSqlType SqlDayTime = "TIMESTAMP"
@@ -445,7 +477,8 @@ showSqlType SqlBlob = "BLOB"
 showSqlType SqlBool = "BOOLEAN"
 showSqlType (SqlOther t) = t
 
-sqliteMkColumns :: [EntityDef] -> EntityDef -> ([Column], [UniqueDef], [ForeignDef])
+sqliteMkColumns
+    :: [EntityDef] -> EntityDef -> ([Column], [UniqueDef], [ForeignDef])
 sqliteMkColumns allDefs t = mkColumns allDefs t emptyBackendSpecificOverrides
 
 migrate'
@@ -454,11 +487,19 @@ migrate'
     -> EntityDef
     -> IO (Either [Text] CautiousMigration)
 migrate' allDefs getter val = do
-    let (cols, uniqs, fdefs) = sqliteMkColumns allDefs val
-    let newSql = mkCreateTable False def (filter (not . safeToRemove val . cName) cols, uniqs, fdefs)
+    let
+        (cols, uniqs, fdefs) = sqliteMkColumns allDefs val
+    let
+        newSql =
+            mkCreateTable
+                False
+                def
+                (filter (not . safeToRemove val . cName) cols, uniqs, fdefs)
     stmt <- getter "SELECT sql FROM sqlite_master WHERE type='table' AND name=?"
-    oldSql' <- with (stmtQuery stmt [PersistText $ unEntityNameDB table])
-      (\src -> runConduit $ src .| go)
+    oldSql' <-
+        with
+            (stmtQuery stmt [PersistText $ unEntityNameDB table])
+            (\src -> runConduit $ src .| go)
     case oldSql' of
         Nothing -> return $ Right [(False, newSql)]
         Just oldSql -> do
@@ -483,31 +524,34 @@ migrate' allDefs getter val = do
 mockMigration :: Migration -> IO ()
 mockMigration mig = do
     smap <- newIORef mempty
-    let sqlbackend =
+    let
+        sqlbackend =
             setConnMaxParams 999 $
-            mkSqlBackend MkSqlBackendArgs
-                { connPrepare = \_ -> do
-                    return Statement
-                        { stmtFinalize = return ()
-                        , stmtReset = return ()
-                        , stmtExecute = undefined
-                        , stmtQuery = \_ -> return $ return ()
+                mkSqlBackend
+                    MkSqlBackendArgs
+                        { connPrepare = \_ -> do
+                            return
+                                Statement
+                                    { stmtFinalize = return ()
+                                    , stmtReset = return ()
+                                    , stmtExecute = undefined
+                                    , stmtQuery = \_ -> return $ return ()
+                                    }
+                        , connStmtMap = smap
+                        , connInsertSql = insertSql'
+                        , connClose = undefined
+                        , connMigrateSql = migrate'
+                        , connBegin = \f _ -> helper "BEGIN" f
+                        , connCommit = helper "COMMIT"
+                        , connRollback = ignoreExceptions . helper "ROLLBACK"
+                        , connEscapeFieldName = escape . unFieldNameDB
+                        , connEscapeTableName = escape . unEntityNameDB . getEntityDBName
+                        , connEscapeRawName = escape
+                        , connNoLimit = "LIMIT -1"
+                        , connRDBMS = "sqlite"
+                        , connLimitOffset = decorateSQLWithLimitOffset "LIMIT -1"
+                        , connLogFunc = undefined
                         }
-                , connStmtMap = smap
-                , connInsertSql = insertSql'
-                , connClose = undefined
-                , connMigrateSql = migrate'
-                , connBegin = \f _ -> helper "BEGIN" f
-                , connCommit = helper "COMMIT"
-                , connRollback = ignoreExceptions . helper "ROLLBACK"
-                , connEscapeFieldName = escape . unFieldNameDB
-                , connEscapeTableName = escape . unEntityNameDB . getEntityDBName
-                , connEscapeRawName = escape
-                , connNoLimit = "LIMIT -1"
-                , connRDBMS = "sqlite"
-                , connLimitOffset = decorateSQLWithLimitOffset "LIMIT -1"
-                , connLogFunc = undefined
-                }
         result = runReaderT . runWriterT . runWriterT $ mig
     resp <- result sqlbackend
     mapM_ TIO.putStrLn $ map snd $ snd resp
@@ -522,10 +566,10 @@ mockMigration mig = do
 -- | Check if a column name is listed as the "safe to remove" in the entity
 -- list.
 safeToRemove :: EntityDef -> FieldNameDB -> Bool
-safeToRemove def (FieldNameDB colName)
-    = any (elem FieldAttrSafeToRemove . fieldAttrs)
-    $ filter ((== FieldNameDB colName) . fieldDB)
-    $ allEntityFields
+safeToRemove def (FieldNameDB colName) =
+    any (elem FieldAttrSafeToRemove . fieldAttrs) $
+        filter ((== FieldNameDB colName) . fieldDB) $
+            allEntityFields
   where
     allEntityFields =
         getEntityFieldsDatabase def <> case getEntityId def of
@@ -534,29 +578,34 @@ safeToRemove def (FieldNameDB colName)
             _ ->
                 []
 
-getCopyTable :: [EntityDef]
-             -> (Text -> IO Statement)
-             -> EntityDef
-             -> IO [(Bool, Text)]
+getCopyTable
+    :: [EntityDef]
+    -> (Text -> IO Statement)
+    -> EntityDef
+    -> IO [(Bool, Text)]
 getCopyTable allDefs getter def = do
-    stmt <- getter $ T.concat [ "PRAGMA table_info(", escapeE table, ")" ]
+    stmt <- getter $ T.concat ["PRAGMA table_info(", escapeE table, ")"]
     oldCols' <- with (stmtQuery stmt []) (\src -> runConduit $ src .| getCols)
-    let oldCols = map FieldNameDB oldCols'
-    let newCols = filter (not . safeToRemove def) $ map cName cols
-    let common = filter (`elem` oldCols) newCols
-    return [ (False, tmpSql)
-           , (False, copyToTemp common)
-           , (common /= filter (not . safeToRemove def) oldCols, dropOld)
-           , (False, newSql)
-           , (False, copyToFinal newCols)
-           , (False, dropTmp)
-           ]
+    let
+        oldCols = map FieldNameDB oldCols'
+    let
+        newCols = filter (not . safeToRemove def) $ map cName cols
+    let
+        common = filter (`elem` oldCols) newCols
+    return
+        [ (False, tmpSql)
+        , (False, copyToTemp common)
+        , (common /= filter (not . safeToRemove def) oldCols, dropOld)
+        , (False, newSql)
+        , (False, copyToFinal newCols)
+        , (False, dropTmp)
+        ]
   where
     getCols = do
         x <- CL.head
         case x of
             Nothing -> return []
-            Just (_:PersistText name:_) -> do
+            Just (_ : PersistText name : _) -> do
                 names <- getCols
                 return $ name : names
             Just y -> error $ "Invalid result from PRAGMA table_info: " ++ show y
@@ -568,26 +617,29 @@ getCopyTable allDefs getter def = do
     tmpSql = mkCreateTable True (setEntityDBName tableTmp def) (cols', uniqs, [])
     dropTmp = "DROP TABLE " <> escapeE tableTmp
     dropOld = "DROP TABLE " <> escapeE table
-    copyToTemp common = T.concat
-        [ "INSERT INTO "
-        , escapeE tableTmp
-        , "("
-        , T.intercalate "," $ map escapeF common
-        , ") SELECT "
-        , T.intercalate "," $ map escapeF common
-        , " FROM "
-        , escapeE table
-        ]
-    copyToFinal newCols = T.concat
-        [ "INSERT INTO "
-        , escapeE table
-        , " SELECT "
-        , T.intercalate "," $ map escapeF newCols
-        , " FROM "
-        , escapeE tableTmp
-        ]
+    copyToTemp common =
+        T.concat
+            [ "INSERT INTO "
+            , escapeE tableTmp
+            , "("
+            , T.intercalate "," $ map escapeF common
+            , ") SELECT "
+            , T.intercalate "," $ map escapeF common
+            , " FROM "
+            , escapeE table
+            ]
+    copyToFinal newCols =
+        T.concat
+            [ "INSERT INTO "
+            , escapeE table
+            , " SELECT "
+            , T.intercalate "," $ map escapeF newCols
+            , " FROM "
+            , escapeE tableTmp
+            ]
 
-mkCreateTable :: Bool -> EntityDef -> ([Column], [UniqueDef], [ForeignDef]) -> Text
+mkCreateTable
+    :: Bool -> EntityDef -> ([Column], [UniqueDef], [ForeignDef]) -> Text
 mkCreateTable isTemp entity (cols, uniqs, fdefs) =
     T.concat (header <> columns <> footer)
   where
@@ -613,7 +665,6 @@ mkCreateTable isTemp entity (cols, uniqs, fdefs) =
             , T.intercalate "," $ map (escapeF . fieldDB) $ toList $ compositeFields pdef
             , ")"
             ]
-
         EntityIdField fd ->
             [ escapeF $ fieldDB fd
             , " "
@@ -636,58 +687,68 @@ mayGenerated gen = case gen of
     Just g -> " GENERATED ALWAYS AS (" <> g <> ") STORED"
 
 sqlColumn :: Bool -> Column -> Text
-sqlColumn noRef (Column name isNull typ def gen _cn _maxLen ref) = T.concat
-    [ ","
-    , escapeF name
-    , " "
-    , showSqlType typ
-    , if isNull then " NULL" else " NOT NULL"
-    , mayDefault def
-    , mayGenerated gen
-    , case ref of
-        Nothing -> ""
-        Just ColumnReference {crTableName=table, crFieldCascade=cascadeOpts} ->
-          if noRef then "" else " REFERENCES " <> escapeE table
-            <> onDelete cascadeOpts <> onUpdate cascadeOpts
-    ]
+sqlColumn noRef (Column name isNull typ def gen _cn _maxLen ref) =
+    T.concat
+        [ ","
+        , escapeF name
+        , " "
+        , showSqlType typ
+        , if isNull then " NULL" else " NOT NULL"
+        , mayDefault def
+        , mayGenerated gen
+        , case ref of
+            Nothing -> ""
+            Just ColumnReference{crTableName = table, crFieldCascade = cascadeOpts} ->
+                if noRef
+                    then ""
+                    else
+                        " REFERENCES "
+                            <> escapeE table
+                            <> onDelete cascadeOpts
+                            <> onUpdate cascadeOpts
+        ]
   where
     onDelete opts = maybe "" (T.append " ON DELETE " . renderCascadeAction) (fcOnDelete opts)
     onUpdate opts = maybe "" (T.append " ON UPDATE " . renderCascadeAction) (fcOnUpdate opts)
 
 sqlForeign :: ForeignDef -> Text
-sqlForeign fdef = T.concat $
-    [ ", CONSTRAINT "
-    , escapeC $ foreignConstraintNameDBName fdef
-    , " FOREIGN KEY("
-    , T.intercalate "," $ map (escapeF . snd. fst) $ foreignFields fdef
-    , ") REFERENCES "
-    , escapeE $ foreignRefTableDBName fdef
-    , "("
-    , T.intercalate "," $ map (escapeF . snd . snd) $ foreignFields fdef
-    , ")"
-    ] ++ onDelete ++ onUpdate
+sqlForeign fdef =
+    T.concat $
+        [ ", CONSTRAINT "
+        , escapeC $ foreignConstraintNameDBName fdef
+        , " FOREIGN KEY("
+        , T.intercalate "," $ map (escapeF . snd . fst) $ foreignFields fdef
+        , ") REFERENCES "
+        , escapeE $ foreignRefTableDBName fdef
+        , "("
+        , T.intercalate "," $ map (escapeF . snd . snd) $ foreignFields fdef
+        , ")"
+        ]
+            ++ onDelete
+            ++ onUpdate
   where
     onDelete =
-        fmap (T.append " ON DELETE ")
-        $ showAction
-        $ fcOnDelete
-        $ foreignFieldCascade fdef
+        fmap (T.append " ON DELETE ") $
+            showAction $
+                fcOnDelete $
+                    foreignFieldCascade fdef
     onUpdate =
-        fmap (T.append " ON UPDATE ")
-        $ showAction
-        $ fcOnUpdate
-        $ foreignFieldCascade fdef
+        fmap (T.append " ON UPDATE ") $
+            showAction $
+                fcOnUpdate $
+                    foreignFieldCascade fdef
 
     showAction = maybeToList . fmap renderCascadeAction
 
 sqlUnique :: UniqueDef -> Text
-sqlUnique (UniqueDef _ cname cols _) = T.concat
-    [ ",CONSTRAINT "
-    , escapeC cname
-    , " UNIQUE ("
-    , T.intercalate "," $ map (escapeF . snd) $ toList cols
-    , ")"
-    ]
+sqlUnique (UniqueDef _ cname cols _) =
+    T.concat
+        [ ",CONSTRAINT "
+        , escapeC cname
+        , " UNIQUE ("
+        , T.intercalate "," $ map (escapeF . snd) $ toList cols
+        , ")"
+        ]
 
 escapeC :: ConstraintNameDB -> Text
 escapeC = escapeWith escape
@@ -710,7 +771,8 @@ putManySql :: EntityDef -> Int -> Text
 putManySql ent n = putManySql' conflictColumns (toList fields) ent n
   where
     fields = getEntityFields ent
-    conflictColumns = concatMap (map (escapeF . snd) . toList . uniqueFields) (getEntityUniques ent)
+    conflictColumns =
+        concatMap (map (escapeF . snd) . toList . uniqueFields) (getEntityUniques ent)
 
 repsertManySql :: EntityDef -> Int -> Text
 repsertManySql ent n = putManySql' conflictColumns (toList fields) ent n
@@ -729,38 +791,50 @@ putManySql' conflictColumns fields ent n = q
     placeholders = map (const "?") fields
     updates = map (mkAssignment . fieldDbToText) fields
 
-    q = T.concat
-        [ "INSERT INTO "
-        , table
-        , Util.parenWrapped columns
-        , " VALUES "
-        , Util.commaSeparated . replicate n
-            . Util.parenWrapped . Util.commaSeparated $ placeholders
-        , " ON CONFLICT "
-        , Util.parenWrapped . Util.commaSeparated $ conflictColumns
-        , " DO UPDATE SET "
-        , Util.commaSeparated updates
-        ]
+    q =
+        T.concat
+            [ "INSERT INTO "
+            , table
+            , Util.parenWrapped columns
+            , " VALUES "
+            , Util.commaSeparated
+                . replicate n
+                . Util.parenWrapped
+                . Util.commaSeparated
+                $ placeholders
+            , " ON CONFLICT "
+            , Util.parenWrapped . Util.commaSeparated $ conflictColumns
+            , " DO UPDATE SET "
+            , Util.commaSeparated updates
+            ]
 
 -- | Information required to setup a connection pool.
-data SqliteConf = SqliteConf
-    { sqlDatabase :: Text
-    , sqlPoolSize :: Int
-    }
+data SqliteConf
+    = SqliteConf
+        { sqlDatabase :: Text
+        , sqlPoolSize :: Int
+        }
     | SqliteConfInfo
-    { sqlConnInfo :: SqliteConnectionInfo
-    , sqlPoolSize :: Int
-    } deriving Show
+        { sqlConnInfo :: SqliteConnectionInfo
+        , sqlPoolSize :: Int
+        }
+    deriving (Show)
 
 instance FromJSON SqliteConf where
-    parseJSON v = modifyFailure ("Persistent: error loading Sqlite conf: " ++) $ flip (withObject "SqliteConf") v parser where
-        parser o = if "database" `isMember` o
-                      then SqliteConf
-                            <$> o .: "database"
-                            <*> o .: "poolsize"
-                      else SqliteConfInfo
-                            <$> o .: "connInfo"
-                            <*> o .: "poolsize"
+    parseJSON v =
+        modifyFailure ("Persistent: error loading Sqlite conf: " ++) $
+            flip (withObject "SqliteConf") v parser
+      where
+        parser o =
+            if "database" `isMember` o
+                then
+                    SqliteConf
+                        <$> o .: "database"
+                        <*> o .: "poolsize"
+                else
+                    SqliteConfInfo
+                        <$> o .: "connInfo"
+                        <*> o .: "poolsize"
 #if MIN_VERSION_aeson(2,0,0)
         isMember = KeyMap.member
 #else
@@ -775,14 +849,19 @@ instance PersistConfig SqliteConf where
     runPool _ = runSqlPool
     loadConfig = parseJSON
 
-finally :: MonadUnliftIO m
-        => m a -- ^ computation to run first
-        -> m b -- ^ computation to run afterward (even if an exception was raised)
-        -> m a
+finally
+    :: (MonadUnliftIO m)
+    => m a
+    -- ^ computation to run first
+    -> m b
+    -- ^ computation to run afterward (even if an exception was raised)
+    -> m a
 finally a sequel = withUnliftIO $ \u ->
-                     E.finally (unliftIO u a)
-                               (unliftIO u sequel)
-{-# INLINABLE finally #-}
+    E.finally
+        (unliftIO u a)
+        (unliftIO u sequel)
+{-# INLINEABLE finally #-}
+
 -- | Creates a SqliteConnectionInfo from a connection string, with the
 -- default settings.
 --
@@ -792,12 +871,13 @@ mkSqliteConnectionInfo fp = SqliteConnectionInfo fp True True []
 
 -- | Parses connection options from a connection string. Used only to provide deprecated API.
 conStringToInfo :: Text -> SqliteConnectionInfo
-conStringToInfo connStr = SqliteConnectionInfo connStr' enableWal True [] where
+conStringToInfo connStr = SqliteConnectionInfo connStr' enableWal True []
+  where
     (connStr', enableWal) = case () of
         ()
-            | Just cs <- T.stripPrefix "WAL=on "  connStr -> (cs, True)
+            | Just cs <- T.stripPrefix "WAL=on " connStr -> (cs, True)
             | Just cs <- T.stripPrefix "WAL=off " connStr -> (cs, False)
-            | otherwise                                   -> (connStr, True)
+            | otherwise -> (connStr, True)
 
 -- | Information required to connect to a sqlite database. We export
 -- lenses instead of fields to avoid being limited to the current
@@ -805,28 +885,38 @@ conStringToInfo connStr = SqliteConnectionInfo connStr' enableWal True [] where
 --
 -- @since 2.6.2
 data SqliteConnectionInfo = SqliteConnectionInfo
-    { _sqlConnectionStr :: Text -- ^ connection string for the database. Use @:memory:@ for an in-memory database.
-    , _walEnabled :: Bool -- ^ if the write-ahead log is enabled - see https://github.com/yesodweb/persistent/issues/363.
-    , _fkEnabled :: Bool -- ^ if foreign-key constraints are enabled.
-    , _extraPragmas :: [Text] -- ^ additional pragmas to be set on initialization
-    } deriving Show
+    { _sqlConnectionStr :: Text
+    -- ^ connection string for the database. Use @:memory:@ for an in-memory database.
+    , _walEnabled :: Bool
+    -- ^ if the write-ahead log is enabled - see https://github.com/yesodweb/persistent/issues/363.
+    , _fkEnabled :: Bool
+    -- ^ if foreign-key constraints are enabled.
+    , _extraPragmas :: [Text]
+    -- ^ additional pragmas to be set on initialization
+    }
+    deriving (Show)
 
 instance FromJSON SqliteConnectionInfo where
     parseJSON v = modifyFailure ("Persistent: error loading SqliteConnectionInfo: " ++) $
-      flip (withObject "SqliteConnectionInfo") v $ \o -> SqliteConnectionInfo
-        <$> o .: "connectionString"
-        <*> o .: "walEnabled"
-        <*> o .: "fkEnabled"
-        <*> o .:? "extraPragmas" .!= []
+        flip (withObject "SqliteConnectionInfo") v $ \o ->
+            SqliteConnectionInfo
+                <$> o .: "connectionString"
+                <*> o .: "walEnabled"
+                <*> o .: "fkEnabled"
+                <*> o .:? "extraPragmas" .!= []
 
 -- | Data type for reporting foreign key violations using 'checkForeignKeys'.
 --
 -- @since 2.11.1
 data ForeignKeyViolation = ForeignKeyViolation
-    { foreignKeyTable :: Text -- ^ The table of the violated constraint
-    , foreignKeyColumn :: Text -- ^ The column of the violated constraint
-    , foreignKeyRowId :: Int64 -- ^ The ROWID of the row with the violated foreign key constraint
-    } deriving (Eq, Ord, Show)
+    { foreignKeyTable :: Text
+    -- ^ The table of the violated constraint
+    , foreignKeyColumn :: Text
+    -- ^ The column of the violated constraint
+    , foreignKeyRowId :: Int64
+    -- ^ The ROWID of the row with the violated foreign key constraint
+    }
+    deriving (Eq, Ord, Show)
 
 -- | Outputs all (if any) the violated foreign key constraints in the database.
 --
@@ -841,22 +931,26 @@ checkForeignKeys
 checkForeignKeys = rawQuery query [] .| C.mapM parse
   where
     parse l = case l of
-        [ PersistInt64 rowid , PersistText table , PersistText column ] ->
-            return ForeignKeyViolation
-                { foreignKeyTable = table
-                , foreignKeyColumn = column
-                , foreignKeyRowId = rowid
-                }
-        _ -> liftIO . E.throwIO . PersistMarshalError $ mconcat
-            [ "Unexpected result from foreign key check:\n", T.pack (show l) ]
+        [PersistInt64 rowid, PersistText table, PersistText column] ->
+            return
+                ForeignKeyViolation
+                    { foreignKeyTable = table
+                    , foreignKeyColumn = column
+                    , foreignKeyRowId = rowid
+                    }
+        _ ->
+            liftIO . E.throwIO . PersistMarshalError $
+                mconcat
+                    ["Unexpected result from foreign key check:\n", T.pack (show l)]
 
-    query = T.unlines
-        [ "SELECT origin.rowid, origin.\"table\", group_concat(foreignkeys.\"from\")"
-        , "FROM pragma_foreign_key_check() AS origin"
-        , "INNER JOIN pragma_foreign_key_list(origin.\"table\") AS foreignkeys"
-        , "ON origin.fkid = foreignkeys.id AND origin.parent = foreignkeys.\"table\""
-        , "GROUP BY origin.rowid"
-        ]
+    query =
+        T.unlines
+            [ "SELECT origin.rowid, origin.\"table\", group_concat(foreignkeys.\"from\")"
+            , "FROM pragma_foreign_key_check() AS origin"
+            , "INNER JOIN pragma_foreign_key_list(origin.\"table\") AS foreignkeys"
+            , "ON origin.fkid = foreignkeys.id AND origin.parent = foreignkeys.\"table\""
+            , "GROUP BY origin.rowid"
+            ]
 
 -- | Like `withSqliteConnInfo`, but exposes the internal `Sqlite.Connection`.
 -- For power users who want to manually interact with SQLite's C API via
@@ -894,7 +988,8 @@ createRawSqlitePoolFromInfo
     -> m (Pool (RawSqlite SqlBackend))
 createRawSqlitePoolFromInfo connInfo f n = do
     runIO <- askRunInIO
-    let createRawSqlite logFun = do
+    let
+        createRawSqlite logFun = do
             result <- openWith RawSqlite connInfo logFun
             result <$ runIO (f result)
 
@@ -908,7 +1003,7 @@ createRawSqlitePoolFromInfo_
     :: (MonadLoggerIO m, MonadUnliftIO m)
     => SqliteConnectionInfo -> Int -> m (Pool (RawSqlite SqlBackend))
 createRawSqlitePoolFromInfo_ connInfo =
-  createRawSqlitePoolFromInfo connInfo (const (return ()))
+    createRawSqlitePoolFromInfo connInfo (const (return ()))
 
 -- | Like `createSqlitePoolInfo`, but based on `createRawSqlitePoolFromInfo`.
 --
@@ -917,12 +1012,14 @@ withRawSqlitePoolInfo
     :: (MonadUnliftIO m, MonadLoggerIO m)
     => SqliteConnectionInfo
     -> (RawSqlite SqlBackend -> m ())
-    -> Int -- ^ number of connections to open
+    -> Int
+    -- ^ number of connections to open
     -> (Pool (RawSqlite SqlBackend) -> m a)
     -> m a
 withRawSqlitePoolInfo connInfo f n work = do
     runIO <- askRunInIO
-    let createRawSqlite logFun = do
+    let
+        createRawSqlite logFun = do
             result <- openWith RawSqlite connInfo logFun
             result <$ runIO (f result)
 
@@ -934,19 +1031,22 @@ withRawSqlitePoolInfo connInfo f n work = do
 withRawSqlitePoolInfo_
     :: (MonadUnliftIO m, MonadLoggerIO m)
     => SqliteConnectionInfo
-    -> Int -- ^ number of connections to open
+    -> Int
+    -- ^ number of connections to open
     -> (Pool (RawSqlite SqlBackend) -> m a)
     -> m a
 withRawSqlitePoolInfo_ connInfo =
-  withRawSqlitePoolInfo connInfo (const (return ()))
+    withRawSqlitePoolInfo connInfo (const (return ()))
 
 -- | Wrapper for persistent SqlBackends that carry the corresponding
 -- `Sqlite.Connection`.
 --
 -- @since 2.10.2
 data RawSqlite backend = RawSqlite
-    { _persistentBackend :: backend -- ^ The persistent backend
-    , _rawSqliteConnection :: Sqlite.Connection -- ^ The underlying `Sqlite.Connection`
+    { _persistentBackend :: backend
+    -- ^ The persistent backend
+    , _rawSqliteConnection :: Sqlite.Connection
+    -- ^ The underlying `Sqlite.Connection`
     }
 
 -- | Open a @'RawSqlite' 'SqlBackend'@ connection from a 'SqliteConnectionInfo'.
@@ -991,7 +1091,6 @@ deriving instance (Bounded (BackendKey b)) => Bounded (BackendKey (RawSqlite b))
 deriving instance (ToJSON (BackendKey b)) => ToJSON (BackendKey (RawSqlite b))
 deriving instance (FromJSON (BackendKey b)) => FromJSON (BackendKey (RawSqlite b))
 #endif
-
 
 #if MIN_VERSION_base(4,12,0)
 $(pure [])

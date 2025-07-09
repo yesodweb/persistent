@@ -29,7 +29,9 @@ import Database.Persist.ImplicitIdDef
 import Database.Persist.ImplicitIdDef.Internal (fieldTypeFromTypeable)
 import Database.Persist.Types
 
-mkPersist sqlSettings [persistLowerCase|
+mkPersist
+    sqlSettings
+    [persistLowerCase|
 JsonEncoding json
     name Text
     age  Int
@@ -71,58 +73,54 @@ spec = describe "JsonEncodingSpec" $ do
 
     it "encodes without an ID field" $ do
         toJSON subjectEntity
-            `shouldBe`
-                object
-                    [ ("name", String "Bob")
-                    , ("age", toJSON (32 :: Int))
-                    , ("id", String "Bob")
-                    ]
+            `shouldBe` object
+                [ ("name", String "Bob")
+                , ("age", toJSON (32 :: Int))
+                , ("id", String "Bob")
+                ]
 
     it "decodes without an ID field" $ do
         let
-            json_ = encode . object $
-                [ ("name", String "Bob")
-                , ("age", toJSON (32 :: Int))
-                ]
+            json_ =
+                encode . object $
+                    [ ("name", String "Bob")
+                    , ("age", toJSON (32 :: Int))
+                    ]
         eitherDecode json_
-            `shouldBe`
-                Right subjectEntity
+            `shouldBe` Right subjectEntity
 
     it "has informative decoder errors" $ do
         let
             json_ = encode Null
         (eitherDecode json_ :: Either String JsonEncoding)
-            `shouldBe`
-                Left "Error in $: parsing JsonEncoding failed, expected Object, but encountered Null"
+            `shouldBe` Left
+                "Error in $: parsing JsonEncoding failed, expected Object, but encountered Null"
 
     prop "works with a Primary" $ \jsonEncoding -> do
         let
             ent =
                 Entity (JsonEncodingKey (jsonEncodingName jsonEncoding)) jsonEncoding
         decode (encode ent)
-            `shouldBe`
-                Just ent
+            `shouldBe` Just ent
 
     prop "excuse me what" $ \j@JsonEncoding{..} -> do
         let
             ent =
                 Entity (JsonEncodingKey jsonEncodingName) j
         toJSON ent
-            `shouldBe`
-                object
-                    [ ("name", toJSON jsonEncodingName)
-                    , ("age", toJSON jsonEncodingAge)
-                    , ("id", toJSON jsonEncodingName)
-                    ]
+            `shouldBe` object
+                [ ("name", toJSON jsonEncodingName)
+                , ("age", toJSON jsonEncodingAge)
+                , ("id", toJSON jsonEncodingName)
+                ]
 
     prop "round trip works with composite key" $ \j@JsonEncoding2{..} -> do
         let
             key = JsonEncoding2Key jsonEncoding2Name jsonEncoding2Blood
             ent =
-              Entity key j
+                Entity key j
         decode (encode ent)
-            `shouldBe`
-                Just ent
+            `shouldBe` Just ent
 
     prop "works with a composite key" $ \j@JsonEncoding2{..} -> do
         let
@@ -130,10 +128,9 @@ spec = describe "JsonEncodingSpec" $ do
             ent =
                 Entity key j
         toJSON ent
-            `shouldBe`
-                object
-                  [ ("name", toJSON jsonEncoding2Name)
-                  , ("age", toJSON jsonEncoding2Age)
-                  , ("blood", toJSON jsonEncoding2Blood)
-                  , ("id", toJSON key)
-                  ]
+            `shouldBe` object
+                [ ("name", toJSON jsonEncoding2Name)
+                , ("age", toJSON jsonEncoding2Age)
+                , ("blood", toJSON jsonEncoding2Blood)
+                , ("id", toJSON key)
+                ]

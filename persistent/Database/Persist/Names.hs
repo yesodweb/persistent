@@ -8,6 +8,7 @@ module Database.Persist.Names where
 
 import Data.Text (Text)
 import Language.Haskell.TH.Syntax (Lift)
+
 -- Bring `Lift (Map k v)` instance into scope, as well as `Lift Text`
 -- instance on pre-1.2.4 versions of `text`
 import Instances.TH.Lift ()
@@ -22,7 +23,7 @@ class DatabaseName a where
 -- will use for a field.
 --
 -- @since 2.12.0.0
-newtype FieldNameDB = FieldNameDB { unFieldNameDB :: Text }
+newtype FieldNameDB = FieldNameDB {unFieldNameDB :: Text}
     deriving (Show, Eq, Read, Ord, Lift)
 
 -- | @since 2.12.0.0
@@ -33,21 +34,21 @@ instance DatabaseName FieldNameDB where
 -- will use for a field.
 --
 -- @since 2.12.0.0
-newtype FieldNameHS = FieldNameHS { unFieldNameHS :: Text }
+newtype FieldNameHS = FieldNameHS {unFieldNameHS :: Text}
     deriving (Show, Eq, Read, Ord, Lift)
 
 -- | An 'EntityNameHS' represents the Haskell-side name that @persistent@
 -- will use for an entity.
 --
 -- @since 2.12.0.0
-newtype EntityNameHS = EntityNameHS { unEntityNameHS :: Text }
+newtype EntityNameHS = EntityNameHS {unEntityNameHS :: Text}
     deriving (Show, Eq, Read, Ord, Lift)
 
 -- | An 'EntityNameDB' represents the datastore-side name that @persistent@
 -- will use for an entity.
 --
 -- @since 2.12.0.0
-newtype EntityNameDB = EntityNameDB { unEntityNameDB :: Text }
+newtype EntityNameDB = EntityNameDB {unEntityNameDB :: Text}
     deriving (Show, Eq, Read, Ord, Lift)
 
 instance DatabaseName EntityNameDB where
@@ -57,16 +58,16 @@ instance DatabaseName EntityNameDB where
 -- will use for a constraint.
 --
 -- @since 2.12.0.0
-newtype ConstraintNameDB = ConstraintNameDB { unConstraintNameDB :: Text }
-  deriving (Show, Eq, Read, Ord, Lift)
+newtype ConstraintNameDB = ConstraintNameDB {unConstraintNameDB :: Text}
+    deriving (Show, Eq, Read, Ord, Lift)
 
 -- | @since 2.12.0.0
 instance DatabaseName ConstraintNameDB where
-  escapeWith f (ConstraintNameDB n) = f n
+    escapeWith f (ConstraintNameDB n) = f n
 
 -- | An 'ConstraintNameHS' represents the Haskell-side name that @persistent@
 -- will use for a constraint.
 --
 -- @since 2.12.0.0
-newtype ConstraintNameHS = ConstraintNameHS { unConstraintNameHS :: Text }
-  deriving (Show, Eq, Read, Ord, Lift)
+newtype ConstraintNameHS = ConstraintNameHS {unConstraintNameHS :: Text}
+    deriving (Show, Eq, Read, Ord, Lift)

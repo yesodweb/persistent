@@ -1,18 +1,23 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE AllowAmbiguousTypes, GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE ScopedTypeVariables, TypeApplications, UndecidableInstances #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module ForeignKey where
 
-import Data.Proxy
 import qualified Data.List as List
+import Data.Proxy
 import Init
 
 import Database.Persist.EntityDef.Internal (entityExtra)
 
 -- mpsGeneric = False is due to a bug or at least lack of a feature in mkKeyTypeDec TH.hs
-share [mkPersist persistSettings { mpsGeneric = False }, mkMigrate "compositeMigrate"] [persistLowerCase|
+share
+    [mkPersist persistSettings{mpsGeneric = False}, mkMigrate "compositeMigrate"]
+    [persistLowerCase|
 SimpleCascadeChild
     ref SimpleCascadeId OnDeleteCascade
     deriving Show Eq
@@ -109,7 +114,8 @@ specsWith runDb = describe "foreign keys options" $ do
         insert_ $ Child 1
         delete kf
         cs <- selectList [] []
-        let expected = [] :: [Entity Child]
+        let
+            expected = [] :: [Entity Child]
         cs @== expected
     it "update cascades" $ runDb $ do
         kf <- insert $ Parent 1
@@ -122,14 +128,16 @@ specsWith runDb = describe "foreign keys options" $ do
         insert_ $ ChildComposite 1 2
         delete kf
         cs <- selectList [] []
-        let expected = [] :: [Entity ChildComposite]
+        let
+            expected = [] :: [Entity ChildComposite]
         cs @== expected
     it "delete self referenced cascades" $ runDb $ do
         kf <- insert $ SelfReferenced 1 1
         insert_ $ SelfReferenced 2 1
         delete kf
         srs <- selectList [] []
-        let expected = [] :: [Entity SelfReferenced]
+        let
+            expected = [] :: [Entity SelfReferenced]
         srs @== expected
     it "delete cascade works on simple references" $ runDb $ do
         scId <- insert $ SimpleCascade 1
@@ -147,7 +155,8 @@ specsWith runDb = describe "foreign keys options" $ do
         delete kf
         return ()
         cs <- selectList [] []
-        let expected = [] :: [Entity B]
+        let
+            expected = [] :: [Entity B]
         cs @== expected
     it "delete cascades with explicit Composite Reference" $ runDb $ do
         kf <- insert $ AComposite 1 20
@@ -155,7 +164,8 @@ specsWith runDb = describe "foreign keys options" $ do
         delete kf
         return ()
         cs <- selectList [] []
-        let expected = [] :: [Entity B]
+        let
+            expected = [] :: [Entity B]
         cs @== expected
     it "delete cascades with explicit Composite Reference" $ runDb $ do
         kf <- insert $ AComposite 1 20
@@ -163,7 +173,8 @@ specsWith runDb = describe "foreign keys options" $ do
         delete kf
         return ()
         cs <- selectList [] []
-        let expected = [] :: [Entity B]
+        let
+            expected = [] :: [Entity B]
         cs @== expected
     it "delete cascades with explicit Id field" $ runDb $ do
         kf <- insert $ A 1 20
@@ -171,14 +182,16 @@ specsWith runDb = describe "foreign keys options" $ do
         delete kf
         return ()
         cs <- selectList [] []
-        let expected = [] :: [Entity B]
+        let
+            expected = [] :: [Entity B]
         cs @== expected
     it "deletes sets null with self reference" $ runDb $ do
         kf <- insert $ Chain 1 Nothing
         kf' <- insert $ Chain 2 (Just kf)
         delete kf
         cs <- selectList [] []
-        let expected = [Entity {entityKey = kf', entityVal = Chain 2 Nothing}]
+        let
+            expected = [Entity{entityKey = kf', entityVal = Chain 2 Nothing}]
         List.sort cs @== List.sort expected
     it "deletes cascades with self reference to the whole chain" $ runDb $ do
         k1 <- insert $ Chain2 1 Nothing
@@ -186,7 +199,8 @@ specsWith runDb = describe "foreign keys options" $ do
         insert_ $ Chain2 3 (Just k2)
         delete k1
         cs <- selectList [] []
-        let expected = [] :: [Entity Chain2]
+        let
+            expected = [] :: [Entity Chain2]
         cs @== expected
     it "deletes cascades with field self reference to the whole chain" $ runDb $ do
         k1 <- insert $ Chain3 1 Nothing
@@ -194,28 +208,30 @@ specsWith runDb = describe "foreign keys options" $ do
         insert_ $ Chain3 3 (Just k2)
         delete k1
         cs <- selectList [] []
-        let expected = [] :: [Entity Chain3]
+        let
+            expected = [] :: [Entity Chain3]
         cs @== expected
 
     describe "EntityDef" $ do
-        let ed =
+        let
+            ed =
                 entityDef (Proxy @SimpleCascadeChild)
             isRefCol =
                 (FieldNameHS "ref" ==) . fieldHaskell
-            expected = FieldCascade
-                { fcOnUpdate = Nothing
-                , fcOnDelete = Just Cascade
-                }
+            expected =
+                FieldCascade
+                    { fcOnUpdate = Nothing
+                    , fcOnDelete = Just Cascade
+                    }
             Just refField =
                 List.find isRefCol (getEntityFields ed)
 
-        it "parses into fieldCascade"  $ do
+        it "parses into fieldCascade" $ do
             fieldCascade refField `shouldBe` expected
 
         it "shouldn't have cascade in extras" $ do
             entityExtra ed
-                `shouldBe`
-                    mempty
+                `shouldBe` mempty
 
 cleanDB :: (MonadIO m) => SqlPersistT m ()
 cleanDB = do
@@ -237,10 +253,10 @@ cleanDB = do
     del @Chain2
 
 del
-    :: forall a m.
-    ( PersistEntity a
-    , PersistEntityBackend a ~ SqlBackend
-    , MonadIO m
-    )
+    :: forall a m
+     . ( PersistEntity a
+       , PersistEntityBackend a ~ SqlBackend
+       , MonadIO m
+       )
     => SqlPersistT m ()
 del = deleteWhere @_ @_ @a []

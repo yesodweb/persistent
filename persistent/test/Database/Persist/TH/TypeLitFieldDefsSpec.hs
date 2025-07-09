@@ -33,7 +33,9 @@ instance PersistField (Labelled n) where
 instance PersistFieldSql (Labelled n) where
     sqlType _ = sqlType (Proxy :: Proxy Int)
 
-mkPersist sqlSettings [persistLowerCase|
+mkPersist
+    sqlSettings
+    [persistLowerCase|
 WithFinite
     one    (Finite 1)
     twenty (Finite 20)
@@ -46,12 +48,14 @@ WithLabelled
 spec :: Spec
 spec = describe "TypeLitFieldDefs" $ do
     it "should support numeric type literal fields in entity definition" $ do
-        let mkFinite :: Finite 1 -> Finite 20 -> WithFinite
+        let
+            mkFinite :: Finite 1 -> Finite 20 -> WithFinite
             mkFinite = WithFinite
         compiles
 
     it "should support string based type literal fields in entity definition" $ do
-        let mkLabelled :: Labelled "one" -> Labelled "twenty" -> WithLabelled
+        let
+            mkLabelled :: Labelled "one" -> Labelled "twenty" -> WithLabelled
             mkLabelled = WithLabelled
         compiles
 

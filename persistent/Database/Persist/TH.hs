@@ -3,8 +3,6 @@
 --
 -- For documentation on the domain specific language used for defining database
 -- models, see "Database.Persist.Quasi".
---
---
 module Database.Persist.TH
     ( -- * Parse entity defs
       persistWith
@@ -12,14 +10,17 @@ module Database.Persist.TH
     , persistLowerCase
     , persistFileWith
     , persistManyFileWith
+
       -- * Turn @EntityDef@s into types
     , mkPersist
     , mkPersistWith
+
       -- ** Configuring Entity Definition
     , MkPersistSettings
     , mkPersistSettings
     , sqlSettings
-    -- *** Record Fields (for update/viewing settings)
+
+      -- *** Record Fields (for update/viewing settings)
     , mpsBackend
     , mpsGeneric
     , mpsPrefixFields
@@ -31,10 +32,12 @@ module Database.Persist.TH
     , mpsGenerateLenses
     , mpsDeriveInstances
     , mpsCamelCaseCompositeKeySelector
-    , EntityJSON(..)
-    -- ** Implicit ID Columns
+    , EntityJSON (..)
+
+      -- ** Implicit ID Columns
     , ImplicitIdDef
     , setImplicitIdDef
+
       -- * Various other TH functions
     , mkMigrate
     , migrateModels
