@@ -72,7 +72,9 @@ instance PersistQueryRead SqlBackend where
                 Just [PersistByteString i] -> case readInteger i of -- gb mssql
                     Just (ret, "") -> return $ fromIntegral ret
                     xs -> error $ "invalid number i[" ++ show i ++ "] xs[" ++ show xs ++ "]"
-                Just xs -> error $ "count:invalid sql  return xs[" ++ show xs ++ "] sql[" ++ show sql ++ "]"
+                Just xs ->
+                    error $
+                        "count:invalid sql  return xs[" ++ show xs ++ "] sql[" ++ show sql ++ "]"
                 Nothing -> error $ "count:invalid sql returned nothing sql[" ++ show sql ++ "]"
       where
         t = entityDef $ dummyFromFilts filts

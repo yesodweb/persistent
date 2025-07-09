@@ -207,7 +207,9 @@ class
     -- | Use a 'PersistField' as a lens.
     fieldLens
         :: EntityField record field
-        -> (forall f. (Functor f) => (field -> f field) -> Entity record -> f (Entity record))
+        -> ( forall f
+              . (Functor f) => (field -> f field) -> Entity record -> f (Entity record)
+           )
 
     -- | Extract a @'Key' record@ from a @record@ value. Currently, this is
     -- only defined for entities using the @Primary@ syntax for

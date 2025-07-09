@@ -23,6 +23,7 @@ import Control.Monad.Reader.Class
 import Data.Aeson (FromJSON (..), Value (Number, Object, String), (.!=), (.:?))
 import qualified Data.ByteString.Char8 as B
 import Data.Scientific ()
+
 -- we require only RealFrac instance of Scientific
 import Data.Text (Text, pack, unpack)
 import qualified Database.Redis as R

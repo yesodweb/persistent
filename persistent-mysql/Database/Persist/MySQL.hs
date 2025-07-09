@@ -718,10 +718,10 @@ getColumns connectInfo getter def cols = do
                     ] = return (cntrName, clmnName)
             check other = fail $ "helperCntrs: unexpected " ++ show other
         rows <- mapM check =<< CL.consume
-        return $
-            map
-                (Right . Right . (ConstraintNameDB . fst . head &&& map (FieldNameDB . snd))) $
-                groupBy ((==) `on` fst) rows
+        return
+            $ map
+                (Right . Right . (ConstraintNameDB . fst . head &&& map (FieldNameDB . snd)))
+            $ groupBy ((==) `on` fst) rows
 
 -- | Get the information about a column in a table.
 getColumn
@@ -870,17 +870,17 @@ getColumn
                         , PersistText onUpd
                         ]
                     ] ->
-                    if pos == 1
-                        then
-                            Just $
-                                ColumnReference
-                                    (EntityNameDB tab)
-                                    (ConstraintNameDB ref)
-                                    FieldCascade
-                                        { fcOnUpdate = parseCascadeAction onUpd
-                                        , fcOnDelete = parseCascadeAction onDel
-                                        }
-                        else Nothing
+                        if pos == 1
+                            then
+                                Just $
+                                    ColumnReference
+                                        (EntityNameDB tab)
+                                        (ConstraintNameDB ref)
+                                        FieldCascade
+                                            { fcOnUpdate = parseCascadeAction onUpd
+                                            , fcOnDelete = parseCascadeAction onDel
+                                            }
+                            else Nothing
                 xs ->
                     error $
                         mconcat
@@ -1034,10 +1034,10 @@ findAlters edef allDefs col@(Column name isNull type_ def gen _defConstraintName
                                     , crFieldCascade = cfc
                                     }
                             )
-                            | tname /= getEntityDBName edef
-                            , Just idField <- getEntityIdField edef
-                            , unConstraintNameDB cname /= unFieldNameDB (fieldDB idField) ->
-                                [addReference allDefs cname tname name cfc]
+                                | tname /= getEntityDBName edef
+                                , Just idField <- getEntityIdField edef
+                                , unConstraintNameDB cname /= unFieldNameDB (fieldDB idField) ->
+                                    [addReference allDefs cname tname name cfc]
                         _ -> []
                 -- Type and nullability
                 modType

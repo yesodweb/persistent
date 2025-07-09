@@ -300,7 +300,8 @@ specsWith runDb = describe "persistent" $ do
 
         c34 <-
             count $
-                [Person1Name ==. "Michael"] ||. [Person1Name ==. "Mirieam"] ++ [Person1Age <. 35]
+                [Person1Name ==. "Michael"]
+                    ||. [Person1Name ==. "Mirieam"] ++ [Person1Age <. 35]
         c34 @== 3
         c30 <-
             count $
@@ -315,7 +316,10 @@ specsWith runDb = describe "persistent" $ do
 
         c40 <-
             count $
-                ([Person1Name ==. "Michael"] ||. [Person1Name ==. "Miriam"] ||. [Person1Age <. 35])
+                ( [Person1Name ==. "Michael"]
+                    ||. [Person1Name ==. "Miriam"]
+                    ||. [Person1Age <. 35]
+                )
         c40 @== 4
 
     it "deleteWhere" $ runDb $ do
@@ -585,7 +589,8 @@ specsWith runDb = describe "persistent" $ do
         rows3 @== 0
 
     it "insertEntityMany" $ runDb $ do
-        id1 : id2 : id3 : id4 : id5 : [] <- liftIO $ replicateM 5 (PersonKey `fmap` generateKey)
+        id1 : id2 : id3 : id4 : id5 : [] <-
+            liftIO $ replicateM 5 (PersonKey `fmap` generateKey)
         let
             p1 = Entity id1 $ Person "insertEntityMany1" 1 Nothing
             p2 = Entity id2 $ Person "insertEntityMany2" 2 Nothing
@@ -725,7 +730,8 @@ specsWith runDb = describe "persistent" $ do
             k <- insert p
             liftIO $
                 toJSON (Entity k p)
-                    @?= object [("id", toJSON k), ("color", Null), ("name", String "D"), ("age", Number 0)]
+                    @?= object
+                        [("id", toJSON k), ("color", Null), ("name", String "D"), ("age", Number 0)]
 
     {- FIXME
         prop "fromJSON . toJSON $ key" $ \(person :: Key Person) ->

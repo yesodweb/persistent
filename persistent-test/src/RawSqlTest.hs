@@ -223,7 +223,8 @@ specsWith runDb = describe "rawSql" $ do
     it "queries with large number of results" $ runDb $ do
         -- max size of a GHC tuple is 62, but Eq instances currently only exist up to 15-tuples
         -- See https://gitlab.haskell.org/ghc/ghc/-/merge_requests/3369
-        ret <- rawSql "SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?" $ map PersistInt64 [1 .. 15]
+        ret <-
+            rawSql "SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?" $ map PersistInt64 [1 .. 15]
         liftIO $
             ret
                 @?= [

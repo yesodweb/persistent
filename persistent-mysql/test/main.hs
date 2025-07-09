@@ -21,7 +21,13 @@ import Data.Fixed
 import Data.Int (Int8)
 import Data.IntMap (IntMap)
 import qualified Data.Text as T
-import Data.Time (Day, TimeOfDay, UTCTime (..), timeOfDayToTime, timeToTimeOfDay)
+import Data.Time
+    ( Day
+    , TimeOfDay
+    , UTCTime (..)
+    , timeOfDayToTime
+    , timeToTimeOfDay
+    )
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
 import Database.Persist.Sql
 import Test.QuickCheck
@@ -233,8 +239,8 @@ main = do
         CustomConstraintTest.specs db
         -- TODO: implement automatic truncation for too long foreign keys, so we can run this test.
         xdescribe
-            "The migration for this test currently fails because of MySQL's 64 character limit for identifiers. See https://github.com/yesodweb/persistent/issues/1000 for details" $
-            LongIdentifierTest.specsWith db
+            "The migration for this test currently fails because of MySQL's 64 character limit for identifiers. See https://github.com/yesodweb/persistent/issues/1000 for details"
+            $ LongIdentifierTest.specsWith db
         GeneratedColumnTestSQL.specsWith db
         JSONTest.specs
 

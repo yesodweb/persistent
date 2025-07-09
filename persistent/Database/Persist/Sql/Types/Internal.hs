@@ -88,7 +88,8 @@ readToWrite ma = do
     lift . runReaderT ma . SqlReadBackend $ unSqlWriteBackend write
 
 -- | Useful for running a read query against a backend with unknown capabilities.
-readToUnknown :: (Monad m) => ReaderT SqlReadBackend m a -> ReaderT SqlBackend m a
+readToUnknown
+    :: (Monad m) => ReaderT SqlReadBackend m a -> ReaderT SqlBackend m a
 readToUnknown ma = do
     unknown <- ask
     lift . runReaderT ma $ SqlReadBackend unknown

@@ -135,8 +135,8 @@ specs = describe "UpsertWhere" $ do
             dbItems <- fmap entityVal <$> selectList [] []
             dbItems `shouldMatchList` (newItem : items)
         itDb
-            "inserts without modifying existing records if no updates specified and there's a filter with True condition" $
-            do
+            "inserts without modifying existing records if no updates specified and there's a filter with True condition"
+            $ do
                 let
                     newItem = Item "item3" "hi friends!" Nothing Nothing
                 insertMany_ items
@@ -148,8 +148,8 @@ specs = describe "UpsertWhere" $ do
                 dbItems <- fmap entityVal <$> selectList [] []
                 dbItems `shouldMatchList` (newItem : items)
         itDb
-            "inserts without updating existing records if there are updates specified but there's a filter with a False condition" $
-            do
+            "inserts without updating existing records if there are updates specified but there's a filter with a False condition"
+            $ do
                 let
                     newItem = Item "item3" "hi friends!" Nothing Nothing
                 insertMany_ items
@@ -161,8 +161,8 @@ specs = describe "UpsertWhere" $ do
                 dbItems <- fmap entityVal <$> selectList [] []
                 dbItems `shouldMatchList` (newItem : items)
         itDb
-            "inserts new records but does not update existing records if there are updates specified but the modification condition is False" $
-            do
+            "inserts new records but does not update existing records if there are updates specified but the modification condition is False"
+            $ do
                 let
                     newItem = Item "item3" "hi friends!" Nothing Nothing
                 insertMany_ items
@@ -174,8 +174,8 @@ specs = describe "UpsertWhere" $ do
                 dbItems <- fmap entityVal <$> selectList [] []
                 dbItems `shouldMatchList` (newItem : items)
         itDb
-            "inserts new records and updates existing records if there are updates specified and the modification condition is True (because it's empty)" $
-            do
+            "inserts new records and updates existing records if there are updates specified and the modification condition is True (because it's empty)"
+            $ do
                 let
                     newItem = Item "item3" "hello world" Nothing Nothing
                     postUpdate = map (\i -> i{itemQuantity = fmap (+ 1) (itemQuantity i)}) items
@@ -188,8 +188,8 @@ specs = describe "UpsertWhere" $ do
                 dbItems <- fmap entityVal <$> selectList [] []
                 dbItems `shouldMatchList` (newItem : postUpdate)
         itDb
-            "inserts new records and updates existing records if there are updates specified and the modification filter condition is triggered" $
-            do
+            "inserts new records and updates existing records if there are updates specified and the modification filter condition is triggered"
+            $ do
                 let
                     newItem = Item "item3" "hi friends!" Nothing Nothing
                     postUpdate = map (\i -> i{itemQuantity = fmap (+ 1) (itemQuantity i)}) items
@@ -204,8 +204,8 @@ specs = describe "UpsertWhere" $ do
                 dbItems <- fmap entityVal <$> selectList [] []
                 dbItems `shouldMatchList` (newItem : postUpdate)
         itDb
-            "inserts an item and doesn't apply the update if the filter condition is triggered" $
-            do
+            "inserts an item and doesn't apply the update if the filter condition is triggered"
+            $ do
                 let
                     newItem = Item "item3" "hello world" Nothing Nothing
                 insertMany_ items

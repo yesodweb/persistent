@@ -96,7 +96,11 @@ import Data.Text (Text, pack, unpack)
 import Data.Text.Encoding (decodeUtf8With, encodeUtf8)
 import Data.Text.Encoding.Error (lenientDecode)
 import Data.Time (UTCTime, defaultTimeLocale, formatTime)
-import Database.Sqlite.Internal (Connection (..), Connection' (..), Statement (..))
+import Database.Sqlite.Internal
+    ( Connection (..)
+    , Connection' (..)
+    , Statement (..)
+    )
 import Foreign
 import Foreign.C
 

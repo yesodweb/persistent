@@ -424,7 +424,9 @@ specs = afterAll_ teardown $ do
                     -- 1234567890 @>. [1,2,3,4,5,6,7,8,9,0] == False
                     \TestKeys{..} -> runConnAssert $ do
                         vals <-
-                            selectList [TestValueJson @>. toJSON ([1, 2, 3, 4, 5, 6, 7, 8, 9, 0] :: [Int])] []
+                            selectList
+                                [TestValueJson @>. toJSON ([1, 2, 3, 4, 5, 6, 7, 8, 9, 0] :: [Int])]
+                                []
                         [] `matchKeys` vals
 
             describe "@>. boolean queries" $ do
