@@ -14,7 +14,8 @@ data StatementCache = StatementCache
     , statementCacheSize :: IO Int
     }
 
-newtype StatementCacheKey = StatementCacheKey { cacheKey :: Text }
+newtype StatementCacheKey = StatementCacheKey {cacheKey :: Text}
+
 -- Wrapping around this to allow for more efficient keying mechanisms
 -- in the future, perhaps.
 

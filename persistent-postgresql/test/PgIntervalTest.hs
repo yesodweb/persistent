@@ -1,17 +1,19 @@
-{-# LANGUAGE EmptyDataDecls             #-}
-{-# LANGUAGE FlexibleContexts           #-}
-{-# LANGUAGE GADTs, DataKinds, FlexibleInstances                      #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE EmptyDataDecls #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MultiParamTypeClasses      #-}
-{-# LANGUAGE OverloadedStrings          #-}
-{-# LANGUAGE QuasiQuotes                #-}
-{-# LANGUAGE TemplateHaskell            #-}
-{-# LANGUAGE TypeFamilies               #-}
-{-# LANGUAGE UndecidableInstances       #-}
-{-# LANGUAGE DerivingStrategies         #-}
-{-# LANGUAGE StandaloneDeriving         #-}
-{-# LANGUAGE DeriveAnyClass             #-}
-{-# LANGUAGE TypeOperators              #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module PgIntervalTest where
 
@@ -23,7 +25,9 @@ import Test.Hspec.QuickCheck
 import Database.Persist.Postgresql.Interval ()
 import qualified Database.PostgreSQL.Simple.Interval as Interval
 
-share [mkPersist sqlSettings, mkMigrate "pgIntervalMigrate"] [persistLowerCase|
+share
+    [mkPersist sqlSettings, mkMigrate "pgIntervalMigrate"]
+    [persistLowerCase|
 PgIntervalDb
     interval_field PgInterval
     deriving Eq

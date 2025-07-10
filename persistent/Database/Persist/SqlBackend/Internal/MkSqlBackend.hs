@@ -3,14 +3,14 @@
 module Database.Persist.SqlBackend.Internal.MkSqlBackend where
 
 import Control.Monad.Logger (Loc, LogLevel, LogSource, LogStr)
+import Data.IORef (IORef)
+import Data.Map (Map)
 import Data.Text (Text)
 import Database.Persist.Names
 import Database.Persist.SqlBackend.Internal.InsertSqlResult
 import Database.Persist.SqlBackend.Internal.IsolationLevel
 import Database.Persist.SqlBackend.Internal.Statement
 import Database.Persist.Types.Base
-import Data.Map (Map)
-import Data.IORef (IORef)
 
 -- | This type shares many of the same field names as the 'SqlBackend' type.
 -- It's useful for library authors to use this when migrating from using the
@@ -68,7 +68,7 @@ data MkSqlBackendArgs = MkSqlBackendArgs
     -- ^ A tag displaying what database the 'SqlBackend' is for. Can be
     -- used to differentiate features in downstream libraries for different
     -- database backends.
-    , connLimitOffset :: (Int,Int) -> Text -> Text
+    , connLimitOffset :: (Int, Int) -> Text -> Text
     -- ^ Attach a 'LIMIT/OFFSET' clause to a SQL query. Note that
     -- LIMIT/OFFSET is problematic for performance, and indexed range
     -- queries are the superior way to offer pagination.

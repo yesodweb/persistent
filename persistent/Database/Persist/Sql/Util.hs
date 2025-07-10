@@ -23,44 +23,45 @@ module Database.Persist.Sql.Util
 
 import Data.ByteString.Char8 (readInteger)
 import Data.Int (Int64)
-import Data.List.NonEmpty (NonEmpty(..))
+import Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.Maybe as Maybe
 import Data.Text (Text, pack)
 import qualified Data.Text as T
 
 import Database.Persist
-       ( Entity(Entity)
-       , EntityDef
-       , EntityField
-       , FieldDef(..)
-       , FieldNameDB
-       , FieldNameHS(FieldNameHS)
-       , PersistEntity(..)
-       , PersistUpdate(..)
-       , PersistValue(..)
-       , Update(..)
-       , compositeFields
-       , entityPrimary
-       , fieldDB
-       , fieldHaskell
-       , fromPersistValues
-       , getEntityFields
-       , getEntityKeyFields
-       , keyAndEntityFields
-       , keyFromValues
-       , persistFieldDef
-       , toPersistValue
-       )
+    ( Entity (Entity)
+    , EntityDef
+    , EntityField
+    , FieldDef (..)
+    , FieldNameDB
+    , FieldNameHS (FieldNameHS)
+    , PersistEntity (..)
+    , PersistUpdate (..)
+    , PersistValue (..)
+    , Update (..)
+    , compositeFields
+    , entityPrimary
+    , fieldDB
+    , fieldHaskell
+    , fromPersistValues
+    , getEntityFields
+    , getEntityKeyFields
+    , keyAndEntityFields
+    , keyFromValues
+    , persistFieldDef
+    , toPersistValue
+    )
 
-import Database.Persist.SqlBackend.Internal (SqlBackend(..))
+import Database.Persist.SqlBackend.Internal (SqlBackend (..))
 
 keyAndEntityColumnNames :: EntityDef -> SqlBackend -> NonEmpty Text
 keyAndEntityColumnNames ent conn =
     fmap (connEscapeFieldName conn . fieldDB) (keyAndEntityFields ent)
 
 entityColumnCount :: EntityDef -> Int
-entityColumnCount e = length (getEntityFields e)
-                    + if hasNaturalKey e then 0 else 1
+entityColumnCount e =
+    length (getEntityFields e)
+        + if hasNaturalKey e then 0 else 1
 
 -- | Returns 'True' if the entity has a natural key defined with the
 -- Primary keyword.
@@ -163,47 +164,52 @@ dbColumns conn =
   where
     escapeColumn = connEscapeFieldName conn . fieldDB
 
-parseEntityValues :: PersistEntity record
-                  => EntityDef -> [PersistValue] -> Either Text (Entity record)
+parseEntityValues
+    :: (PersistEntity record)
+    => EntityDef -> [PersistValue] -> Either Text (Entity record)
 parseEntityValues t vals =
     case entityPrimary t of
-      Just pdef ->
-            let pks = fmap fieldHaskell $ compositeFields pdef
-                keyvals = map snd . filter ((`elem` pks) . fst)
-                        $ zip (map fieldHaskell $ getEntityFields t) vals
-            in fromPersistValuesComposite' keyvals vals
-      Nothing -> fromPersistValues' vals
+        Just pdef ->
+            let
+                pks = fmap fieldHaskell $ compositeFields pdef
+                keyvals =
+                    map snd . filter ((`elem` pks) . fst) $
+                        zip (map fieldHaskell $ getEntityFields t) vals
+             in
+                fromPersistValuesComposite' keyvals vals
+        Nothing -> fromPersistValues' vals
   where
-    fromPersistValues' (kpv:xs) = -- oracle returns Double
+    fromPersistValues' (kpv : xs) =
+        -- oracle returns Double
         case fromPersistValues xs of
             Left e -> Left e
             Right xs' ->
                 case keyFromValues [kpv] of
                     Left _ -> error $ "fromPersistValues': keyFromValues failed on " ++ show kpv
                     Right k -> Right (Entity k xs')
-
-
     fromPersistValues' xs = Left $ pack ("error in fromPersistValues' xs=" ++ show xs)
 
     fromPersistValuesComposite' keyvals xs =
         case fromPersistValues xs of
             Left e -> Left e
             Right xs' -> case keyFromValues keyvals of
-                Left err -> error $ "fromPersistValuesComposite': keyFromValues failed with error: "
-                    <> T.unpack err
+                Left err ->
+                    error $
+                        "fromPersistValuesComposite': keyFromValues failed with error: "
+                            <> T.unpack err
                 Right key -> Right (Entity key xs')
 
-
 isIdField
-    :: forall record typ. (PersistEntity record)
+    :: forall record typ
+     . (PersistEntity record)
     => EntityField record typ
     -> Bool
 isIdField f = fieldHaskell (persistFieldDef f) == FieldNameHS "Id"
 
 -- | Gets the 'FieldDef' for an 'Update'.
-updateFieldDef :: PersistEntity v => Update v -> FieldDef
+updateFieldDef :: (PersistEntity v) => Update v -> FieldDef
 updateFieldDef (Update f _ _) = persistFieldDef f
-updateFieldDef BackendUpdate {} = error "updateFieldDef: did not expect BackendUpdate"
+updateFieldDef BackendUpdate{} = error "updateFieldDef: did not expect BackendUpdate"
 
 updatePersistValue :: Update v -> PersistValue
 updatePersistValue (Update _ v _) = toPersistValue v
@@ -213,20 +219,23 @@ updatePersistValue (BackendUpdate{}) =
 commaSeparated :: [Text] -> Text
 commaSeparated = T.intercalate ", "
 
-mkUpdateText :: PersistEntity record => SqlBackend -> Update record -> Text
+mkUpdateText :: (PersistEntity record) => SqlBackend -> Update record -> Text
 mkUpdateText conn = mkUpdateText' (connEscapeFieldName conn) id
 
 -- TODO: incorporate the table names into a sum type
-mkUpdateText' :: PersistEntity record => (FieldNameDB -> Text) -> (Text -> Text) -> Update record -> Text
+mkUpdateText'
+    :: (PersistEntity record)
+    => (FieldNameDB -> Text) -> (Text -> Text) -> Update record -> Text
 mkUpdateText' escapeName refColumn x =
-  case updateUpdate x of
-    Assign -> n <> "=?"
-    Add -> T.concat [n, "=", refColumn n, "+?"]
-    Subtract -> T.concat [n, "=", refColumn n, "-?"]
-    Multiply -> T.concat [n, "=", refColumn n, "*?"]
-    Divide -> T.concat [n, "=", refColumn n, "/?"]
-    BackendSpecificUpdate up ->
-      error . T.unpack $ "mkUpdateText: BackendSpecificUpdate " <> up <> " not supported"
+    case updateUpdate x of
+        Assign -> n <> "=?"
+        Add -> T.concat [n, "=", refColumn n, "+?"]
+        Subtract -> T.concat [n, "=", refColumn n, "-?"]
+        Multiply -> T.concat [n, "=", refColumn n, "*?"]
+        Divide -> T.concat [n, "=", refColumn n, "/?"]
+        BackendSpecificUpdate up ->
+            error . T.unpack $
+                "mkUpdateText: BackendSpecificUpdate " <> up <> " not supported"
   where
     n = escapeName . fieldDB . updateFieldDef $ x
 
@@ -240,7 +249,7 @@ parenWrapped t = T.concat ["(", t, ")"]
 --
 -- @since 2.11.0.0
 mkInsertValues
-    :: PersistEntity rec
+    :: (PersistEntity rec)
     => rec
     -> [PersistValue]
 mkInsertValues entity =
@@ -277,11 +286,21 @@ mkInsertPlaceholders ed escape =
 parseExistsResult :: Maybe [PersistValue] -> Text -> String -> Bool
 parseExistsResult mm sql errloc =
     case mm of
-        Just [PersistBool b]  -> b -- Postgres
+        Just [PersistBool b] -> b -- Postgres
         Just [PersistInt64 i] -> i > 0 -- MySQL, SQLite
         Just [PersistDouble i] -> (truncate i :: Int64) > 0 -- gb oracle
         Just [PersistByteString i] -> case readInteger i of -- gb mssql
-                                        Just (ret,"") -> ret > 0
-                                        xs -> error $ "invalid number i["++show i++"] xs[" ++ show xs ++ "]"
-        Just xs -> error $ errloc ++ ": Expected a boolean, int, double, or bytestring; got: " ++ show xs ++ " for query: " ++ show sql
-        Nothing -> error $ errloc ++ ": Expected a boolean, int, double, or bytestring; got: Nothing for query: " ++ show sql
+            Just (ret, "") -> ret > 0
+            xs -> error $ "invalid number i[" ++ show i ++ "] xs[" ++ show xs ++ "]"
+        Just xs ->
+            error $
+                errloc
+                    ++ ": Expected a boolean, int, double, or bytestring; got: "
+                    ++ show xs
+                    ++ " for query: "
+                    ++ show sql
+        Nothing ->
+            error $
+                errloc
+                    ++ ": Expected a boolean, int, double, or bytestring; got: Nothing for query: "
+                    ++ show sql

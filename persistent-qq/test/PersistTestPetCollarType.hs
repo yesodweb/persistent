@@ -1,11 +1,12 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TemplateHaskell #-}
+
 module PersistTestPetCollarType where
 
-import GHC.Generics
 import Data.Aeson
-import Database.Persist.TH
 import Data.Text (Text)
+import Database.Persist.TH
+import GHC.Generics
 
 data PetCollar = PetCollar {tag :: Text, bell :: Bool}
     deriving (Generic, Eq, Show)

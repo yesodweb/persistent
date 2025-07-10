@@ -16,7 +16,9 @@ module Database.Persist.TH.PersistWith.Model2 where
 
 import TemplateTestImports
 
-mkPersist sqlSettings [persistLowerCase|
+mkPersist
+    sqlSettings
+    [persistLowerCase|
 
 Flavor
     name    Text

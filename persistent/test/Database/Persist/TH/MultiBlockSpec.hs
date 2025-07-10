@@ -18,7 +18,6 @@ module Database.Persist.TH.MultiBlockSpec where
 
 import TemplateTestImports
 
-
 import Database.Persist.TH.MultiBlockSpec.Model
 
 share
@@ -56,24 +55,20 @@ spec = describe "MultiBlockSpec" $ do
                     getEntityFields edef
             it "User reference works" $ do
                 fieldReference userRef
-                    `shouldBe`
-                        ForeignRef
-                            (EntityNameHS "User")
+                    `shouldBe` ForeignRef
+                        (EntityNameHS "User")
 
             it "Primary key reference works" $ do
                 fieldReference profileRef
-                    `shouldBe`
-                        ForeignRef
-                            (EntityNameHS "MBDog")
+                    `shouldBe` ForeignRef
+                        (EntityNameHS "MBDog")
 
             it "Thing ref works (same block)" $ do
                 fieldReference thingRef
-                    `shouldBe`
-                        ForeignRef
-                            (EntityNameHS "Thing")
+                    `shouldBe` ForeignRef
+                        (EntityNameHS "Thing")
 
             it "ThingAuto ref works (same block)" $ do
                 fieldReference thingAutoRef
-                    `shouldBe`
-                        ForeignRef
-                            (EntityNameHS "ThingAuto")
+                    `shouldBe` ForeignRef
+                        (EntityNameHS "ThingAuto")

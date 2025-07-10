@@ -1,16 +1,26 @@
 module Database.Persist.Sql.Types
     ( module Database.Persist.Sql.Types
-    , SqlBackend, SqlReadBackend (..), SqlWriteBackend (..)
-    , Statement (..), LogFunc, InsertSqlResult (..)
-    , readToUnknown, readToWrite, writeToUnknown
-    , SqlBackendCanRead, SqlBackendCanWrite, SqlReadT, SqlWriteT, IsSqlBackend
-    , OverflowNatural(..)
-    , ConnectionPoolConfig(..)
+    , SqlBackend
+    , SqlReadBackend (..)
+    , SqlWriteBackend (..)
+    , Statement (..)
+    , LogFunc
+    , InsertSqlResult (..)
+    , readToUnknown
+    , readToWrite
+    , writeToUnknown
+    , SqlBackendCanRead
+    , SqlBackendCanWrite
+    , SqlReadT
+    , SqlWriteT
+    , IsSqlBackend
+    , OverflowNatural (..)
+    , ConnectionPoolConfig (..)
     ) where
 
-import Control.Exception (Exception(..))
+import Control.Exception (Exception (..))
 import Control.Monad.Logger (NoLoggingT)
-import Control.Monad.Trans.Reader (ReaderT(..))
+import Control.Monad.Trans.Reader (ReaderT (..))
 import Control.Monad.Trans.Resource (ResourceT)
 import Data.Pool (Pool)
 import Data.Text (Text)
@@ -20,13 +30,13 @@ import Database.Persist.Sql.Types.Internal
 import Database.Persist.Types
 
 data Column = Column
-    { cName      :: !FieldNameDB
-    , cNull      :: !Bool
-    , cSqlType   :: !SqlType
-    , cDefault   :: !(Maybe Text)
+    { cName :: !FieldNameDB
+    , cNull :: !Bool
+    , cSqlType :: !SqlType
+    , cDefault :: !(Maybe Text)
     , cGenerated :: !(Maybe Text)
-    , cDefaultConstraintName   :: !(Maybe ConstraintNameDB)
-    , cMaxLen    :: !(Maybe Integer)
+    , cDefaultConstraintName :: !(Maybe ConstraintNameDB)
+    , cMaxLen :: !(Maybe Integer)
     , cReference :: !(Maybe ColumnReference)
     }
     deriving (Eq, Ord, Show)
@@ -51,9 +61,10 @@ data ColumnReference = ColumnReference
     }
     deriving (Eq, Ord, Show)
 
-data PersistentSqlException = StatementAlreadyFinalized Text
-                            | Couldn'tGetSQLConnection
-    deriving Show
+data PersistentSqlException
+    = StatementAlreadyFinalized Text
+    | Couldn'tGetSQLConnection
+    deriving (Show)
 instance Exception PersistentSqlException
 
 type SqlPersistT = ReaderT SqlBackend
@@ -66,13 +77,17 @@ type ConnectionPool = Pool SqlBackend
 --
 -- @since 2.11.0.0
 data ConnectionPoolConfig = ConnectionPoolConfig
-    { connectionPoolConfigStripes :: Int -- ^ How many stripes to divide the pool into. See "Data.Pool" for details. Default: 1.
-    , connectionPoolConfigIdleTimeout :: NominalDiffTime -- ^ How long connections can remain idle before being disposed of, in seconds. Default: 600
-    , connectionPoolConfigSize :: Int -- ^ How many connections should be held in the connection pool. Default: 10
+    { connectionPoolConfigStripes :: Int
+    -- ^ How many stripes to divide the pool into. See "Data.Pool" for details. Default: 1.
+    , connectionPoolConfigIdleTimeout :: NominalDiffTime
+    -- ^ How long connections can remain idle before being disposed of, in seconds. Default: 600
+    , connectionPoolConfigSize :: Int
+    -- ^ How many connections should be held in the connection pool. Default: 10
     }
     deriving (Show)
 
 -- TODO: Bad defaults for SQLite maybe?
+
 -- | Initializes a ConnectionPoolConfig with default values. See the documentation of 'ConnectionPoolConfig' for each field's default value.
 --
 -- @since 2.11.0.0
@@ -131,10 +146,8 @@ defaultConnectionPoolConfig = ConnectionPoolConfig 1 600 10
 -- Note that 'rawSql' knows how to replace the double question
 -- marks @??@ because of the type of the @results@.
 
-
 -- | A single column (see 'rawSql').  Any 'PersistField' may be
 -- used here, including 'PersistValue' (which does not do any
 -- processing).
 newtype Single a = Single {unSingle :: a}
     deriving (Eq, Ord, Show, Read)
-

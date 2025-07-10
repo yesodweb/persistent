@@ -1,16 +1,19 @@
-{-# LANGUAGE TypeApplications, TypeOperators, UndecidableInstances #-}
-
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
 module MigrationOnlyTest (specsWith, migrateAll1, migrateAll2) where
 
 import qualified Data.Text as T
 
+import Database.Persist.EntityDef
 import Database.Persist.TH
 import Init
-import Database.Persist.EntityDef
 
-share [mkPersist sqlSettings { mpsGeneric = True }, mkMigrate "migrateAll1"] [persistLowerCase|
+share
+    [mkPersist sqlSettings{mpsGeneric = True}, mkMigrate "migrateAll1"]
+    [persistLowerCase|
 TwoField1 sql=two_field
     field1 Int
     field2 T.Text
@@ -18,7 +21,9 @@ TwoField1 sql=two_field
     deriving Eq Show
 |]
 
-share [mkPersist sqlSettings { mpsGeneric = True }, mkMigrate "migrateAll2"] [persistLowerCase|
+share
+    [mkPersist sqlSettings{mpsGeneric = True}, mkMigrate "migrateAll2"]
+    [persistLowerCase|
 TwoField
     field1 Int
     field2 T.Text
@@ -31,7 +36,11 @@ Referencing
 |]
 
 specsWith
-    :: (MonadIO m, PersistQueryWrite backend, PersistStoreWrite backend, PersistQueryWrite (BaseBackend backend))
+    :: ( MonadIO m
+       , PersistQueryWrite backend
+       , PersistStoreWrite backend
+       , PersistQueryWrite (BaseBackend backend)
+       )
     => RunDb backend m
     -> Maybe (ReaderT backend m a)
     -> Spec
@@ -60,7 +69,8 @@ specsWith runDb mmigrate = describe "MigrationOnly field" $ do
     it "doesn't have the field in the Haskell entity" $ asIO $ runDb $ do
         sequence_ mmigrate
         sequence_ mmigrate
-        let tf = TwoField 5 "hello"
+        let
+            tf = TwoField 5 "hello"
         tid <- insert tf
         mtf <- get tid
         liftIO $ mtf @?= Just tf

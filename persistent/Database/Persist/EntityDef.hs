@@ -5,7 +5,9 @@
 module Database.Persist.EntityDef
     ( -- * The 'EntityDef' type
       EntityDef
+
       -- * Construction
+
       -- * Accessors
     , getEntityHaskellName
     , getEntityDBName
@@ -25,13 +27,15 @@ module Database.Persist.EntityDef
     , entitiesPrimary
     , keyAndEntityFields
     , keyAndEntityFieldsDatabase
-     -- * Setters
+
+      -- * Setters
     , setEntityId
     , setEntityIdDef
     , setEntityDBName
     , overEntityFields
+
       -- * Related Types
-    , EntityIdDef(..)
+    , EntityIdDef (..)
     ) where
 
 import Data.List.NonEmpty (NonEmpty)
@@ -43,7 +47,11 @@ import Database.Persist.FieldDef
 
 import Database.Persist.Names
 import Database.Persist.Types.Base
-       (ForeignDef, SourceSpan, UniqueDef(..), entityKeyFields)
+    ( ForeignDef
+    , SourceSpan
+    , UniqueDef (..)
+    , entityKeyFields
+    )
 
 -- | Retrieve the list of 'UniqueDef' from an 'EntityDef'. This does not include
 -- a @Primary@ key, if one is defined. A future version of @persistent@ will
@@ -96,7 +104,7 @@ getEntityExtra = entityExtra
 --
 -- @since 2.13.0.0
 setEntityDBName :: EntityNameDB -> EntityDef -> EntityDef
-setEntityDBName db ed = ed { entityDB = db }
+setEntityDBName db ed = ed{entityDB = db}
 
 getEntityComments :: EntityDef -> Maybe Text
 getEntityComments = entityComments
@@ -182,7 +190,7 @@ setEntityIdDef
     :: EntityIdDef
     -> EntityDef
     -> EntityDef
-setEntityIdDef i ed = ed { entityId = i }
+setEntityIdDef i ed = ed{entityId = i}
 
 -- |
 --
@@ -196,7 +204,7 @@ getEntityKeyFields = entityKeyFields
 --
 -- @since 2.13.0.0
 setEntityFields :: [FieldDef] -> EntityDef -> EntityDef
-setEntityFields fd ed = ed { entityFields = fd }
+setEntityFields fd ed = ed{entityFields = fd}
 
 -- | Perform a mapping function over all of the entity fields, as determined by
 -- 'getEntityFieldsDatabase'.

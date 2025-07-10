@@ -9,37 +9,39 @@
 
 module Database.Persist.Types.Base
     ( module Database.Persist.Types.Base
-    -- * Re-exports
-    , PersistValue(..)
+
+      -- * Re-exports
+    , PersistValue (..)
     , fromPersistValueText
-    , LiteralType(..)
-    , SourceSpan(..)
+    , LiteralType (..)
+    , SourceSpan (..)
     ) where
 
 import Control.Exception (Exception)
 import Data.Char (isSpace)
-import Data.List.NonEmpty (NonEmpty(..))
+import Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.List.NonEmpty as NEL
 import Data.Map (Map)
 import Data.Maybe (isNothing)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Word (Word32)
-import Language.Haskell.TH.Syntax (Lift(..))
+import Language.Haskell.TH.Syntax (Lift (..))
 import Web.HttpApiData
-       ( FromHttpApiData(..)
-       , ToHttpApiData(..)
-       , parseBoundedTextData
-       , showTextData
-       )
-import Web.PathPieces (PathPiece(..))
-    -- Bring `Lift (Map k v)` instance into scope, as well as `Lift Text`
-    -- instance on pre-1.2.4 versions of `text`
+    ( FromHttpApiData (..)
+    , ToHttpApiData (..)
+    , parseBoundedTextData
+    , showTextData
+    )
+import Web.PathPieces (PathPiece (..))
+
+-- Bring `Lift (Map k v)` instance into scope, as well as `Lift Text`
+-- instance on pre-1.2.4 versions of `text`
 import Instances.TH.Lift ()
 
 import Database.Persist.Names
 import Database.Persist.PersistValue
-import Database.Persist.Types.SourceSpan (SourceSpan(..))
+import Database.Persist.Types.SourceSpan (SourceSpan (..))
 
 -- | A 'Checkmark' should be used as a field type whenever a
 -- uniqueness constraint should guarantee that a certain kind of
@@ -83,12 +85,13 @@ import Database.Persist.Types.SourceSpan (SourceSpan(..))
 -- type available.  Note that we never use @FALSE@, just @TRUE@
 -- and @NULL@.  Provides the same behavior @Maybe ()@ would if
 -- @()@ was a valid 'PersistField'.
-data Checkmark = Active
-                 -- ^ When used on a uniqueness constraint, there
-                 -- may be at most one 'Active' record.
-               | Inactive
-                 -- ^ When used on a uniqueness constraint, there
-                 -- may be any number of 'Inactive' records.
+data Checkmark
+    = -- | When used on a uniqueness constraint, there
+      -- may be at most one 'Active' record.
+      Active
+    | -- | When used on a uniqueness constraint, there
+      -- may be any number of 'Inactive' records.
+      Inactive
     deriving (Eq, Ord, Read, Show, Enum, Bounded)
 
 instance ToHttpApiData Checkmark where
@@ -98,12 +101,12 @@ instance FromHttpApiData Checkmark where
     parseUrlPiece = parseBoundedTextData
 
 instance PathPiece Checkmark where
-  toPathPiece Active = "active"
-  toPathPiece Inactive = "inactive"
+    toPathPiece Active = "active"
+    toPathPiece Inactive = "inactive"
 
-  fromPathPiece "active" = Just Active
-  fromPathPiece "inactive" = Just Inactive
-  fromPathPiece _ = Nothing
+    fromPathPiece "active" = Just Active
+    fromPathPiece "inactive" = Just Inactive
+    fromPathPiece _ = Nothing
 
 data IsNullable
     = Nullable !WhyNullable
@@ -112,7 +115,7 @@ data IsNullable
 
 fieldAttrsContainsNullable :: [FieldAttr] -> IsNullable
 fieldAttrsContainsNullable s
-    | FieldAttrMaybe    `elem` s = Nullable ByMaybeAttr
+    | FieldAttrMaybe `elem` s = Nullable ByMaybeAttr
     | FieldAttrNullable `elem` s = Nullable ByNullableAttr
     | otherwise = NotNullable
 
@@ -121,9 +124,10 @@ fieldAttrsContainsNullable s
 -- type changed from @A@ to @Maybe A@.  OTOH, a field that is
 -- nullable because of a @nullable@ tag will remain with the same
 -- type.
-data WhyNullable = ByMaybeAttr
-                 | ByNullableAttr
-                  deriving (Eq, Show)
+data WhyNullable
+    = ByMaybeAttr
+    | ByNullableAttr
+    deriving (Eq, Show)
 
 -- | An 'EntityDef' represents the information that @persistent@ knows
 -- about an Entity. It uses this information to generate the Haskell
@@ -131,27 +135,27 @@ data WhyNullable = ByMaybeAttr
 data EntityDef = EntityDef
     { entityHaskell :: !EntityNameHS
     -- ^ The name of the entity as Haskell understands it.
-    , entityDB      :: !EntityNameDB
+    , entityDB :: !EntityNameDB
     -- ^ The name of the database table corresponding to the entity.
-    , entityId      :: !EntityIdDef
+    , entityId :: !EntityIdDef
     -- ^ The entity's primary key or identifier.
-    , entityAttrs   :: ![Attr]
+    , entityAttrs :: ![Attr]
     -- ^ The @persistent@ entity syntax allows you to add arbitrary 'Attr's
     -- to an entity using the @!@ operator. Those attributes are stored in
     -- this list.
-    , entityFields  :: ![FieldDef]
+    , entityFields :: ![FieldDef]
     -- ^ The fields for this entity. Note that the ID field will not be
     -- present in this list. To get all of the fields for an entity, use
     -- 'keyAndEntityFields'.
     , entityUniques :: ![UniqueDef]
     -- ^ The Uniqueness constraints for this entity.
-    , entityForeigns:: ![ForeignDef]
+    , entityForeigns :: ![ForeignDef]
     -- ^ The foreign key relationships that this entity has to other
     -- entities.
     , entityDerives :: ![Text]
     -- ^ A list of type classes that have been derived for this entity.
-    , entityExtra   :: !(Map Text [ExtraLine])
-    , entitySum     :: !Bool
+    , entityExtra :: !(Map Text [ExtraLine])
+    , entitySum :: !Bool
     -- ^ Whether or not this entity represents a sum type in the database.
     , entityComments :: !(Maybe Text)
     -- ^ Optional comments on the entity.
@@ -172,18 +176,18 @@ data EntityDef = EntityDef
 --
 -- @since 2.13.0.0
 data EntityIdDef
-    = EntityIdField !FieldDef
-    -- ^ The entity has a single key column, and it is a surrogate key - that
-    -- is, you can't go from @rec -> Key rec@.
-    --
-    -- @since 2.13.0.0
-    | EntityIdNaturalKey !CompositeDef
-    -- ^ The entity has a natural key. This means you can write @rec -> Key rec@
-    -- because all the key fields are present on the datatype.
-    --
-    -- A natural key can have one or more columns.
-    --
-    -- @since 2.13.0.0
+    = -- | The entity has a single key column, and it is a surrogate key - that
+      -- is, you can't go from @rec -> Key rec@.
+      --
+      -- @since 2.13.0.0
+      EntityIdField !FieldDef
+    | -- | The entity has a natural key. This means you can write @rec -> Key rec@
+      -- because all the key fields are present on the datatype.
+      --
+      -- A natural key can have one or more columns.
+      --
+      -- @since 2.13.0.0
+      EntityIdNaturalKey !CompositeDef
     deriving (Show, Eq, Read, Ord, Lift)
 
 -- | Return the @['FieldDef']@ for the entity keys.
@@ -238,11 +242,12 @@ keyWithFields entId fields =
         EntityIdNaturalKey _ ->
             case NEL.nonEmpty fields of
                 Nothing ->
-                    error $ mconcat
-                        [ "persistent internal guarantee failed: entity is "
-                        , "defined with an entityId = EntityIdNaturalKey, "
-                        , "but somehow doesn't have any entity fields."
-                        ]
+                    error $
+                        mconcat
+                            [ "persistent internal guarantee failed: entity is "
+                            , "defined with an entityId = EntityIdNaturalKey, "
+                            , "but somehow doesn't have any entity fields."
+                            ]
                 Just xs ->
                     xs
 
@@ -258,147 +263,147 @@ type Attr = Text
 --
 -- @since 2.11.0.0
 data FieldAttr
-    = FieldAttrMaybe
-    -- ^ The 'Maybe' keyword goes after the type. This indicates that the column
-    -- is nullable, and the generated Haskell code will have a @'Maybe'@ type
-    -- for it.
-    --
-    -- Example:
-    --
-    -- @
-    -- User
-    --     name Text Maybe
-    -- @
-    | FieldAttrNullable
-    -- ^ This indicates that the column is nullable, but should not have
-    -- a 'Maybe' type. For this to work out, you need to ensure that the
-    -- 'PersistField' instance for the type in question can support
-    -- a 'PersistNull' value.
-    --
-    -- @
-    -- data What = NoWhat | Hello Text
-    --
-    -- instance PersistField What where
-    --     fromPersistValue PersistNull =
-    --         pure NoWhat
-    --     fromPersistValue pv =
-    --         Hello <$> fromPersistValue pv
-    --
-    -- instance PersistFieldSql What where
-    --     sqlType _ = SqlString
-    --
-    -- User
-    --     what What nullable
-    -- @
-    | FieldAttrMigrationOnly
-    -- ^ This tag means that the column will not be present on the Haskell code,
-    -- but will not be removed from the database. Useful to deprecate fields in
-    -- phases.
-    --
-    -- You should set the column to be nullable in the database. Otherwise,
-    -- inserts won't have values.
-    --
-    -- @
-    -- User
-    --     oldName Text MigrationOnly
-    --     newName Text
-    -- @
-    | FieldAttrSafeToRemove
-    -- ^ A @SafeToRemove@ attribute is not present on the Haskell datatype, and
-    -- the backend migrations should attempt to drop the column without
-    -- triggering any unsafe migration warnings.
-    --
-    -- Useful after you've used @MigrationOnly@ to remove a column from the
-    -- database in phases.
-    --
-    -- @
-    -- User
-    --     oldName Text SafeToRemove
-    --     newName Text
-    -- @
-    | FieldAttrNoreference
-    -- ^ This attribute indicates that we should not create a foreign key
-    -- reference from a column. By default, @persistent@ will try and create a
-    -- foreign key reference for a column if it can determine that the type of
-    -- the column is a @'Key' entity@ or an @EntityId@  and the @Entity@'s name
-    -- was present in 'mkPersist'.
-    --
-    -- This is useful if you want to use the explicit foreign key syntax.
-    --
-    -- @
-    -- Post
-    --     title    Text
-    --
-    -- Comment
-    --     postId   PostId      noreference
-    --     Foreign Post fk_comment_post postId
-    -- @
-    | FieldAttrReference Text
-    -- ^ This is set to specify precisely the database table the column refers
-    -- to.
-    --
-    -- @
-    -- Post
-    --     title    Text
-    --
-    -- Comment
-    --     postId   PostId references="post"
-    -- @
-    --
-    -- You should not need this - @persistent@ should be capable of correctly
-    -- determining the target table's name. If you do need this, please file an
-    -- issue describing why.
-    | FieldAttrConstraint Text
-    -- ^ Specify a name for the constraint on the foreign key reference for this
-    -- table.
-    --
-    -- @
-    -- Post
-    --     title    Text
-    --
-    -- Comment
-    --     postId   PostId constraint="my_cool_constraint_name"
-    -- @
-    | FieldAttrDefault Text
-    -- ^ Specify the default value for a column.
-    --
-    -- @
-    -- User
-    --     createdAt    UTCTime     default="NOW()"
-    -- @
-    --
-    -- Note that a @default=@ attribute does not mean you can omit the value
-    -- while inserting.
-    | FieldAttrSqltype Text
-    -- ^ Specify a custom SQL type for the column. Generally, you should define
-    -- a custom datatype with a custom 'PersistFieldSql' instance instead of
-    -- using this.
-    --
-    -- @
-    -- User
-    --     uuid     Text    sqltype="UUID"
-    -- @
-    | FieldAttrMaxlen Integer
-    -- ^ Set a maximum length for a column. Useful for VARCHAR and indexes.
-    --
-    -- @
-    -- User
-    --     name     Text    maxlen=200
-    --
-    --     UniqueName name
-    -- @
-    | FieldAttrSql Text
-    -- ^ Specify the database name of the column.
-    --
-    -- @
-    -- User
-    --     blarghle     Int     sql="b_l_a_r_g_h_l_e"
-    -- @
-    --
-    -- Useful for performing phased migrations, where one column is renamed to
-    -- another column over time.
-    | FieldAttrOther Text
-    -- ^ A grab bag of random attributes that were unrecognized by the parser.
+    = -- | The 'Maybe' keyword goes after the type. This indicates that the column
+      -- is nullable, and the generated Haskell code will have a @'Maybe'@ type
+      -- for it.
+      --
+      -- Example:
+      --
+      -- @
+      -- User
+      --     name Text Maybe
+      -- @
+      FieldAttrMaybe
+    | -- | This indicates that the column is nullable, but should not have
+      -- a 'Maybe' type. For this to work out, you need to ensure that the
+      -- 'PersistField' instance for the type in question can support
+      -- a 'PersistNull' value.
+      --
+      -- @
+      -- data What = NoWhat | Hello Text
+      --
+      -- instance PersistField What where
+      --     fromPersistValue PersistNull =
+      --         pure NoWhat
+      --     fromPersistValue pv =
+      --         Hello <$> fromPersistValue pv
+      --
+      -- instance PersistFieldSql What where
+      --     sqlType _ = SqlString
+      --
+      -- User
+      --     what What nullable
+      -- @
+      FieldAttrNullable
+    | -- | This tag means that the column will not be present on the Haskell code,
+      -- but will not be removed from the database. Useful to deprecate fields in
+      -- phases.
+      --
+      -- You should set the column to be nullable in the database. Otherwise,
+      -- inserts won't have values.
+      --
+      -- @
+      -- User
+      --     oldName Text MigrationOnly
+      --     newName Text
+      -- @
+      FieldAttrMigrationOnly
+    | -- | A @SafeToRemove@ attribute is not present on the Haskell datatype, and
+      -- the backend migrations should attempt to drop the column without
+      -- triggering any unsafe migration warnings.
+      --
+      -- Useful after you've used @MigrationOnly@ to remove a column from the
+      -- database in phases.
+      --
+      -- @
+      -- User
+      --     oldName Text SafeToRemove
+      --     newName Text
+      -- @
+      FieldAttrSafeToRemove
+    | -- | This attribute indicates that we should not create a foreign key
+      -- reference from a column. By default, @persistent@ will try and create a
+      -- foreign key reference for a column if it can determine that the type of
+      -- the column is a @'Key' entity@ or an @EntityId@  and the @Entity@'s name
+      -- was present in 'mkPersist'.
+      --
+      -- This is useful if you want to use the explicit foreign key syntax.
+      --
+      -- @
+      -- Post
+      --     title    Text
+      --
+      -- Comment
+      --     postId   PostId      noreference
+      --     Foreign Post fk_comment_post postId
+      -- @
+      FieldAttrNoreference
+    | -- | This is set to specify precisely the database table the column refers
+      -- to.
+      --
+      -- @
+      -- Post
+      --     title    Text
+      --
+      -- Comment
+      --     postId   PostId references="post"
+      -- @
+      --
+      -- You should not need this - @persistent@ should be capable of correctly
+      -- determining the target table's name. If you do need this, please file an
+      -- issue describing why.
+      FieldAttrReference Text
+    | -- | Specify a name for the constraint on the foreign key reference for this
+      -- table.
+      --
+      -- @
+      -- Post
+      --     title    Text
+      --
+      -- Comment
+      --     postId   PostId constraint="my_cool_constraint_name"
+      -- @
+      FieldAttrConstraint Text
+    | -- | Specify the default value for a column.
+      --
+      -- @
+      -- User
+      --     createdAt    UTCTime     default="NOW()"
+      -- @
+      --
+      -- Note that a @default=@ attribute does not mean you can omit the value
+      -- while inserting.
+      FieldAttrDefault Text
+    | -- | Specify a custom SQL type for the column. Generally, you should define
+      -- a custom datatype with a custom 'PersistFieldSql' instance instead of
+      -- using this.
+      --
+      -- @
+      -- User
+      --     uuid     Text    sqltype="UUID"
+      -- @
+      FieldAttrSqltype Text
+    | -- | Set a maximum length for a column. Useful for VARCHAR and indexes.
+      --
+      -- @
+      -- User
+      --     name     Text    maxlen=200
+      --
+      --     UniqueName name
+      -- @
+      FieldAttrMaxlen Integer
+    | -- | Specify the database name of the column.
+      --
+      -- @
+      -- User
+      --     blarghle     Int     sql="b_l_a_r_g_h_l_e"
+      -- @
+      --
+      -- Useful for performing phased migrations, where one column is renamed to
+      -- another column over time.
+      FieldAttrSql Text
+    | -- | A grab bag of random attributes that were unrecognized by the parser.
+      FieldAttrOther Text
     deriving (Show, Eq, Read, Ord, Lift)
 
 -- | Parse raw field attributes into structured form. Any unrecognized
@@ -438,8 +443,8 @@ parseFieldAttrs = fmap $ \case
 -- FTApp (FTTypeCon Nothing "Jsonb") (FTTypeCon Nothing "User")
 -- @
 data FieldType
-    = FTTypeCon (Maybe Text) Text
-    -- ^ Optional module and name.
+    = -- | Optional module and name.
+      FTTypeCon (Maybe Text) Text
     | FTLit FieldTypeLit
     | FTTypePromoted Text
     | FTApp FieldType FieldType
@@ -460,12 +465,12 @@ isFieldNotGenerated = isNothing . fieldGenerated
 -- 3) embedded
 data ReferenceDef
     = NoReference
-    | ForeignRef !EntityNameHS
-    -- ^ A ForeignRef has a late binding to the EntityDef it references via name
-    -- and has the Haskell type of the foreign key in the form of FieldType
+    | -- | A ForeignRef has a late binding to the EntityDef it references via name
+      -- and has the Haskell type of the foreign key in the form of FieldType
+      ForeignRef !EntityNameHS
     | EmbedRef EntityNameHS
-    | SelfReference
-    -- ^ A SelfReference stops an immediate cycle which causes non-termination at compile-time (issue #311).
+    | -- | A SelfReference stops an immediate cycle which causes non-termination at compile-time (issue #311).
+      SelfReference
     deriving (Show, Eq, Read, Ord, Lift)
 
 -- | An EmbedEntityDef is the same as an EntityDef
@@ -473,14 +478,15 @@ data ReferenceDef
 -- so it only has data needed for embedding
 data EmbedEntityDef = EmbedEntityDef
     { embeddedHaskell :: EntityNameHS
-    , embeddedFields  :: [EmbedFieldDef]
-    } deriving (Show, Eq, Read, Ord, Lift)
+    , embeddedFields :: [EmbedFieldDef]
+    }
+    deriving (Show, Eq, Read, Ord, Lift)
 
 -- | An EmbedFieldDef is the same as a FieldDef
 -- But it is only used for embeddedFields
 -- so it only has data needed for embedding
 data EmbedFieldDef = EmbedFieldDef
-    { emFieldDB    :: FieldNameDB
+    { emFieldDB :: FieldNameDB
     , emFieldEmbed :: Maybe (Either SelfEmbed EntityNameHS)
     }
     deriving (Show, Eq, Read, Ord, Lift)
@@ -494,19 +500,20 @@ data SelfEmbed = SelfEmbed
 -- @since 2.13.0.0
 isHaskellField :: FieldDef -> Bool
 isHaskellField fd =
-    FieldAttrMigrationOnly `notElem` fieldAttrs fd &&
-    FieldAttrSafeToRemove `notElem` fieldAttrs fd
+    FieldAttrMigrationOnly `notElem` fieldAttrs fd
+        && FieldAttrSafeToRemove `notElem` fieldAttrs fd
 
 toEmbedEntityDef :: EntityDef -> EmbedEntityDef
 toEmbedEntityDef ent = embDef
   where
-    embDef = EmbedEntityDef
-        { embeddedHaskell = entityHaskell ent
-        , embeddedFields =
-            map toEmbedFieldDef
-            $ filter isHaskellField
-            $ entityFields ent
-        }
+    embDef =
+        EmbedEntityDef
+            { embeddedHaskell = entityHaskell ent
+            , embeddedFields =
+                map toEmbedFieldDef $
+                    filter isHaskellField $
+                        entityFields ent
+            }
     toEmbedFieldDef :: FieldDef -> EmbedFieldDef
     toEmbedFieldDef field =
         EmbedFieldDef
@@ -540,18 +547,17 @@ toEmbedEntityDef ent = embDef
 --     , uniqueAttrs = []
 --     }
 -- @
---
 data UniqueDef = UniqueDef
     { uniqueHaskell :: !ConstraintNameHS
-    , uniqueDBName  :: !ConstraintNameDB
-    , uniqueFields  :: !(NonEmpty (FieldNameHS, FieldNameDB))
-    , uniqueAttrs   :: ![Attr]
+    , uniqueDBName :: !ConstraintNameDB
+    , uniqueFields :: !(NonEmpty (FieldNameHS, FieldNameDB))
+    , uniqueAttrs :: ![Attr]
     }
     deriving (Show, Eq, Read, Ord, Lift)
 
 data CompositeDef = CompositeDef
-    { compositeFields  :: !(NonEmpty FieldDef)
-    , compositeAttrs   :: ![Attr]
+    { compositeFields :: !(NonEmpty FieldDef)
+    , compositeAttrs :: ![Attr]
     }
     deriving (Show, Eq, Read, Ord, Lift)
 
@@ -560,18 +566,18 @@ data CompositeDef = CompositeDef
 type ForeignFieldDef = (FieldNameHS, FieldNameDB)
 
 data ForeignDef = ForeignDef
-    { foreignRefTableHaskell       :: !EntityNameHS
-    , foreignRefTableDBName        :: !EntityNameDB
+    { foreignRefTableHaskell :: !EntityNameHS
+    , foreignRefTableDBName :: !EntityNameDB
     , foreignConstraintNameHaskell :: !ConstraintNameHS
-    , foreignConstraintNameDBName  :: !ConstraintNameDB
-    , foreignFieldCascade          :: !FieldCascade
+    , foreignConstraintNameDBName :: !ConstraintNameDB
+    , foreignFieldCascade :: !FieldCascade
     -- ^ Determine how the field will cascade on updates and deletions.
     --
     -- @since 2.11.0
-    , foreignFields                :: ![(ForeignFieldDef, ForeignFieldDef)] -- this entity plus the primary entity
-    , foreignAttrs                 :: ![Attr]
-    , foreignNullable              :: Bool
-    , foreignToPrimary             :: Bool
+    , foreignFields :: ![(ForeignFieldDef, ForeignFieldDef)] -- this entity plus the primary entity
+    , foreignAttrs :: ![Attr]
+    , foreignNullable :: Bool
+    , foreignToPrimary :: Bool
     -- ^ Determines if the reference is towards a Primary Key or not.
     --
     -- @since 2.11.0
@@ -623,44 +629,57 @@ data CascadeAction = Cascade | Restrict | SetNull | SetDefault
 -- @since 2.11.0
 renderCascadeAction :: CascadeAction -> Text
 renderCascadeAction action = case action of
-  Cascade    -> "CASCADE"
-  Restrict   -> "RESTRICT"
-  SetNull    -> "SET NULL"
-  SetDefault -> "SET DEFAULT"
+    Cascade -> "CASCADE"
+    Restrict -> "RESTRICT"
+    SetNull -> "SET NULL"
+    SetDefault -> "SET DEFAULT"
 
 data PersistException
-  = PersistError Text -- ^ Generic Exception
-  | PersistMarshalError Text
-  | PersistInvalidField Text
-  | PersistForeignConstraintUnmet Text
-  | PersistMongoDBError Text
-  | PersistMongoDBUnsupported Text
-    deriving Show
+    = -- | Generic Exception
+      PersistError Text
+    | PersistMarshalError Text
+    | PersistInvalidField Text
+    | PersistForeignConstraintUnmet Text
+    | PersistMongoDBError Text
+    | PersistMongoDBUnsupported Text
+    deriving (Show)
 
 instance Exception PersistException
 
 -- | A SQL data type. Naming attempts to reflect the underlying Haskell
 -- datatypes, eg SqlString instead of SqlVarchar. Different SQL databases may
 -- have different translations for these types.
-data SqlType = SqlString
-             | SqlInt32
-             | SqlInt64
-             | SqlReal
-             | SqlNumeric Word32 Word32
-             | SqlBool
-             | SqlDay
-             | SqlTime
-             | SqlDayTime -- ^ Always uses UTC timezone
-             | SqlBlob
-             | SqlOther T.Text -- ^ a backend-specific name
+data SqlType
+    = SqlString
+    | SqlInt32
+    | SqlInt64
+    | SqlReal
+    | SqlNumeric Word32 Word32
+    | SqlBool
+    | SqlDay
+    | SqlTime
+    | -- | Always uses UTC timezone
+      SqlDayTime
+    | SqlBlob
+    | -- | a backend-specific name
+      SqlOther T.Text
     deriving (Show, Read, Eq, Ord, Lift)
 
-data PersistFilter = Eq | Ne | Gt | Lt | Ge | Le | In | NotIn
-                   | BackendSpecificFilter T.Text
+data PersistFilter
+    = Eq
+    | Ne
+    | Gt
+    | Lt
+    | Ge
+    | Le
+    | In
+    | NotIn
+    | BackendSpecificFilter T.Text
     deriving (Read, Show, Lift)
 
-data UpdateException = KeyNotFound String
-                     | UpsertError String
+data UpdateException
+    = KeyNotFound String
+    | UpsertError String
 instance Show UpdateException where
     show (KeyNotFound key) = "Key not found during updateGet: " ++ key
     show (UpsertError msg) = "Error during upsert: " ++ msg
@@ -669,12 +688,15 @@ instance Exception UpdateException
 data OnlyUniqueException = OnlyUniqueException String
 instance Show OnlyUniqueException where
     show (OnlyUniqueException uniqueMsg) =
-      "Expected only one unique key, got " ++ uniqueMsg
+        "Expected only one unique key, got " ++ uniqueMsg
 instance Exception OnlyUniqueException
 
-
 data PersistUpdate
-    = Assign | Add | Subtract | Multiply | Divide
+    = Assign
+    | Add
+    | Subtract
+    | Multiply
+    | Divide
     | BackendSpecificUpdate T.Text
     deriving (Read, Show, Lift)
 
@@ -682,23 +704,23 @@ data PersistUpdate
 -- a field of a datatype. This includes information used to parse the field
 -- out of the database and what the field corresponds to.
 data FieldDef = FieldDef
-    { fieldHaskell   :: !FieldNameHS
+    { fieldHaskell :: !FieldNameHS
     -- ^ The name of the field. Note that this does not corresponds to the
     -- record labels generated for the particular entity - record labels
     -- are generated with the type name prefixed to the field, so
     -- a 'FieldDef' that contains a @'FieldNameHS' "name"@ for a type
     -- @User@ will have a record field @userName@.
-    , fieldDB        :: !FieldNameDB
+    , fieldDB :: !FieldNameDB
     -- ^ The name of the field in the database. For SQL databases, this
     -- corresponds to the column name.
-    , fieldType      :: !FieldType
+    , fieldType :: !FieldType
     -- ^ The type of the field in Haskell.
-    , fieldSqlType   :: !SqlType
+    , fieldSqlType :: !SqlType
     -- ^ The type of the field in a SQL database.
-    , fieldAttrs     :: ![FieldAttr]
+    , fieldAttrs :: ![FieldAttr]
     -- ^ User annotations for a field. These are provided with the @!@
     -- operator.
-    , fieldStrict    :: !Bool
+    , fieldStrict :: !Bool
     -- ^ If this is 'True', then the Haskell datatype will have a strict
     -- record field. The default value for this is 'True'.
     , fieldReference :: !ReferenceDef
@@ -709,7 +731,7 @@ data FieldDef = FieldDef
     -- be the same as the one obtained in the 'fieldReference'.
     --
     -- @since 2.11.0
-    , fieldComments  :: !(Maybe Text)
+    , fieldComments :: !(Maybe Text)
     -- ^ Optional comments for a 'Field'.
     --
     -- @since 2.10.0

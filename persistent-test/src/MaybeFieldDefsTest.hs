@@ -9,7 +9,9 @@ import Data.String (IsString)
 
 import Init
 
-share [mkPersist sqlSettings { mpsGeneric = True },  mkMigrate "maybeFieldDefMigrate"] [persistLowerCase|
+share
+    [mkPersist sqlSettings{mpsGeneric = True}, mkMigrate "maybeFieldDefMigrate"]
+    [persistLowerCase|
   MaybeFieldDefEntity
     optionalString    (Maybe String)
     optionalInt       (Maybe Int)
@@ -18,10 +20,10 @@ share [mkPersist sqlSettings { mpsGeneric = True },  mkMigrate "maybeFieldDefMig
 
 specsWith :: (Runner backend m) => RunDb backend m -> Spec
 specsWith runDb = describe "Maybe Field Definitions" $ do
-  it "runs appropriate migrations" $ runDb $ do
-    emptyEntity <- insert $ MaybeFieldDefEntity Nothing Nothing
-    emptyResult <- get emptyEntity
-    liftIO $ emptyResult @?= Just (MaybeFieldDefEntity Nothing Nothing)
-    populatedEntity <- insert $ MaybeFieldDefEntity (Just "text") (Just 8)
-    populatedResult <- get populatedEntity
-    liftIO $ populatedResult @?= Just (MaybeFieldDefEntity (Just "text") (Just 8))
+    it "runs appropriate migrations" $ runDb $ do
+        emptyEntity <- insert $ MaybeFieldDefEntity Nothing Nothing
+        emptyResult <- get emptyEntity
+        liftIO $ emptyResult @?= Just (MaybeFieldDefEntity Nothing Nothing)
+        populatedEntity <- insert $ MaybeFieldDefEntity (Just "text") (Just 8)
+        populatedResult <- get populatedEntity
+        liftIO $ populatedResult @?= Just (MaybeFieldDefEntity (Just "text") (Just 8))

@@ -1,29 +1,33 @@
-{-# LANGUAGE DataKinds, UndecidableInstances #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
+
 module HtmlTest (specsWith, cleanDB, htmlMigrate) where
 
-import Data.Char (generalCategory, GeneralCategory(..))
+import Data.Char (GeneralCategory (..), generalCategory)
 import qualified Data.Text as T
-import System.Random (randomIO, randomRIO, Random)
+import System.Random (Random, randomIO, randomRIO)
 import Text.Blaze.Html
 import Text.Blaze.Html.Renderer.Text
 
 import Init
 
 -- Test lower case names
-share [mkPersist persistSettings { mpsGeneric = True }, mkMigrate "htmlMigrate"] [persistLowerCase|
+share
+    [mkPersist persistSettings{mpsGeneric = True}, mkMigrate "htmlMigrate"]
+    [persistLowerCase|
 HtmlTable
     html Html
     deriving
 |]
 
-cleanDB :: Runner backend m => ReaderT backend m ()
+cleanDB :: (Runner backend m) => ReaderT backend m ()
 cleanDB = do
-  deleteWhere ([] :: [Filter (HtmlTableGeneric backend)])
+    deleteWhere ([] :: [Filter (HtmlTableGeneric backend)])
 
 specsWith
-    :: Runner backend m
+    :: (Runner backend m)
     => RunDb backend m
     -> Maybe (ReaderT backend m a)
     -> Spec
@@ -42,15 +46,16 @@ specsWith runConn mmigrate = describe "html" $ do
 
 randomValue :: IO Html
 randomValue =
-                preEscapedToMarkup
-              . T.pack
-              . filter ((`notElem` forbidden) . generalCategory)
-              . filter (<= '\xFFFF') -- only BMP
-              . filter (/= '\0')     -- no nulls
-         <$> randomIOs
-    where forbidden = [NotAssigned, PrivateUse]
+    preEscapedToMarkup
+        . T.pack
+        . filter ((`notElem` forbidden) . generalCategory)
+        . filter (<= '\xFFFF') -- only BMP
+        . filter (/= '\0') -- no nulls
+        <$> randomIOs
+  where
+    forbidden = [NotAssigned, PrivateUse]
 
-randomIOs :: Random a => IO [a]
+randomIOs :: (Random a) => IO [a]
 randomIOs = do
     len <- randomRIO (0, 20)
     sequence $ replicate len randomIO

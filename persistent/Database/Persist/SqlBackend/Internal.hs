@@ -44,7 +44,8 @@ data SqlBackend = SqlBackend
     -- ^ SQL for inserting many rows and returning their primary keys, for
     -- backends that support this functionality. If 'Nothing', rows will be
     -- inserted one-at-a-time using 'connInsertSql'.
-    , connUpsertSql :: Maybe (EntityDef -> NonEmpty (FieldNameHS, FieldNameDB) -> Text -> Text)
+    , connUpsertSql
+        :: Maybe (EntityDef -> NonEmpty (FieldNameHS, FieldNameDB) -> Text -> Text)
     -- ^ Some databases support performing UPSERT _and_ RETURN entity
     -- in a single call.
     --
@@ -110,7 +111,7 @@ data SqlBackend = SqlBackend
     -- ^ A tag displaying what database the 'SqlBackend' is for. Can be
     -- used to differentiate features in downstream libraries for different
     -- database backends.
-    , connLimitOffset :: (Int,Int) -> Text -> Text
+    , connLimitOffset :: (Int, Int) -> Text -> Text
     -- ^ Attach a 'LIMIT/OFFSET' clause to a SQL query. Note that
     -- LIMIT/OFFSET is problematic for performance, and indexed range
     -- queries are the superior way to offer pagination.
@@ -146,9 +147,10 @@ newtype SqlBackendHooks = SqlBackendHooks
     }
 
 emptySqlBackendHooks :: SqlBackendHooks
-emptySqlBackendHooks = SqlBackendHooks
-    { hookGetStatement = \_ _ s -> pure s
-    }
+emptySqlBackendHooks =
+    SqlBackendHooks
+        { hookGetStatement = \_ _ s -> pure s
+        }
 
 -- | A function for creating a value of the 'SqlBackend' type. You should prefer
 -- to use this instead of the constructor for 'SqlBackend', because default
@@ -157,7 +159,7 @@ emptySqlBackendHooks = SqlBackendHooks
 --
 -- @since 2.13.0.0
 mkSqlBackend :: MkSqlBackendArgs -> SqlBackend
-mkSqlBackend MkSqlBackendArgs {..} =
+mkSqlBackend MkSqlBackendArgs{..} =
     SqlBackend
         { connMaxParams = Nothing
         , connRepsertManySql = Nothing

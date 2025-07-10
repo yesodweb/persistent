@@ -1,8 +1,8 @@
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE GADTs #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -16,11 +16,14 @@
 module Database.Persist.TH.PersistWithSpec where
 
 import Control.Monad
-import TemplateTestImports
 import Database.Persist.TH.PersistWith.Model as Model (IceCream, IceCreamId)
 import Language.Haskell.TH as TH
+import TemplateTestImports
 
-mkPersistWith sqlSettings $(discoverEntities) [persistLowerCase|
+mkPersistWith
+    sqlSettings
+    $(discoverEntities)
+    [persistLowerCase|
 
 BestTopping
     iceCream IceCreamId
@@ -62,11 +65,17 @@ spec = describe "mkPersistWith" $ do
 shouldReferToIceCream :: EntityField BestTopping a -> IO ()
 shouldReferToIceCream field =
     unless (reference == iceCreamRef) $ do
-        expectationFailure $ mconcat
-            [ "The field '", show field, "' does not have a reference to IceCream.\n"
-            , "Got Reference: ", show reference, "\n"
-            , "Expected     : ", show iceCreamRef
-            ]
+        expectationFailure $
+            mconcat
+                [ "The field '"
+                , show field
+                , "' does not have a reference to IceCream.\n"
+                , "Got Reference: "
+                , show reference
+                , "\n"
+                , "Expected     : "
+                , show iceCreamRef
+                ]
   where
     reference =
         fieldReference (persistFieldDef field)

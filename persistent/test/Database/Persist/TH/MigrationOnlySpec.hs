@@ -22,7 +22,9 @@ import Database.Persist.ImplicitIdDef
 import Database.Persist.ImplicitIdDef.Internal (fieldTypeFromTypeable)
 import Database.Persist.Types
 
-mkPersist sqlSettings [persistLowerCase|
+mkPersist
+    sqlSettings
+    [persistLowerCase|
 
 HasMigrationOnly
     name String
@@ -54,12 +56,8 @@ spec = describe "MigrationOnlySpec" $ do
         describe "toPersistFields" $ do
             it "should have one field" $ do
                 map toPersistValue (toPersistFields (HasMigrationOnly "asdf"))
-                    `shouldBe`
-                        [PersistText ("asdf" :: Text)]
+                    `shouldBe` [PersistText ("asdf" :: Text)]
         describe "fromPersistValues" $ do
             it "should work with only item in list" $ do
                 fromPersistValues [PersistText "Hello"]
-                    `shouldBe`
-                        Right (HasMigrationOnly "Hello")
-
-
+                    `shouldBe` Right (HasMigrationOnly "Hello")

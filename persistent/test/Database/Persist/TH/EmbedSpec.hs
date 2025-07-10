@@ -16,18 +16,19 @@ module Database.Persist.TH.EmbedSpec where
 
 import TemplateTestImports
 
-import Data.Text (Text)
 import qualified Data.Map as M
+import Data.Text (Text)
 import qualified Data.Text as T
 
+import Database.Persist.EntityDef
+import Database.Persist.EntityDef.Internal (toEmbedEntityDef)
 import Database.Persist.ImplicitIdDef
 import Database.Persist.ImplicitIdDef.Internal (fieldTypeFromTypeable)
 import Database.Persist.Types
-import Database.Persist.Types
-import Database.Persist.EntityDef
-import Database.Persist.EntityDef.Internal (toEmbedEntityDef)
 
-mkPersist sqlSettings [persistLowerCase|
+mkPersist
+    sqlSettings
+    [persistLowerCase|
 
 Thing
     name String
@@ -80,12 +81,10 @@ spec = describe "EmbedSpec" $ do
                 getEntityFields edef
         it "has the right type" $ do
             fieldType fieldDef
-                `shouldBe`
-                    FTList (FTTypeCon Nothing "Text")
+                `shouldBe` FTList (FTTypeCon Nothing "Text")
         it "has the right sqltype" $ do
             fieldSqlType fieldDef
-                `shouldBe`
-                    SqlString
+                `shouldBe` SqlString
     describe "MapIdValue" $ do
         let
             edef =
@@ -94,20 +93,15 @@ spec = describe "EmbedSpec" $ do
                 getEntityFields edef
         it "has the right type" $ do
             fieldType fieldDef
-                `shouldBe`
-                    ( FTTypeCon (Just "M") "Map"
-                        `FTApp`
-                        FTTypeCon (Just "T") "Text"
-                        `FTApp`
-                        (FTTypeCon Nothing "Key"
-                            `FTApp`
-                            FTTypeCon Nothing "Thing"
-                        )
-                    )
+                `shouldBe` ( FTTypeCon (Just "M") "Map"
+                                `FTApp` FTTypeCon (Just "T") "Text"
+                                `FTApp` ( FTTypeCon Nothing "Key"
+                                            `FTApp` FTTypeCon Nothing "Thing"
+                                        )
+                           )
         it "has the right sqltype" $ do
             fieldSqlType fieldDef
-                `shouldBe`
-                    SqlString
+                `shouldBe` SqlString
     describe "HasMap" $ do
         let
             edef =
@@ -116,17 +110,13 @@ spec = describe "EmbedSpec" $ do
                 getEntityFields edef
         it "has the right type" $ do
             fieldType fieldDef
-                `shouldBe`
-                    ( FTTypeCon (Just "M") "Map"
-                    `FTApp`
-                    FTTypeCon (Just "T") "Text"
-                    `FTApp`
-                    FTTypeCon (Just "T") "Text"
-                    )
+                `shouldBe` ( FTTypeCon (Just "M") "Map"
+                                `FTApp` FTTypeCon (Just "T") "Text"
+                                `FTApp` FTTypeCon (Just "T") "Text"
+                           )
         it "has the right sqltype" $ do
             fieldSqlType fieldDef
-                `shouldBe`
-                    SqlString
+                `shouldBe` SqlString
 
     describe "SomeThing" $ do
         let
@@ -138,12 +128,12 @@ spec = describe "EmbedSpec" $ do
                     toEmbedEntityDef edef
             it "should have the same field count as Haskell fields" $ do
                 length (embeddedFields embedDef)
-                    `shouldBe`
-                        length (getEntityFields edef)
+                    `shouldBe` length (getEntityFields edef)
 
     describe "EmbedThing" $ do
         it "generates the right constructor" $ do
-            let embedThing :: EmbedThing
+            let
+                embedThing :: EmbedThing
                 embedThing = EmbedThing (Thing "asdf")
             pass
 
@@ -156,14 +146,11 @@ spec = describe "EmbedSpec" $ do
                 [nameField, selfField] = getEntityFields edef
             it "has self reference" $ do
                 fieldReference selfField
-                    `shouldBe`
-                        NoReference
+                    `shouldBe` NoReference
         describe "toEmbedEntityDef" $ do
             let
                 embedDef =
                     toEmbedEntityDef edef
             it "has the same field count as regular def" $ do
                 length (getEntityFields edef)
-                    `shouldBe`
-                        length (embeddedFields embedDef)
-
+                    `shouldBe` length (embeddedFields embedDef)

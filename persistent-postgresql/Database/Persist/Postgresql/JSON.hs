@@ -3,25 +3,30 @@
 
 -- | Filter operators for JSON values added to PostgreSQL 9.4
 module Database.Persist.Postgresql.JSON
-  ( (@>.)
-  , (<@.)
-  , (?.)
-  , (?|.)
-  , (?&.)
-  , Value()
-  ) where
+    ( (@>.)
+    , (<@.)
+    , (?.)
+    , (?|.)
+    , (?&.)
+    , Value ()
+    ) where
 
-import Data.Aeson (FromJSON, ToJSON, Value, encode, eitherDecodeStrict)
+import Data.Aeson (FromJSON, ToJSON, Value, eitherDecodeStrict, encode)
 import qualified Data.ByteString.Lazy as BSL
 import Data.Proxy (Proxy)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Encoding as TE (encodeUtf8)
 
-import Database.Persist (EntityField, Filter(..), PersistValue(..), PersistField(..), PersistFilter(..))
-import Database.Persist.Sql (PersistFieldSql(..), SqlType(..))
-import Database.Persist.Types (FilterValue(..))
-
+import Database.Persist
+    ( EntityField
+    , Filter (..)
+    , PersistField (..)
+    , PersistFilter (..)
+    , PersistValue (..)
+    )
+import Database.Persist.Sql (PersistFieldSql (..), SqlType (..))
+import Database.Persist.Types (FilterValue (..))
 
 infix 4 @>., <@., ?., ?|., ?&.
 
@@ -314,36 +319,36 @@ infix 4 @>., <@., ?., ?|., ?&.
 (?&.) :: EntityField record Value -> [Text] -> Filter record
 (?&.) field = jsonFilter " ??& " field . PostgresArray
 
-jsonFilter :: PersistField a => Text -> EntityField record Value -> a -> Filter record
+jsonFilter
+    :: (PersistField a) => Text -> EntityField record Value -> a -> Filter record
 jsonFilter op field a = Filter field (UnsafeValue a) $ BackendSpecificFilter op
-
 
 -----------------
 -- AESON VALUE --
 -----------------
 
 instance PersistField Value where
-  toPersistValue = toPersistValueJsonB
-  fromPersistValue = fromPersistValueJsonB
+    toPersistValue = toPersistValueJsonB
+    fromPersistValue = fromPersistValueJsonB
 
 instance PersistFieldSql Value where
-  sqlType = sqlTypeJsonB
+    sqlType = sqlTypeJsonB
 
 -- FIXME: PersistText might be a bit more efficient,
 -- but needs testing/profiling before changing it.
 -- (When entering into the DB the type isn't as important as fromPersistValue)
-toPersistValueJsonB :: ToJSON a => a -> PersistValue
+toPersistValueJsonB :: (ToJSON a) => a -> PersistValue
 toPersistValueJsonB = PersistLiteralEscaped . BSL.toStrict . encode
 
-fromPersistValueJsonB :: FromJSON a => PersistValue -> Either Text a
+fromPersistValueJsonB :: (FromJSON a) => PersistValue -> Either Text a
 fromPersistValueJsonB (PersistText t) =
     case eitherDecodeStrict $ TE.encodeUtf8 t of
-      Left str -> Left $ fromPersistValueParseError "FromJSON" t $ T.pack str
-      Right v -> Right v
+        Left str -> Left $ fromPersistValueParseError "FromJSON" t $ T.pack str
+        Right v -> Right v
 fromPersistValueJsonB (PersistByteString bs) =
     case eitherDecodeStrict bs of
-      Left str -> Left $ fromPersistValueParseError "FromJSON" bs $ T.pack str
-      Right v -> Right v
+        Left str -> Left $ fromPersistValueParseError "FromJSON" bs $ T.pack str
+        Right v -> Right v
 fromPersistValueJsonB x = Left $ fromPersistValueError "FromJSON" "string or bytea" x
 
 -- Constraints on the type might not be necessary,
@@ -351,38 +356,49 @@ fromPersistValueJsonB x = Left $ fromPersistValueError "FromJSON" "string or byt
 sqlTypeJsonB :: (ToJSON a, FromJSON a) => Proxy a -> SqlType
 sqlTypeJsonB _ = SqlOther "JSONB"
 
+fromPersistValueError
+    :: Text
+    -- ^ Haskell type, should match Haskell name exactly, e.g. "Int64"
+    -> Text
+    -- ^ Database type(s), should appear different from Haskell name, e.g. "integer" or "INT", not "Int".
+    -> PersistValue
+    -- ^ Incorrect value
+    -> Text
+    -- ^ Error message
+fromPersistValueError haskellType databaseType received =
+    T.concat
+        [ "Failed to parse Haskell type `"
+        , haskellType
+        , "`; expected "
+        , databaseType
+        , " from database, but received: "
+        , T.pack (show received)
+        , ". Potential solution: Check that your database schema matches your Persistent model definitions."
+        ]
 
-fromPersistValueError :: Text -- ^ Haskell type, should match Haskell name exactly, e.g. "Int64"
-                      -> Text -- ^ Database type(s), should appear different from Haskell name, e.g. "integer" or "INT", not "Int".
-                      -> PersistValue -- ^ Incorrect value
-                      -> Text -- ^ Error message
-fromPersistValueError haskellType databaseType received = T.concat
-    [ "Failed to parse Haskell type `"
-    , haskellType
-    , "`; expected "
-    , databaseType
-    , " from database, but received: "
-    , T.pack (show received)
-    , ". Potential solution: Check that your database schema matches your Persistent model definitions."
-    ]
-
-fromPersistValueParseError :: (Show a)
-                           => Text -- ^ Haskell type, should match Haskell name exactly, e.g. "Int64"
-                           -> a -- ^ Received value
-                           -> Text -- ^ Additional error
-                           -> Text -- ^ Error message
-fromPersistValueParseError haskellType received err = T.concat
-    [ "Failed to parse Haskell type `"
-    , haskellType
-    , "`, but received "
-    , T.pack (show received)
-    , " | with error: "
-    , err
-    ]
+fromPersistValueParseError
+    :: (Show a)
+    => Text
+    -- ^ Haskell type, should match Haskell name exactly, e.g. "Int64"
+    -> a
+    -- ^ Received value
+    -> Text
+    -- ^ Additional error
+    -> Text
+    -- ^ Error message
+fromPersistValueParseError haskellType received err =
+    T.concat
+        [ "Failed to parse Haskell type `"
+        , haskellType
+        , "`, but received "
+        , T.pack (show received)
+        , " | with error: "
+        , err
+        ]
 
 newtype PostgresArray a = PostgresArray [a]
 
-instance PersistField a => PersistField (PostgresArray a) where
-  toPersistValue (PostgresArray ts) = PersistArray $ toPersistValue <$> ts
-  fromPersistValue (PersistArray as) = PostgresArray <$> traverse fromPersistValue as
-  fromPersistValue wat = Left $ fromPersistValueError "PostgresArray" "array" wat
+instance (PersistField a) => PersistField (PostgresArray a) where
+    toPersistValue (PostgresArray ts) = PersistArray $ toPersistValue <$> ts
+    fromPersistValue (PersistArray as) = PostgresArray <$> traverse fromPersistValue as
+    fromPersistValue wat = Left $ fromPersistValueError "PostgresArray" "array" wat

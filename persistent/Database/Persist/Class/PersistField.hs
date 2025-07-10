@@ -1,50 +1,52 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE PatternGuards, DataKinds, TypeOperators, UndecidableInstances, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE UndecidableInstances #-}
+
 module Database.Persist.Class.PersistField
     ( PersistField (..)
     , getPersistMap
-    , OverflowNatural(..)
+    , OverflowNatural (..)
     ) where
 
 import Control.Arrow (second)
 import Control.Monad ((<=<))
 import qualified Data.Aeson as A
-import Data.ByteString.Char8 (ByteString, unpack, readInt)
+import Data.ByteString.Char8 (ByteString, readInt, unpack)
 import qualified Data.ByteString.Lazy as L
 import Data.Fixed
 import Data.Foldable (asum)
-import Data.Int (Int8, Int16, Int32, Int64)
+import Data.Int (Int16, Int32, Int64, Int8)
 import qualified Data.IntMap as IM
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Map as M
+import Data.Ratio (denominator, numerator)
 import qualified Data.Set as S
 import Data.Text (Text)
 import qualified Data.Text as T
-import Data.Text.Read (double)
 import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Encoding.Error as TERR
 import qualified Data.Text.Lazy as TL
+import Data.Text.Read (double)
 import qualified Data.Vector as V
-import Data.Word (Word, Word8, Word16, Word32, Word64)
+import Data.Word (Word, Word16, Word32, Word64, Word8)
+import GHC.TypeLits
 import Numeric.Natural (Natural)
 import Text.Blaze.Html
 import Text.Blaze.Html.Renderer.Text (renderHtml)
-import GHC.TypeLits
-import Data.Ratio (numerator, denominator)
 
 import Database.Persist.Types.Base
 
-import Data.Time (Day(..), TimeOfDay, UTCTime,
-    parseTimeM)
-import Data.Time (defaultTimeLocale)
+import Data.Time (Day (..), TimeOfDay, UTCTime, defaultTimeLocale, parseTimeM)
 
 #ifdef HIGH_PRECISION_DATE
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 #endif
-
 
 -- | This class teaches Persistent how to take a custom type and marshal it to and from a 'PersistValue', allowing it to be stored in a database.
 --
@@ -154,7 +156,8 @@ instance PersistField Int64 where
     toPersistValue = PersistInt64
     fromPersistValue = fromPersistValueIntegral "Int64" "integer"
 
-fromPersistValueIntegral :: Integral a => Text -> Text -> PersistValue -> Either Text a
+fromPersistValueIntegral
+    :: (Integral a) => Text -> Text -> PersistValue -> Either Text a
 fromPersistValueIntegral haskellType sqlType pv = case pv of
     PersistInt64 i ->
         Right (fromIntegral i)
@@ -167,45 +170,57 @@ fromPersistValueIntegral haskellType sqlType pv = case pv of
             _denom ->
                 boom
     PersistByteString bs ->
-        case readInt bs of  -- oracle
-           Just (i,"") ->
-               Right $ fromIntegral i
-           Just (i,extra) ->
-               Left $ extraInputError haskellType bs i extra
-           Nothing ->
-               Left $ intParseError haskellType bs
+        case readInt bs of -- oracle
+            Just (i, "") ->
+                Right $ fromIntegral i
+            Just (i, extra) ->
+                Left $ extraInputError haskellType bs i extra
+            Nothing ->
+                Left $ intParseError haskellType bs
     _ ->
         boom
   where
     boom =
         Left $ fromPersistValueError haskellType sqlType pv
 
-extraInputError :: (Show result)
-                => Text -- ^ Haskell type
-                -> ByteString -- ^ Original bytestring
-                -> result -- ^ Integer result
-                -> ByteString -- ^  Extra bytestring
-                -> Text -- ^ Error message
-extraInputError haskellType original result extra = T.concat
-    [ "Parsed "
-    , TE.decodeUtf8 original
-    , " into Haskell type `"
-    , haskellType
-    , "` with value"
-    , T.pack $ show result
-    , "but had extra input: "
-    , TE.decodeUtf8 extra
-    ]
+extraInputError
+    :: (Show result)
+    => Text
+    -- ^ Haskell type
+    -> ByteString
+    -- ^ Original bytestring
+    -> result
+    -- ^ Integer result
+    -> ByteString
+    -- ^  Extra bytestring
+    -> Text
+    -- ^ Error message
+extraInputError haskellType original result extra =
+    T.concat
+        [ "Parsed "
+        , TE.decodeUtf8 original
+        , " into Haskell type `"
+        , haskellType
+        , "` with value"
+        , T.pack $ show result
+        , "but had extra input: "
+        , TE.decodeUtf8 extra
+        ]
 
-intParseError :: Text -- ^ Haskell type
-              -> ByteString -- ^ Original bytestring
-              -> Text -- ^ Error message
-intParseError haskellType original = T.concat
-    [ "Failed to parse Haskell type `"
-    , haskellType
-    , " from "
-    , TE.decodeUtf8 original
-    ]
+intParseError
+    :: Text
+    -- ^ Haskell type
+    -> ByteString
+    -- ^ Original bytestring
+    -> Text
+    -- ^ Error message
+intParseError haskellType original =
+    T.concat
+        [ "Failed to parse Haskell type `"
+        , haskellType
+        , " from "
+        , TE.decodeUtf8 original
+        ]
 
 instance PersistField Data.Word.Word where
     toPersistValue = PersistInt64 . fromIntegral
@@ -243,8 +258,8 @@ instance (HasResolution a) => PersistField (Fixed a) where
     toPersistValue = PersistRational . toRational
     fromPersistValue (PersistRational r) = Right $ fromRational r
     fromPersistValue (PersistText t) = case reads $ T.unpack t of --  NOTE: Sqlite can store rationals just as string
-      [(a, "")] -> Right a
-      _ -> Left $ "Can not read " <> t <> " as Fixed"
+        [(a, "")] -> Right a
+        _ -> Left $ "Can not read " <> t <> " as Fixed"
     fromPersistValue (PersistDouble d) = Right $ realToFrac d
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
     fromPersistValue x = Left $ fromPersistValueError "Fixed" "rational, string, double, or integer" x
@@ -254,24 +269,48 @@ instance PersistField Rational where
     fromPersistValue (PersistRational r) = Right r
     fromPersistValue (PersistDouble d) = Right $ toRational d
     fromPersistValue (PersistText t) = case reads $ T.unpack t of --  NOTE: Sqlite can store rationals just as string
-      [(a, "")] -> Right $ toRational (a :: Pico)
-      _ -> Left $ "Can not read " <> t <> " as Rational (Pico in fact)"
+        [(a, "")] -> Right $ toRational (a :: Pico)
+        _ -> Left $ "Can not read " <> t <> " as Rational (Pico in fact)"
     fromPersistValue (PersistInt64 i) = Right $ fromIntegral i
     fromPersistValue (PersistByteString bs) = case double $ T.cons '0' $ TE.decodeUtf8With TERR.lenientDecode bs of
-                                                Right (ret,"") -> Right $ toRational ret
-                                                Right (a,b) -> Left $ "Invalid bytestring[" <> T.pack (show bs) <> "]: expected a double but returned " <> T.pack (show (a,b))
-                                                Left xs -> Left $ "Invalid bytestring[" <> T.pack (show bs) <> "]: expected a double but returned " <> T.pack (show xs)
-    fromPersistValue x = Left $ fromPersistValueError "Rational" "rational, double, string, integer, or bytestring" x
+        Right (ret, "") -> Right $ toRational ret
+        Right (a, b) ->
+            Left $
+                "Invalid bytestring["
+                    <> T.pack (show bs)
+                    <> "]: expected a double but returned "
+                    <> T.pack (show (a, b))
+        Left xs ->
+            Left $
+                "Invalid bytestring["
+                    <> T.pack (show bs)
+                    <> "]: expected a double but returned "
+                    <> T.pack (show xs)
+    fromPersistValue x =
+        Left $
+            fromPersistValueError
+                "Rational"
+                "rational, double, string, integer, or bytestring"
+                x
 
 instance PersistField Bool where
     toPersistValue = PersistBool
     fromPersistValue (PersistBool b) = Right b
     fromPersistValue (PersistInt64 i) = Right $ i /= 0
     fromPersistValue (PersistByteString i) = case readInt i of
-                                               Just (0,"") -> Right False
-                                               Just (1,"") -> Right True
-                                               xs -> Left $ T.pack $ "Failed to parse Haskell type `Bool` from PersistByteString. Original value:" ++ show i ++ ". Parsed by `readInt` as " ++ (show xs) ++ ". Expected '1'."
-    fromPersistValue x = Left $ fromPersistValueError "Bool" "boolean, integer, or bytestring of '1' or '0'" x
+        Just (0, "") -> Right False
+        Just (1, "") -> Right True
+        xs ->
+            Left $
+                T.pack $
+                    "Failed to parse Haskell type `Bool` from PersistByteString. Original value:"
+                        ++ show i
+                        ++ ". Parsed by `readInt` as "
+                        ++ (show xs)
+                        ++ ". Expected '1'."
+    fromPersistValue x =
+        Left $
+            fromPersistValueError "Bool" "boolean, integer, or bytestring of '1' or '0'" x
 
 instance PersistField Day where
     toPersistValue = PersistDay
@@ -279,11 +318,11 @@ instance PersistField Day where
     fromPersistValue (PersistInt64 i) = Right $ ModifiedJulianDay $ toInteger i
     fromPersistValue x@(PersistText t) =
         case reads $ T.unpack t of
-            (d, _):_ -> Right d
+            (d, _) : _ -> Right d
             _ -> Left $ fromPersistValueParseError "Day" x
     fromPersistValue x@(PersistByteString s) =
         case reads $ unpack s of
-            (d, _):_ -> Right d
+            (d, _) : _ -> Right d
             _ -> Left $ fromPersistValueParseError "Day" x
     fromPersistValue x = Left $ fromPersistValueError "Day" "day, integer, string or bytestring" x
 
@@ -292,11 +331,11 @@ instance PersistField TimeOfDay where
     fromPersistValue (PersistTimeOfDay d) = Right d
     fromPersistValue x@(PersistText t) =
         case reads $ T.unpack t of
-            (d, _):_ -> Right d
+            (d, _) : _ -> Right d
             _ -> Left $ fromPersistValueParseError "TimeOfDay" x
     fromPersistValue x@(PersistByteString s) =
         case reads $ unpack s of
-            (d, _):_ -> Right d
+            (d, _) : _ -> Right d
             _ -> Left $ fromPersistValueParseError "TimeOfDay" x
     fromPersistValue x = Left $ fromPersistValueError "TimeOfDay" "time, string, or bytestring" x
 
@@ -326,13 +365,15 @@ utcTimeFromPersistValue x = Left $ fromPersistValueError "UTCTime" "time, intege
 #endif
 
 utcTimeFromPersistText :: Text -> Either Text UTCTime
-utcTimeFromPersistText  t =
-        let x = PersistText t
-            s = T.unpack t
-        in
-          case NonEmpty.nonEmpty (reads s) of
+utcTimeFromPersistText t =
+    let
+        x = PersistText t
+        s = T.unpack t
+     in
+        case NonEmpty.nonEmpty (reads s) of
             Nothing ->
-                case asum [parse8601 s, parse8601NoTimezone s, parsePretty s, parsePrettyNoTimezone s] of
+                case asum
+                    [parse8601 s, parse8601NoTimezone s, parsePretty s, parsePrettyNoTimezone s] of
                     Nothing -> Left $ fromPersistValueParseError "UTCTime" x
                     Just x' -> Right x'
             Just matches ->
@@ -342,13 +383,13 @@ utcTimeFromPersistText  t =
                 -- here contains the parsed UTCTime with as much microsecond
                 -- precision parsed as posssible.
                 Right $ fst $ NonEmpty.last matches
-      where
-        parse8601 = parseTime' "%FT%T%QZ"
-        parsePretty = parseTime' "%F %T%QZ"
-        -- Before 2.13.3.1 persistent-sqlite was missing the timezone "Z" for UTC,
-        -- which was only implicit, so these functions ensure backwards-compatibility.
-        parse8601NoTimezone = parseTime' "%FT%T%Q"
-        parsePrettyNoTimezone = parseTime' "%F %T%Q"
+  where
+    parse8601 = parseTime' "%FT%T%QZ"
+    parsePretty = parseTime' "%F %T%QZ"
+    -- Before 2.13.3.1 persistent-sqlite was missing the timezone "Z" for UTC,
+    -- which was only implicit, so these functions ensure backwards-compatibility.
+    parse8601NoTimezone = parseTime' "%FT%T%Q"
+    parsePrettyNoTimezone = parseTime' "%F %T%Q"
 
 #if MIN_VERSION_time(1,5,0)
 parseTime' :: String -> String -> Maybe UTCTime
@@ -372,37 +413,37 @@ parseTime' = parseTime defaultTimeLocale
 -- non-negative, and are quite efficient for the database to store.
 --
 -- @since 2.11.0
-newtype OverflowNatural = OverflowNatural { unOverflowNatural :: Natural }
+newtype OverflowNatural = OverflowNatural {unOverflowNatural :: Natural}
     deriving (Eq, Show, Ord, Num)
 
 instance
-  TypeError
-    ( 'Text "The instance of PersistField for the Natural type was removed."
-    ':$$: 'Text "Please see the documentation for OverflowNatural if you want to "
-    ':$$: 'Text "continue using the old behavior or want to see documentation on "
-    ':$$: 'Text "why the instance was removed."
-    ':$$: 'Text ""
-    ':$$: 'Text "This error instance will be removed in a future release."
+    ( TypeError
+        ( 'Text "The instance of PersistField for the Natural type was removed."
+            ':$$: 'Text "Please see the documentation for OverflowNatural if you want to "
+            ':$$: 'Text "continue using the old behavior or want to see documentation on "
+            ':$$: 'Text "why the instance was removed."
+            ':$$: 'Text ""
+            ':$$: 'Text "This error instance will be removed in a future release."
+        )
     )
-  =>
-    PersistField Natural
-  where
+    => PersistField Natural
+    where
     toPersistValue = undefined
     fromPersistValue = undefined
 
 instance PersistField OverflowNatural where
-  toPersistValue = (toPersistValue :: Int64 -> PersistValue) . fromIntegral . unOverflowNatural
-  fromPersistValue x = case (fromPersistValue x :: Either Text Int64) of
-    Left err -> Left $ T.replace "Int64" "OverflowNatural" err
-    Right int -> Right $ OverflowNatural $ fromIntegral int -- TODO use bimap?
+    toPersistValue = (toPersistValue :: Int64 -> PersistValue) . fromIntegral . unOverflowNatural
+    fromPersistValue x = case (fromPersistValue x :: Either Text Int64) of
+        Left err -> Left $ T.replace "Int64" "OverflowNatural" err
+        Right int -> Right $ OverflowNatural $ fromIntegral int -- TODO use bimap?
 
-instance PersistField a => PersistField (Maybe a) where
+instance (PersistField a) => PersistField (Maybe a) where
     toPersistValue Nothing = PersistNull
     toPersistValue (Just a) = toPersistValue a
     fromPersistValue PersistNull = Right Nothing
     fromPersistValue x = Just <$> fromPersistValue x
 
-instance {-# OVERLAPPABLE #-} PersistField a => PersistField [a] where
+instance {-# OVERLAPPABLE #-} (PersistField a) => PersistField [a] where
     toPersistValue = PersistList . fmap toPersistValue
     fromPersistValue (PersistList l) = fromPersistList l
     fromPersistValue (PersistText t) = fromPersistValue (PersistByteString $ TE.encodeUtf8 t)
@@ -413,15 +454,18 @@ instance {-# OVERLAPPABLE #-} PersistField a => PersistField [a] where
     fromPersistValue (PersistNull) = Right []
     fromPersistValue x = Left $ fromPersistValueError "List" "list, string, bytestring or null" x
 
-instance PersistField a => PersistField (V.Vector a) where
-  toPersistValue = toPersistValue . V.toList
-  fromPersistValue = either (\e -> Left ("Failed to parse Haskell type `Vector`: " `T.append` e))
-                            (Right . V.fromList) . fromPersistValue
+instance (PersistField a) => PersistField (V.Vector a) where
+    toPersistValue = toPersistValue . V.toList
+    fromPersistValue =
+        either
+            (\e -> Left ("Failed to parse Haskell type `Vector`: " `T.append` e))
+            (Right . V.fromList)
+            . fromPersistValue
 
 instance (Ord a, PersistField a) => PersistField (S.Set a) where
     toPersistValue = PersistList . fmap toPersistValue . S.toList
     fromPersistValue (PersistList list) =
-      S.fromList <$> fromPersistList list
+        S.fromList <$> fromPersistList list
     fromPersistValue (PersistText t) = fromPersistValue (PersistByteString $ TE.encodeUtf8 t)
     fromPersistValue (PersistByteString bs)
         | Just values <- A.decode' (L.fromChunks [bs]) =
@@ -429,19 +473,20 @@ instance (Ord a, PersistField a) => PersistField (S.Set a) where
     fromPersistValue PersistNull = Right S.empty
     fromPersistValue x = Left $ fromPersistValueError "Set" "list, string, bytestring or null" x
 
-instance (PersistField a, PersistField b) => PersistField (a,b) where
-    toPersistValue (x,y) = PersistList [toPersistValue x, toPersistValue y]
+instance (PersistField a, PersistField b) => PersistField (a, b) where
+    toPersistValue (x, y) = PersistList [toPersistValue x, toPersistValue y]
     fromPersistValue v =
         case fromPersistValue v of
-            Right [x,y]  -> (,) <$> fromPersistValue x <*> fromPersistValue y
-            Left e       -> Left e
-            _            -> Left $ T.pack $ "Expected 2 item PersistList, received: " ++ show v
+            Right [x, y] -> (,) <$> fromPersistValue x <*> fromPersistValue y
+            Left e -> Left e
+            _ ->
+                Left $ T.pack $ "Expected 2 item PersistList, received: " ++ show v
 
-instance PersistField v => PersistField (IM.IntMap v) where
+instance (PersistField v) => PersistField (IM.IntMap v) where
     toPersistValue = toPersistValue . IM.toList
     fromPersistValue = fmap IM.fromList . fromPersistValue
 
-instance PersistField v => PersistField (M.Map T.Text v) where
+instance (PersistField v) => PersistField (M.Map T.Text v) where
     toPersistValue = PersistMap . fmap (second toPersistValue) . M.toList
     fromPersistValue = fromPersistMap <=< getPersistMap
 
@@ -449,68 +494,94 @@ instance PersistField PersistValue where
     toPersistValue = id
     fromPersistValue = Right
 
-fromPersistList :: PersistField a => [PersistValue] -> Either T.Text [a]
+fromPersistList :: (PersistField a) => [PersistValue] -> Either T.Text [a]
 fromPersistList = mapM fromPersistValue
 
-fromPersistMap :: PersistField v
-               => [(T.Text, PersistValue)]
-               -> Either T.Text (M.Map T.Text v)
-fromPersistMap = foldShortLeft fromPersistValue [] where
+fromPersistMap
+    :: (PersistField v)
+    => [(T.Text, PersistValue)]
+    -> Either T.Text (M.Map T.Text v)
+fromPersistMap = foldShortLeft fromPersistValue []
+  where
     -- a fold that short-circuits on Left.
     foldShortLeft f = go
       where
         go acc [] = Right $ M.fromList acc
-        go acc ((k, v):kvs) =
-          case f v of
-            Left e   -> Left e
-            Right v' -> go ((k,v'):acc) kvs
+        go acc ((k, v) : kvs) =
+            case f v of
+                Left e -> Left e
+                Right v' -> go ((k, v') : acc) kvs
 
 -- | FIXME Add documentation to that.
 getPersistMap :: PersistValue -> Either T.Text [(T.Text, PersistValue)]
 getPersistMap (PersistMap kvs) = Right kvs
-getPersistMap (PersistText t)  = getPersistMap (PersistByteString $ TE.encodeUtf8 t)
+getPersistMap (PersistText t) = getPersistMap (PersistByteString $ TE.encodeUtf8 t)
 getPersistMap (PersistByteString bs)
     | Just pairs <- A.decode' (L.fromChunks [bs]) = Right pairs
 getPersistMap PersistNull = Right []
-getPersistMap x = Left $ fromPersistValueError "[(Text, PersistValue)]" "map, string, bytestring or null" x
+getPersistMap x =
+    Left $
+        fromPersistValueError
+            "[(Text, PersistValue)]"
+            "map, string, bytestring or null"
+            x
 
 instance PersistField Checkmark where
-    toPersistValue Active   = PersistBool True
+    toPersistValue Active = PersistBool True
     toPersistValue Inactive = PersistNull
-    fromPersistValue PersistNull         = Right Inactive
-    fromPersistValue (PersistBool True)  = Right Active
-    fromPersistValue (PersistInt64 1)    = Right Active
+    fromPersistValue PersistNull = Right Inactive
+    fromPersistValue (PersistBool True) = Right Active
+    fromPersistValue (PersistInt64 1) = Right Active
     fromPersistValue (PersistByteString i) = case readInt i of
-                                               Just (0,"") -> Left "Failed to parse Haskell type `Checkmark`: found `0`, expected `1` or NULL"
-                                               Just (1,"") -> Right Active
-                                               xs -> Left $ T.pack $ "Failed to parse Haskell type `Checkmark` from PersistByteString. Original value:" ++ show i ++ ". Parsed by `readInt` as " ++ (show xs) ++ ". Expected '1'."
+        Just (0, "") ->
+            Left "Failed to parse Haskell type `Checkmark`: found `0`, expected `1` or NULL"
+        Just (1, "") -> Right Active
+        xs ->
+            Left $
+                T.pack $
+                    "Failed to parse Haskell type `Checkmark` from PersistByteString. Original value:"
+                        ++ show i
+                        ++ ". Parsed by `readInt` as "
+                        ++ (show xs)
+                        ++ ". Expected '1'."
     fromPersistValue (PersistBool False) =
-      Left $ T.pack "PersistField Checkmark: found unexpected FALSE value"
+        Left $ T.pack "PersistField Checkmark: found unexpected FALSE value"
     fromPersistValue other =
-      Left $ fromPersistValueError "Checkmark" "boolean, integer, bytestring or null" other
+        Left $
+            fromPersistValueError "Checkmark" "boolean, integer, bytestring or null" other
 
+fromPersistValueError
+    :: Text
+    -- ^ Haskell type, should match Haskell name exactly, e.g. "Int64"
+    -> Text
+    -- ^ Database type(s), should appear different from Haskell name, e.g. "integer" or "INT", not "Int".
+    -> PersistValue
+    -- ^ Incorrect value
+    -> Text
+    -- ^ Error message
+fromPersistValueError haskellType databaseType received =
+    T.concat
+        [ "Failed to parse Haskell type `"
+        , haskellType
+        , "`; expected "
+        , databaseType
+        , " from database, but received: "
+        , T.pack (show received)
+        , ". Potential solution: Check that your database schema matches your Persistent model definitions."
+        ]
 
-fromPersistValueError :: Text -- ^ Haskell type, should match Haskell name exactly, e.g. "Int64"
-                      -> Text -- ^ Database type(s), should appear different from Haskell name, e.g. "integer" or "INT", not "Int".
-                      -> PersistValue -- ^ Incorrect value
-                      -> Text -- ^ Error message
-fromPersistValueError haskellType databaseType received = T.concat
-    [ "Failed to parse Haskell type `"
-    , haskellType
-    , "`; expected "
-    , databaseType
-    , " from database, but received: "
-    , T.pack (show received)
-    , ". Potential solution: Check that your database schema matches your Persistent model definitions."
-    ]
-
-fromPersistValueParseError :: (Show a)
-                           => Text -- ^ Haskell type, should match Haskell name exactly, e.g. "Int64"
-                           -> a -- ^ Received value
-                           -> Text -- ^ Error message
-fromPersistValueParseError haskellType received = T.concat
-    [ "Failed to parse Haskell type `"
-    , haskellType
-    , "`, but received "
-    , T.pack (show received)
-    ]
+fromPersistValueParseError
+    :: (Show a)
+    => Text
+    -- ^ Haskell type, should match Haskell name exactly, e.g. "Int64"
+    -> a
+    -- ^ Received value
+    -> Text
+    -- ^ Error message
+fromPersistValueParseError haskellType received =
+    T.concat
+        [ "Failed to parse Haskell type `"
+        , haskellType
+        , "`, but received "
+        , T.pack (show received)
+        ]

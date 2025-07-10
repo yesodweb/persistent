@@ -1,15 +1,16 @@
 {-# LANGUAGE TupleSections #-}
+
 module Models where
 
 import Data.Monoid
-import Language.Haskell.TH
 import qualified Data.Text as Text
+import Language.Haskell.TH
 
 import Database.Persist.Quasi
 import Database.Persist.Quasi.Internal
+import Database.Persist.Sql
 import Database.Persist.TH
 import Database.Persist.TH.Internal
-import Database.Persist.Sql
 
 -- TODO: we use lookupName and reify etc which breaks in IO. somehow need to
 -- test this out elsewise
@@ -31,7 +32,7 @@ mkNullableModels = mkModelsWithFieldModifier maybeFields
 
 mkModelsWithFieldModifier :: (String -> String) -> Int -> Int -> String
 mkModelsWithFieldModifier k i f =
-    unlines . fmap unlines . take i . map mkModel . zip [0..] . cycle $
+    unlines . fmap unlines . take i . map mkModel . zip [0 ..] . cycle $
         [ "Model"
         , "Foobar"
         , "User"
@@ -49,13 +50,17 @@ indent :: Int -> [String] -> [String]
 indent i = map (replicate i ' ' ++)
 
 mkFields :: Int -> [String]
-mkFields i = take i $ map mkField $ zip [0..] $ cycle
-    [ "Bool"
-    , "Int"
-    , "String"
-    , "Double"
-    , "Text"
-    ]
+mkFields i =
+    take i $
+        map mkField $
+            zip [0 ..] $
+                cycle
+                    [ "Bool"
+                    , "Int"
+                    , "String"
+                    , "Double"
+                    , "Text"
+                    ]
   where
     mkField :: (Int, String) -> String
     mkField (i', typ) = "field" <> show i' <> "\t\t" <> typ

@@ -79,7 +79,9 @@ import qualified MigrationTest
 type Tuple = (,)
 
 -- Test lower case names
-share [mkPersist persistSettings, mkMigrate "dataTypeMigrate"] [persistLowerCase|
+share
+    [mkPersist persistSettings, mkMigrate "dataTypeMigrate"]
+    [persistLowerCase|
 DataTypeTable no-json
     text Text
     textMaxLen Text maxlen=100
@@ -97,7 +99,9 @@ DataTypeTable no-json
     utc UTCTime
 |]
 
-share [mkPersist sqlSettings, mkMigrate "idSetup"] [persistLowerCase|
+share
+    [mkPersist sqlSettings, mkMigrate "idSetup"]
+    [persistLowerCase|
 Simple
     text Text
     deriving Show Eq
@@ -108,7 +112,9 @@ SimpleReference
     deriving Show Eq
 |]
 
-share [mkPersist sqlSettings, mkMigrate "idMigrateTest"] [persistLowerCase|
+share
+    [mkPersist sqlSettings, mkMigrate "idMigrateTest"]
+    [persistLowerCase|
 Simple2 sql=simple
     text Text
     int Int default=0
@@ -121,39 +127,44 @@ SimpleReference2 sql=simple_reference
 |]
 
 instance Arbitrary DataTypeTable where
-  arbitrary = DataTypeTable
-     <$> arbText                -- text
-     <*> (T.take 100 <$> arbText)          -- textManLen
-     <*> arbitrary              -- bytes
-     <*> liftA2 (,) arbitrary arbText      -- bytesTextTuple
-     <*> (BS.take 100 <$> arbitrary)       -- bytesMaxLen
-     <*> arbitrary              -- int
-     <*> arbitrary              -- intList
-     <*> arbitrary              -- intMap
-     <*> arbitrary              -- double
-     <*> arbitrary              -- bool
-     <*> arbitrary              -- day
-     <*> arbitrary              -- pico
-     <*> (truncateTimeOfDay =<< arbitrary) -- time
-     <*> (truncateUTCTime   =<< arbitrary) -- utc
+    arbitrary =
+        DataTypeTable
+            <$> arbText -- text
+            <*> (T.take 100 <$> arbText) -- textManLen
+            <*> arbitrary -- bytes
+            <*> liftA2 (,) arbitrary arbText -- bytesTextTuple
+            <*> (BS.take 100 <$> arbitrary) -- bytesMaxLen
+            <*> arbitrary -- int
+            <*> arbitrary -- intList
+            <*> arbitrary -- intMap
+            <*> arbitrary -- double
+            <*> arbitrary -- bool
+            <*> arbitrary -- day
+            <*> arbitrary -- pico
+            <*> (truncateTimeOfDay =<< arbitrary) -- time
+            <*> (truncateUTCTime =<< arbitrary) -- utc
 
-share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
+share
+    [mkPersist sqlSettings, mkMigrate "migrateAll"]
+    [persistLowerCase|
 Test
   time UTCTime
 |]
 
-setup :: MonadIO m => Migration -> ReaderT SqlBackend m ()
+setup :: (MonadIO m) => Migration -> ReaderT SqlBackend m ()
 setup migration = do
-  printMigration migration
-  runMigrationUnsafe migration
+    printMigration migration
+    runMigrationUnsafe migration
 
 main :: IO ()
 main = do
-    handle (\(_ :: IOException) -> return ())
-        $ removeFile $ fromText sqlite_database_file
+    handle (\(_ :: IOException) -> return ()) $
+        removeFile $
+            fromText sqlite_database_file
 
     runConn $ do
-        mapM_ setup
+        mapM_
+            setup
             [ ForeignKey.compositeMigrate
             , PersistentTest.testMigrate
             , PersistentTest.noPrefixMigrate
@@ -180,7 +191,6 @@ main = do
         PersistentTest.cleanDB
         ForeignKey.cleanDB
 
-
     hspec $ do
         describe "Database" $ describe "Persist" $ describe "Sqlite" $ do
             CompositeSpec.spec
@@ -201,7 +211,7 @@ main = do
             , TestFn "time" (DataTypeTest.roundTime . dataTypeTableTime)
             , TestFn "utc" (DataTypeTest.roundUTCTime . dataTypeTableUtc)
             ]
-            [ ("pico", dataTypeTablePico) ]
+            [("pico", dataTypeTablePico)]
             dataTypeTableDouble
         HtmlTest.specsWith
             db
@@ -215,10 +225,11 @@ main = do
         TypeLitFieldDefsTest.specsWith db
         Recursive.specsWith db
         SumTypeTest.specsWith db (Just (runMigrationSilent SumTypeTest.sumTypeMigrate))
-        MigrationOnlyTest.specsWith db
-            (Just
-                $ runMigrationSilent MigrationOnlyTest.migrateAll1
-                >> runMigrationSilent MigrationOnlyTest.migrateAll2
+        MigrationOnlyTest.specsWith
+            db
+            ( Just $
+                runMigrationSilent MigrationOnlyTest.migrateAll1
+                    >> runMigrationSilent MigrationOnlyTest.migrateAll2
             )
         PersistentTest.specsWith db
         PersistentTest.filterOrSpecs db
@@ -231,7 +242,9 @@ main = do
 
         MpsNoPrefixTest.specsWith db
         MpsCustomPrefixTest.specsWith db
-        EmptyEntityTest.specsWith db (Just (runMigrationSilent EmptyEntityTest.migration))
+        EmptyEntityTest.specsWith
+            db
+            (Just (runMigrationSilent EmptyEntityTest.migration))
         CompositeTest.specsWith db
         PersistUniqueTest.specsWith db
         PrimaryTest.specsWith db
@@ -256,7 +269,7 @@ main = do
             tid <- insert $ Test now
             Just (Test now') <- get tid
             liftIO $ now' `shouldBe` now
-        it "issue #564" $ asIO $ withSystemTempFile "test564.sqlite3"$ \fp h -> do
+        it "issue #564" $ asIO $ withSystemTempFile "test564.sqlite3" $ \fp h -> do
             hClose h
             conn <- Sqlite.open (T.pack fp)
             Sqlite.close conn
@@ -267,7 +280,8 @@ main = do
 
         it "afterException" $ asIO $ runSqliteInfo (mkSqliteConnectionInfo ":memory:") $ do
             void $ runMigrationSilent testMigrate
-            let catcher :: forall m. Monad m => SomeException -> m ()
+            let
+                catcher :: forall m. (Monad m) => SomeException -> m ()
                 catcher _ = return ()
             insert_ $ Person "A" 0 Nothing
             insert_ (Person "A" 1 Nothing) `catch` catcher

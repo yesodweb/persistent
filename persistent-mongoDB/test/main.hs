@@ -64,13 +64,17 @@ dbNoCleanup :: Action IO () -> Assertion
 dbNoCleanup = db' (pure ())
 
 -- FIXME: This isn't actually used?
-share [mkPersist persistSettings, mkMigrate "htmlMigrate"] [persistLowerCase|
+share
+    [mkPersist persistSettings, mkMigrate "htmlMigrate"]
+    [persistLowerCase|
 HtmlTable
     html Html
     deriving
 |]
 
-mkPersist persistSettings [persistUpperCase|
+mkPersist
+    persistSettings
+    [persistUpperCase|
 DataTypeTable no-json
     text Text
     textMaxLen Text maxlen=100
@@ -87,71 +91,74 @@ DataTypeTable no-json
 |]
 
 instance Arbitrary DataTypeTable where
-  arbitrary = DataTypeTable
-     <$> arbText                -- text
-     <*> (T.take 100 <$> arbText)          -- textManLen
-     <*> arbitrary              -- bytes
-     <*> liftA2 (,) arbitrary arbText      -- bytesTextTuple
-     <*> (BS.take 100 <$> arbitrary)       -- bytesMaxLen
-     <*> arbitrary              -- int
-     <*> arbitrary              -- intList
-     <*> arbitrary              -- intMap
-     <*> arbitrary              -- double
-     <*> arbitrary              -- bool
-     <*> arbitrary              -- day
-     <*> (truncateUTCTime   =<< arbitrary) -- utc
+    arbitrary =
+        DataTypeTable
+            <$> arbText -- text
+            <*> (T.take 100 <$> arbText) -- textManLen
+            <*> arbitrary -- bytes
+            <*> liftA2 (,) arbitrary arbText -- bytesTextTuple
+            <*> (BS.take 100 <$> arbitrary) -- bytesMaxLen
+            <*> arbitrary -- int
+            <*> arbitrary -- intList
+            <*> arbitrary -- intMap
+            <*> arbitrary -- double
+            <*> arbitrary -- bool
+            <*> arbitrary -- day
+            <*> (truncateUTCTime =<< arbitrary) -- utc
 
-mkPersist persistSettings [persistUpperCase|
+mkPersist
+    persistSettings
+    [persistUpperCase|
 EmptyEntity
 |]
 
 main :: IO ()
 main = do
-  hspec $ afterAll dropDatabase $ do
-    RenameTest.specsWith (db' RenameTest.cleanDB)
-    DataTypeTest.specsWith
-        dbNoCleanup
-        Nothing
-        [ TestFn "Text" dataTypeTableText
-        , TestFn "Text" dataTypeTableTextMaxLen
-        , TestFn "Bytes" dataTypeTableBytes
-        , TestFn "Bytes" dataTypeTableBytesTextTuple
-        , TestFn "Bytes" dataTypeTableBytesMaxLen
-        , TestFn "Int" dataTypeTableInt
-        , TestFn "Int" dataTypeTableIntList
-        , TestFn "Int" dataTypeTableIntMap
-        , TestFn "Double" dataTypeTableDouble
-        , TestFn "Bool" dataTypeTableBool
-        , TestFn "Day" dataTypeTableDay
-        ]
-        []
-        dataTypeTableDouble
-    HtmlTest.specsWith (db' HtmlTest.cleanDB) Nothing
-    EmbedTestMongo.specs
-    EmbedOrderTest.specsWith (db' EmbedOrderTest.cleanDB)
-    LargeNumberTest.specsWith
-        (db' (deleteWhere ([] :: [Filter (LargeNumberTest.NumberGeneric backend)])))
-    MaxLenTest.specsWith dbNoCleanup
-    MaybeFieldDefsTest.specsWith dbNoCleanup
-    TypeLitFieldDefsTest.specsWith dbNoCleanup
-    Recursive.specsWith (db' Recursive.cleanup)
+    hspec $ afterAll dropDatabase $ do
+        RenameTest.specsWith (db' RenameTest.cleanDB)
+        DataTypeTest.specsWith
+            dbNoCleanup
+            Nothing
+            [ TestFn "Text" dataTypeTableText
+            , TestFn "Text" dataTypeTableTextMaxLen
+            , TestFn "Bytes" dataTypeTableBytes
+            , TestFn "Bytes" dataTypeTableBytesTextTuple
+            , TestFn "Bytes" dataTypeTableBytesMaxLen
+            , TestFn "Int" dataTypeTableInt
+            , TestFn "Int" dataTypeTableIntList
+            , TestFn "Int" dataTypeTableIntMap
+            , TestFn "Double" dataTypeTableDouble
+            , TestFn "Bool" dataTypeTableBool
+            , TestFn "Day" dataTypeTableDay
+            ]
+            []
+            dataTypeTableDouble
+        HtmlTest.specsWith (db' HtmlTest.cleanDB) Nothing
+        EmbedTestMongo.specs
+        EmbedOrderTest.specsWith (db' EmbedOrderTest.cleanDB)
+        LargeNumberTest.specsWith
+            (db' (deleteWhere ([] :: [Filter (LargeNumberTest.NumberGeneric backend)])))
+        MaxLenTest.specsWith dbNoCleanup
+        MaybeFieldDefsTest.specsWith dbNoCleanup
+        TypeLitFieldDefsTest.specsWith dbNoCleanup
+        Recursive.specsWith (db' Recursive.cleanup)
 
-    SumTypeTest.specsWith (dbNoCleanup) Nothing
-    MigrationOnlyTest.specsWith
-        dbNoCleanup
-        Nothing
-    PersistentTest.specsWith (db' PersistentTest.cleanDB)
-    UpsertTest.specsWith
-        (db' PersistentTest.cleanDB)
-        UpsertTest.AssumeNullIsZero
-        UpsertTest.UpsertGenerateNewKey
-    EmptyEntityTest.specsWith
-        (db' EmptyEntityTest.cleanDB)
-        Nothing
-    CustomPersistFieldTest.specsWith
-        dbNoCleanup
+        SumTypeTest.specsWith (dbNoCleanup) Nothing
+        MigrationOnlyTest.specsWith
+            dbNoCleanup
+            Nothing
+        PersistentTest.specsWith (db' PersistentTest.cleanDB)
+        UpsertTest.specsWith
+            (db' PersistentTest.cleanDB)
+            UpsertTest.AssumeNullIsZero
+            UpsertTest.UpsertGenerateNewKey
+        EmptyEntityTest.specsWith
+            (db' EmptyEntityTest.cleanDB)
+            Nothing
+        CustomPersistFieldTest.specsWith
+            dbNoCleanup
+  where
     -- FIXME: should this be added? (RawMongoHelpers module wasn't used)
     -- RawMongoHelpers.specs
 
-  where
     dropDatabase () = dbNoCleanup (void (runCommand1 $ T.pack "dropDatabase()"))

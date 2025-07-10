@@ -9,84 +9,105 @@
 --
 -- If you intend on using a SQL database, then check out "Database.Persist.Sql".
 module Database.Persist
-    (
--- * Defining Database Models
---
--- | @persistent@ lets you define your database models using a special syntax.
--- This syntax allows you to customize the resulting Haskell datatypes and
--- database schema. See "Database.Persist.Quasi" for details on that definition
--- language.
+    ( -- * Defining Database Models
 
--- ** Reference Schema & Dataset
---
--- | For a quick example of the syntax, we'll introduce this database schema, and
--- we'll use it to explain the update and filter combinators.
---
--- @
--- 'share' ['mkPersist' 'sqlSettings', 'mkMigrate' "migrateAll"] ['persistLowerCase'|
--- User
---     name String
---     age Int
---     deriving Show
--- |]
--- @
---
--- This creates a Haskell datatype that looks like this:
---
--- @
--- data User = User
---     { userName :: String
---     , userAge :: Int
---     }
---     deriving Show
--- @
---
--- In a SQL database, we'd get a migration like this:
---
--- @
--- CREATE TABLE "user" (
---      id    SERIAL PRIMARY KEY,
---      name  TEXT NOT NULL,
---      age   INT NOT NULL
--- );
--- @
---
--- The examples below will refer to this as dataset-1.
---
--- #dataset#
---
--- > +-----+-----+-----+
--- > |id   |name |age  |
--- > +-----+-----+-----+
--- > |1    |SPJ  |40   |
--- > +-----+-----+-----+
--- > |2    |Simon|41   |
--- > +-----+-----+-----+
+    --
 
-        -- * Database Operations
+      -- | @persistent@ lets you define your database models using a special syntax.
+      -- This syntax allows you to customize the resulting Haskell datatypes and
+      -- database schema. See "Database.Persist.Quasi" for details on that definition
+      -- language.
+
+      -- ** Reference Schema & Dataset
+
+    --
+
+      -- | For a quick example of the syntax, we'll introduce this database schema, and
+      -- we'll use it to explain the update and filter combinators.
+      --
+      -- @
+      -- 'share' ['mkPersist' 'sqlSettings', 'mkMigrate' "migrateAll"] ['persistLowerCase'|
+      -- User
+      --     name String
+      --     age Int
+      --     deriving Show
+      -- |]
+      -- @
+      --
+      -- This creates a Haskell datatype that looks like this:
+      --
+      -- @
+      -- data User = User
+      --     { userName :: String
+      --     , userAge :: Int
+      --     }
+      --     deriving Show
+      -- @
+      --
+      -- In a SQL database, we'd get a migration like this:
+      --
+      -- @
+      -- CREATE TABLE "user" (
+      --      id    SERIAL PRIMARY KEY,
+      --      name  TEXT NOT NULL,
+      --      age   INT NOT NULL
+      -- );
+      -- @
+      --
+      -- The examples below will refer to this as dataset-1.
+      --
+      -- #dataset#
+      --
+      -- > +-----+-----+-----+
+      -- > |id   |name |age  |
+      -- > +-----+-----+-----+
+      -- > |1    |SPJ  |40   |
+      -- > +-----+-----+-----+
+      -- > |2    |Simon|41   |
+      -- > +-----+-----+-----+
+
+      -- * Database Operations
+
       -- | The module "Database.Persist.Class" defines how to operate with
-        -- @persistent@ database models. Check that module out for basic
-        -- operations, like 'get', 'insert', and 'selectList'.
+      -- @persistent@ database models. Check that module out for basic
+      -- operations, like 'get', 'insert', and 'selectList'.
       module Database.Persist.Class
+
       -- * Types
+
       -- | This module re-export contains a lot of the important types for
       -- working with @persistent@ datatypes and underlying values.
     , module Database.Persist.Types
 
       -- * Query Operators
+
       -- | A convention that @persistent@ tries to follow is that operators on
       -- Database types correspond to a Haskell (or database) operator with a @.@
       -- character at the end. So to do @a || b@ , you'd write @a '||.' b@. To
 
       -- ** Query update combinators
+
       -- | These operations are used when performing updates against the database.
       --  Functions like 'upsert' use them to provide new or modified values.
-    , (=.), (+=.), (-=.), (*=.), (/=.)
+    , (=.)
+    , (+=.)
+    , (-=.)
+    , (*=.)
+    , (/=.)
 
       -- ** Query filter combinators
+
       -- | These functions are useful in the 'PersistQuery' class, like
       -- 'selectList', 'updateWhere', etc.
-    , (==.), (!=.), (<.), (>.), (<=.), (>=.), (<-.), (/<-.), (||.)
+    , (==.)
+    , (!=.)
+    , (<.)
+    , (>.)
+    , (<=.)
+    , (>=.)
+    , (<-.)
+    , (/<-.)
+    , (||.)
 
       -- * JSON Utilities
     , listToJSON
@@ -98,19 +119,23 @@ module Database.Persist
     , limitOffsetOrder
     ) where
 
-import Data.Aeson (toJSON, ToJSON)
+import Data.Aeson (ToJSON, toJSON)
 import Data.Aeson.Text (encodeToTextBuilder)
 import qualified Data.Text as T
 import Data.Text.Lazy (toStrict)
 import Data.Text.Lazy.Builder (toLazyText)
 
-import Database.Persist.Types
 import Database.Persist.Class
 import Database.Persist.Class.PersistField (getPersistMap)
+import Database.Persist.Types
 
 infixr 3 =., +=., -=., *=., /=.
-(=.), (+=.), (-=.), (*=.), (/=.) ::
-  forall v typ.  PersistField typ => EntityField v typ -> typ -> Update v
+(=.)
+    , (+=.)
+    , (-=.)
+    , (*=.)
+    , (/=.)
+        :: forall v typ. (PersistField typ) => EntityField v typ -> typ -> Update v
 
 -- | Assign a field a value.
 --
@@ -132,7 +157,6 @@ infixr 3 =., +=., -=., *=., /=.
 -- > +-----+-----+--------+
 -- > |2    |Simon|41      |
 -- > +-----+-----+--------+
-
 f =. a = Update f a Assign
 
 -- | Assign a field by addition (@+=@).
@@ -153,8 +177,6 @@ f =. a = Update f a Assign
 -- > +-----+-----+---------+
 -- > |2    |Simon|41       |
 -- > +-----+-----+---------+
-
-
 f +=. a = Update f a Add
 
 -- | Assign a field by subtraction (@-=@).
@@ -175,7 +197,6 @@ f +=. a = Update f a Add
 -- > +-----+-----+---------+
 -- > |2    |Simon|41       |
 -- > +-----+-----+---------+
-
 f -=. a = Update f a Subtract
 
 -- | Assign a field by multiplication (@*=@).
@@ -196,8 +217,6 @@ f -=. a = Update f a Subtract
 -- > +-----+-----+--------+
 -- > |2    |Simon|41      |
 -- > +-----+-----+--------+
-
-
 f *=. a = Update f a Multiply
 
 -- | Assign a field by division (@/=@).
@@ -218,12 +237,16 @@ f *=. a = Update f a Multiply
 -- > +-----+-----+---------+
 -- > |2    |Simon|41       |
 -- > +-----+-----+---------+
-
 f /=. a = Update f a Divide
 
 infix 4 ==., <., <=., >., >=., !=.
-(==.), (!=.), (<.), (<=.), (>.), (>=.) ::
-  forall v typ.  PersistField typ => EntityField v typ -> typ -> Filter v
+(==.)
+    , (!=.)
+    , (<.)
+    , (<=.)
+    , (>.)
+    , (>=.)
+        :: forall v typ. (PersistField typ) => EntityField v typ -> typ -> Filter v
 
 -- | Check for equality.
 --
@@ -241,8 +264,7 @@ infix 4 ==., <., <=., >., >=., !=.
 -- > +-----+-----+-----+
 -- > |1    |SPJ  |40   |
 -- > +-----+-----+-----+
-
-f ==. a  = Filter f (FilterValue a) Eq
+f ==. a = Filter f (FilterValue a) Eq
 
 -- | Non-equality check.
 --
@@ -260,7 +282,6 @@ f ==. a  = Filter f (FilterValue a) Eq
 -- > +-----+-----+-----+
 -- > |2    |Simon|41   |
 -- > +-----+-----+-----+
-
 f !=. a = Filter f (FilterValue a) Ne
 
 -- | Less-than check.
@@ -279,8 +300,7 @@ f !=. a = Filter f (FilterValue a) Ne
 -- > +-----+-----+-----+
 -- > |1    |SPJ  |40   |
 -- > +-----+-----+-----+
-
-f <. a  = Filter f (FilterValue a) Lt
+f <. a = Filter f (FilterValue a) Lt
 
 -- | Less-than or equal check.
 --
@@ -298,8 +318,7 @@ f <. a  = Filter f (FilterValue a) Lt
 -- > +-----+-----+-----+
 -- > |1    |SPJ  |40   |
 -- > +-----+-----+-----+
-
-f <=. a  = Filter f (FilterValue a) Le
+f <=. a = Filter f (FilterValue a) Le
 
 -- | Greater-than check.
 --
@@ -317,8 +336,7 @@ f <=. a  = Filter f (FilterValue a) Le
 -- > +-----+-----+-----+
 -- > |2    |Simon|41   |
 -- > +-----+-----+-----+
-
-f >. a  = Filter f (FilterValue a) Gt
+f >. a = Filter f (FilterValue a) Gt
 
 -- | Greater-than or equal check.
 --
@@ -336,11 +354,12 @@ f >. a  = Filter f (FilterValue a) Gt
 -- > +-----+-----+-----+
 -- > |2    |Simon|41   |
 -- > +-----+-----+-----+
-
-f >=. a  = Filter f (FilterValue a) Ge
+f >=. a = Filter f (FilterValue a) Ge
 
 infix 4 <-., /<-.
-(<-.), (/<-.) :: forall v typ.  PersistField typ => EntityField v typ -> [typ] -> Filter v
+(<-.)
+    , (/<-.)
+        :: forall v typ. (PersistField typ) => EntityField v typ -> [typ] -> Filter v
 
 -- | Check if value is in given list.
 --
@@ -374,7 +393,6 @@ infix 4 <-., /<-.
 -- > +-----+-----+-----+
 -- > |1    |SPJ  |40   |
 -- > +-----+-----+-----+
-
 f <-. a = Filter f (FilterValues a) In
 
 -- | Check if value is not in given list.
@@ -393,7 +411,6 @@ f <-. a = Filter f (FilterValues a) In
 -- > +-----+-----+-----+
 -- > |2    |Simon|41   |
 -- > +-----+-----+-----+
-
 f /<-. a = Filter f (FilterValues a) NotIn
 
 infixl 3 ||.
@@ -424,7 +441,7 @@ infixl 3 ||.
 --
 -- will filter records where a person's age is between 25 and 30 /and/
 -- (person's category is either 1 or 5).
-a ||. b = [FilterOr  [FilterAnd a, FilterAnd b]]
+a ||. b = [FilterOr [FilterAnd a, FilterAnd b]]
 
 -- | Convert list of 'PersistValue's into textual representation of JSON
 -- object. This is a type-constrained synonym for 'toJsonText'.
@@ -438,16 +455,17 @@ mapToJSON = toJsonText
 
 -- | A more general way to convert instances of `ToJSON` type class to
 -- strict text 'T.Text'.
-toJsonText :: ToJSON j => j -> T.Text
+toJsonText :: (ToJSON j) => j -> T.Text
 toJsonText = toStrict . toLazyText . encodeToTextBuilder . toJSON
 
 -- | FIXME What's this exactly?
-limitOffsetOrder :: PersistEntity val
-  => [SelectOpt val]
-  -> (Int, Int, [SelectOpt val])
+limitOffsetOrder
+    :: (PersistEntity val)
+    => [SelectOpt val]
+    -> (Int, Int, [SelectOpt val])
 limitOffsetOrder opts =
     foldr go (0, 0, []) opts
   where
-    go (LimitTo l) (_, b, c) = (l, b ,c)
+    go (LimitTo l) (_, b, c) = (l, b, c)
     go (OffsetBy o) (a, _, c) = (a, o, c)
     go x (a, b, c) = (a, b, x : c)

@@ -1,16 +1,17 @@
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+
 module Database.Persist.Sql.Run where
 
+import Control.Monad (void)
 import Control.Monad.IO.Unlift
 import Control.Monad.Logger.CallStack
-import Control.Monad (void)
 import Control.Monad.Reader (MonadReader)
 import qualified Control.Monad.Reader as MonadReader
 import Control.Monad.Trans.Reader hiding (local)
 import Control.Monad.Trans.Resource
-import Data.Acquire (Acquire, ReleaseType(..), mkAcquireType, with)
+import Data.Acquire (Acquire, ReleaseType (..), mkAcquireType, with)
 import Data.Pool as P
 import qualified Data.Text as T
 import qualified UnliftIO.Exception as UE
@@ -19,8 +20,8 @@ import Database.Persist.Class.PersistStore
 import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Types.Internal
-import Database.Persist.SqlBackend.Internal.StatementCache
 import Database.Persist.SqlBackend.Internal.SqlPoolHooks
+import Database.Persist.SqlBackend.Internal.StatementCache
 
 -- | Get a connection from the pool, run the given action, and then return the
 -- connection to the pool.
@@ -32,7 +33,8 @@ import Database.Persist.SqlBackend.Internal.SqlPoolHooks
 -- was buggy and caused more problems than it solved. Since version 2.1.2, it
 -- performs no timeout checks.
 runSqlPool
-    :: forall backend m a. (MonadUnliftIO m, BackendCompatible SqlBackend backend)
+    :: forall backend m a
+     . (MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => ReaderT backend m a -> Pool backend -> m a
 runSqlPool r pconn = do
     rawRunSqlPool r pconn Nothing
@@ -41,7 +43,8 @@ runSqlPool r pconn = do
 --
 -- @since 2.9.0
 runSqlPoolWithIsolation
-    :: forall backend m a. (MonadUnliftIO m, BackendCompatible SqlBackend backend)
+    :: forall backend m a
+     . (MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => ReaderT backend m a -> Pool backend -> IsolationLevel -> m a
 runSqlPoolWithIsolation r pconn i =
     rawRunSqlPool r pconn (Just i)
@@ -51,28 +54,36 @@ runSqlPoolWithIsolation r pconn i =
 --
 -- @since 2.12.0.0
 runSqlPoolNoTransaction
-    :: forall backend m a. (MonadUnliftIO m, BackendCompatible SqlBackend backend)
+    :: forall backend m a
+     . (MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => ReaderT backend m a -> Pool backend -> Maybe IsolationLevel -> m a
 runSqlPoolNoTransaction r pconn i =
     runSqlPoolWithHooks r pconn i (\_ -> pure ()) (\_ -> pure ()) (\_ _ -> pure ())
 
 rawRunSqlPool
-    :: forall backend m a. (MonadUnliftIO m, BackendCompatible SqlBackend backend)
+    :: forall backend m a
+     . (MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => ReaderT backend m a -> Pool backend -> Maybe IsolationLevel -> m a
 rawRunSqlPool r pconn mi =
     runSqlPoolWithHooks r pconn mi before after onException
   where
     before conn = do
-        let sqlBackend = projectBackend conn
-        let getter = getStmtConn sqlBackend
+        let
+            sqlBackend = projectBackend conn
+        let
+            getter = getStmtConn sqlBackend
         liftIO $ connBegin sqlBackend getter mi
     after conn = do
-        let sqlBackend = projectBackend conn
-        let getter = getStmtConn sqlBackend
+        let
+            sqlBackend = projectBackend conn
+        let
+            getter = getStmtConn sqlBackend
         liftIO $ connCommit sqlBackend getter
     onException conn _ = do
-        let sqlBackend = projectBackend conn
-        let getter = getStmtConn sqlBackend
+        let
+            sqlBackend = projectBackend conn
+        let
+            getter = getStmtConn sqlBackend
         liftIO $ connRollback sqlBackend getter
 
 -- | This function is how 'runSqlPool' and 'runSqlPoolNoTransaction' are
@@ -82,7 +93,8 @@ rawRunSqlPool r pconn mi =
 --
 -- @since 2.12.0.0
 runSqlPoolWithHooks
-    :: forall backend m a before after onException. (MonadUnliftIO m, BackendCompatible SqlBackend backend)
+    :: forall backend m a before after onException
+     . (MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => ReaderT backend m a
     -> Pool backend
     -> Maybe IsolationLevel
@@ -96,12 +108,13 @@ runSqlPoolWithHooks
     -- cleanup function is complete.
     -> m a
 runSqlPoolWithHooks r pconn i before after onException =
-    runSqlPoolWithExtensibleHooks r pconn i $ SqlPoolHooks
-        { alterBackend = pure
-        , runBefore = \conn _ -> void $ before conn
-        , runAfter = \conn _ -> void $ after conn
-        , runOnException = \b _ e -> void $ onException b e
-        }
+    runSqlPoolWithExtensibleHooks r pconn i $
+        SqlPoolHooks
+            { alterBackend = pure
+            , runBefore = \conn _ -> void $ before conn
+            , runAfter = \conn _ -> void $ after conn
+            , runOnException = \b _ e -> void $ onException b e
+            }
 
 -- | This function is how 'runSqlPoolWithHooks' is defined.
 --
@@ -109,7 +122,8 @@ runSqlPoolWithHooks r pconn i before after onException =
 --
 -- @since 2.13.0.0
 runSqlPoolWithExtensibleHooks
-    :: forall backend m a. (MonadUnliftIO m, BackendCompatible SqlBackend backend)
+    :: forall backend m a
+     . (MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => ReaderT backend m a
     -> Pool backend
     -> Maybe IsolationLevel
@@ -117,16 +131,17 @@ runSqlPoolWithExtensibleHooks
     -> m a
 runSqlPoolWithExtensibleHooks r pconn i SqlPoolHooks{..} =
     withRunInIO $ \runInIO ->
-    withResource pconn $ \conn ->
-    UE.mask $ \restore -> do
-        conn' <- restore $ runInIO $ alterBackend conn
-        _ <- restore $ runInIO $ runBefore conn' i
-        a <- restore (runInIO (runReaderT r conn'))
-            `UE.catchAny` \e -> do
-                _ <- restore $ runInIO $ runOnException conn' i e
-                UE.throwIO e
-        _ <- restore $ runInIO $ runAfter conn' i
-        pure a
+        withResource pconn $ \conn ->
+            UE.mask $ \restore -> do
+                conn' <- restore $ runInIO $ alterBackend conn
+                _ <- restore $ runInIO $ runBefore conn' i
+                a <-
+                    restore (runInIO (runReaderT r conn'))
+                        `UE.catchAny` \e -> do
+                            _ <- restore $ runInIO $ runOnException conn' i e
+                            UE.throwIO e
+                _ <- restore $ runInIO $ runAfter conn' i
+                pure a
 
 rawAcquireSqlConn
     :: forall backend m
@@ -134,7 +149,8 @@ rawAcquireSqlConn
     => Maybe IsolationLevel -> m (Acquire backend)
 rawAcquireSqlConn isolation = do
     conn <- MonadReader.ask
-    let rawConn :: SqlBackend
+    let
+        rawConn :: SqlBackend
         rawConn = projectBackend conn
 
         getter :: T.Text -> IO Statement
@@ -176,15 +192,21 @@ acquireSqlConnWithIsolation
     => IsolationLevel -> m (Acquire backend)
 acquireSqlConnWithIsolation = rawAcquireSqlConn . Just
 
-runSqlConn :: forall backend m a. (MonadUnliftIO m, BackendCompatible SqlBackend backend) => ReaderT backend m a -> backend -> m a
+runSqlConn
+    :: forall backend m a
+     . (MonadUnliftIO m, BackendCompatible SqlBackend backend)
+    => ReaderT backend m a -> backend -> m a
 runSqlConn r conn = with (acquireSqlConn conn) $ runReaderT r
 
 -- | Like 'runSqlConn', but supports specifying an isolation level.
 --
 -- @since 2.9.0
-runSqlConnWithIsolation :: forall backend m a. (MonadUnliftIO m, BackendCompatible SqlBackend backend) => ReaderT backend m a -> backend -> IsolationLevel -> m a
+runSqlConnWithIsolation
+    :: forall backend m a
+     . (MonadUnliftIO m, BackendCompatible SqlBackend backend)
+    => ReaderT backend m a -> backend -> IsolationLevel -> m a
 runSqlConnWithIsolation r conn isolation =
-  with (acquireSqlConnWithIsolation isolation conn) $ runReaderT r
+    with (acquireSqlConnWithIsolation isolation conn) $ runReaderT r
 
 runSqlPersistM
     :: (BackendCompatible SqlBackend backend)
@@ -197,64 +219,84 @@ runSqlPersistMPool
 runSqlPersistMPool x pool = runResourceT $ runNoLoggingT $ runSqlPool x pool
 
 liftSqlPersistMPool
-    :: forall backend m a. (MonadIO m, BackendCompatible SqlBackend backend)
+    :: forall backend m a
+     . (MonadIO m, BackendCompatible SqlBackend backend)
     => ReaderT backend (NoLoggingT (ResourceT IO)) a -> Pool backend -> m a
 liftSqlPersistMPool x pool = liftIO (runSqlPersistMPool x pool)
 
 withSqlPool
-    :: forall backend m a. (MonadLoggerIO m, MonadUnliftIO m, BackendCompatible SqlBackend backend)
-    => (LogFunc -> IO backend) -- ^ create a new connection
-    -> Int -- ^ connection count
+    :: forall backend m a
+     . (MonadLoggerIO m, MonadUnliftIO m, BackendCompatible SqlBackend backend)
+    => (LogFunc -> IO backend)
+    -- ^ create a new connection
+    -> Int
+    -- ^ connection count
     -> (Pool backend -> m a)
     -> m a
-withSqlPool mkConn connCount f = withSqlPoolWithConfig mkConn (defaultConnectionPoolConfig { connectionPoolConfigSize = connCount } ) f
+withSqlPool mkConn connCount f =
+    withSqlPoolWithConfig
+        mkConn
+        (defaultConnectionPoolConfig{connectionPoolConfigSize = connCount})
+        f
 
 -- | Creates a pool of connections to a SQL database which can be used by the @Pool backend -> m a@ function.
 -- After the function completes, the connections are destroyed.
 --
 -- @since 2.11.0.0
 withSqlPoolWithConfig
-    :: forall backend m a. (MonadLoggerIO m, MonadUnliftIO m, BackendCompatible SqlBackend backend)
-    => (LogFunc -> IO backend) -- ^ Function to create a new connection
+    :: forall backend m a
+     . (MonadLoggerIO m, MonadUnliftIO m, BackendCompatible SqlBackend backend)
+    => (LogFunc -> IO backend)
+    -- ^ Function to create a new connection
     -> ConnectionPoolConfig
     -> (Pool backend -> m a)
     -> m a
-withSqlPoolWithConfig mkConn poolConfig f = withUnliftIO $ \u -> UE.bracket
-    (unliftIO u $ createSqlPoolWithConfig mkConn poolConfig)
-    destroyAllResources
-    (unliftIO u . f)
+withSqlPoolWithConfig mkConn poolConfig f = withUnliftIO $ \u ->
+    UE.bracket
+        (unliftIO u $ createSqlPoolWithConfig mkConn poolConfig)
+        destroyAllResources
+        (unliftIO u . f)
 
 createSqlPool
-    :: forall backend m. (MonadLoggerIO m, MonadUnliftIO m, BackendCompatible SqlBackend backend)
+    :: forall backend m
+     . (MonadLoggerIO m, MonadUnliftIO m, BackendCompatible SqlBackend backend)
     => (LogFunc -> IO backend)
     -> Int
     -> m (Pool backend)
-createSqlPool mkConn size = createSqlPoolWithConfig mkConn (defaultConnectionPoolConfig { connectionPoolConfigSize = size } )
+createSqlPool mkConn size =
+    createSqlPoolWithConfig
+        mkConn
+        (defaultConnectionPoolConfig{connectionPoolConfigSize = size})
 
 -- | Creates a pool of connections to a SQL database.
 --
 -- @since 2.11.0.0
 createSqlPoolWithConfig
-    :: forall m backend. (MonadLoggerIO m, MonadUnliftIO m, BackendCompatible SqlBackend backend)
-    => (LogFunc -> IO backend) -- ^ Function to create a new connection
+    :: forall m backend
+     . (MonadLoggerIO m, MonadUnliftIO m, BackendCompatible SqlBackend backend)
+    => (LogFunc -> IO backend)
+    -- ^ Function to create a new connection
     -> ConnectionPoolConfig
     -> m (Pool backend)
 createSqlPoolWithConfig mkConn config = do
     logFunc <- askLoggerIO
     -- Resource pool will swallow any exceptions from close. We want to log
     -- them instead.
-    let loggedClose :: backend -> IO ()
-        loggedClose backend = close' backend `UE.catchAny` \e -> do
-            runLoggingT
-              (logError $ T.pack $ "Error closing database connection in pool: " ++ show e)
-              logFunc
-            UE.throwIO e
-    liftIO $ createPool
-        (mkConn logFunc)
-        loggedClose
-        (connectionPoolConfigStripes config)
-        (connectionPoolConfigIdleTimeout config)
-        (connectionPoolConfigSize config)
+    let
+        loggedClose :: backend -> IO ()
+        loggedClose backend =
+            close' backend `UE.catchAny` \e -> do
+                runLoggingT
+                    (logError $ T.pack $ "Error closing database connection in pool: " ++ show e)
+                    logFunc
+                UE.throwIO e
+    liftIO $
+        createPool
+            (mkConn logFunc)
+            loggedClose
+            (connectionPoolConfigStripes config)
+            (connectionPoolConfigIdleTimeout config)
+            (connectionPoolConfigSize config)
 
 -- | Create a connection and run sql queries within it. This function
 -- automatically closes the connection on it's completion.
@@ -306,20 +348,21 @@ createSqlPoolWithConfig mkConn config = do
 --
 -- > Migrating: CREATE TABLE "person"("id" INTEGER PRIMARY KEY,"name" VARCHAR NOT NULL,"age" INTEGER NULL)
 -- > [Entity {entityKey = PersonKey {unPersonKey = SqlBackendKey {unSqlBackendKey = 1}}, entityVal = Person {personName = "John doe", personAge = Just 35}},Entity {entityKey = PersonKey {unPersonKey = SqlBackendKey {unSqlBackendKey = 2}}, entityVal = Person {personName = "Hema", personAge = Just 36}}]
---
-
 withSqlConn
-    :: forall backend m a. (MonadUnliftIO m, MonadLoggerIO m, BackendCompatible SqlBackend backend)
+    :: forall backend m a
+     . (MonadUnliftIO m, MonadLoggerIO m, BackendCompatible SqlBackend backend)
     => (LogFunc -> IO backend) -> (backend -> m a) -> m a
 withSqlConn open f = do
     logFunc <- askLoggerIO
-    withRunInIO $ \run -> UE.bracket
-      (open logFunc)
-      close'
-      (run . f)
+    withRunInIO $ \run ->
+        UE.bracket
+            (open logFunc)
+            close'
+            (run . f)
 
 close' :: (BackendCompatible SqlBackend backend) => backend -> IO ()
 close' conn = do
-    let backend = projectBackend conn
+    let
+        backend = projectBackend conn
     statementCacheClear $ connStmtMap backend
     connClose backend

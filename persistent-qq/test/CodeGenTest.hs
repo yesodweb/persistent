@@ -1,19 +1,19 @@
-{-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module CodeGenTest (query0, spec) where
 
-import Database.Persist.Sql
-import Test.Hspec
-import Database.Persist.Sql.Raw.QQ
-import PersistentTestModels
 import Control.Monad.Logger (LoggingT)
+import Control.Monad.Reader
 import Control.Monad.Trans.Resource
 import Data.Text (Text)
-import Control.Monad.Reader
+import Database.Persist.Sql
+import Database.Persist.Sql.Raw.QQ
+import PersistentTestModels
+import Test.Hspec
 
 spec :: (forall a. SqlPersistT (LoggingT (ResourceT IO)) a -> IO a) -> Spec
 spec db = describe "CodeGenTest" $ do
@@ -22,7 +22,8 @@ spec db = describe "CodeGenTest" $ do
         pure ()
 
 query0 :: SqlPersistT IO [(Single Text, Single Int, Single (Maybe Text))]
-query0 = --
+query0 =
+    --
     [sqlQQ|
         select
             ^{Person}.@{PersonName}, ^{Person}.@{PersonAge}, ^{Person}.@{PersonColor}

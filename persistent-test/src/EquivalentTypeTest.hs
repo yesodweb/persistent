@@ -10,19 +10,23 @@ import UnliftIO
 import Database.Persist.TH
 import Init
 
-share [mkPersist sqlSettings, mkMigrate "migrateAll1"] [persistLowerCase|
+share
+    [mkPersist sqlSettings, mkMigrate "migrateAll1"]
+    [persistLowerCase|
 EquivalentType sql=equivalent_types
     field1 Int
     deriving Eq Show
 |]
 
-share [mkPersist sqlSettings, mkMigrate "migrateAll2"] [persistLowerCase|
+share
+    [mkPersist sqlSettings, mkMigrate "migrateAll2"]
+    [persistLowerCase|
 EquivalentType2 sql=equivalent_types
     field1 Int
     deriving Eq Show
 |]
 
-specsWith :: Runner SqlBackend m => RunDb SqlBackend m -> Spec
+specsWith :: (Runner SqlBackend m) => RunDb SqlBackend m -> Spec
 specsWith runDb = describe "doesn't migrate equivalent types" $ do
     it "works" $ runDb $ do
         _ <- runMigrationSilent migrateAll1

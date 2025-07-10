@@ -4,11 +4,12 @@ module Database.Persist.Redis.Exception
 
 import Control.Exception (Exception)
 
-data RedisException = NotSupportedOperation String
-                    | ParserError String
-                    | NotSupportedValueType String
-                    | IncorrectUpdate String
-                    | IncorrectBehavior
+data RedisException
+    = NotSupportedOperation String
+    | ParserError String
+    | NotSupportedValueType String
+    | IncorrectUpdate String
+    | IncorrectBehavior
 
 instance Show RedisException where
     show (NotSupportedOperation key) = "The operation is not supported: " ++ key
