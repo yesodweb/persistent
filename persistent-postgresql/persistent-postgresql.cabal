@@ -1,5 +1,5 @@
 name:               persistent-postgresql
-version:            2.13.6.2
+version:            2.13.7.0
 license:            MIT
 license-file:       LICENSE
 author:             Felipe Lessa, Michael Snoyman <michael@snoyman.com>

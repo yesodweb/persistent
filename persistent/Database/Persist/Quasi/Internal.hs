@@ -16,7 +16,7 @@ module Database.Persist.Quasi.Internal
     , PersistSettings (..)
     , upperCaseSettings
     , lowerCaseSettings
-    , Token (..)
+    , Attribute (..)
     , SourceLoc (..)
     , sourceLocFromTHLoc
     , parseFieldType
@@ -61,13 +61,14 @@ import Data.Monoid (mappend)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Database.Persist.EntityDef.Internal
-import Database.Persist.Quasi.PersistSettings
-import Database.Persist.Quasi.PersistSettings.Internal ( psToFKName
-                                                       , psToDBName
-                                                       , psIdName
-                                                       , psStrictFields
-                                                       )
 import Database.Persist.Quasi.Internal.ModelParser
+import Database.Persist.Quasi.PersistSettings
+import Database.Persist.Quasi.PersistSettings.Internal
+    ( psIdName
+    , psStrictFields
+    , psToDBName
+    , psToFKName
+    )
 import Database.Persist.Types
 import Database.Persist.Types.Base
 import Language.Haskell.TH.Syntax (Lift, Loc (..))
@@ -185,14 +186,14 @@ sourceLocFromTHLoc Loc{loc_filename = filename, loc_start = start} =
 
 -- | Parses a quasi-quoted syntax into a list of entity definitions.
 parse
-  :: PersistSettings
-  -> [(Maybe SourceLoc, Text)]
-  -> CumulativeParseResult [UnboundEntityDef]
+    :: PersistSettings
+    -> [(Maybe SourceLoc, Text)]
+    -> CumulativeParseResult [UnboundEntityDef]
 parse ps chunks = toCumulativeParseResult $ map parseChunk chunks
   where
     parseChunk :: (Maybe SourceLoc, Text) -> ParseResult [UnboundEntityDef]
     parseChunk (mSourceLoc, source) =
-      (fmap . fmap) (mkUnboundEntityDef ps) <$> parseSource ps mSourceLoc source
+        (fmap . fmap) (mkUnboundEntityDef ps) <$> parseSource ps mSourceLoc source
 
 entityNamesFromParsedDef
     :: PersistSettings -> ParsedEntityDef -> (EntityNameHS, EntityNameDB)
@@ -206,7 +207,7 @@ entityNamesFromParsedDef ps parsedEntDef = (entNameHS, entNameDB)
             getDbName
                 ps
                 (unEntityNameHS entNameHS)
-                (parsedEntityDefEntityAttributes parsedEntDef)
+                (attributeContent <$> parsedEntityDefEntityAttributes parsedEntDef)
 
 -- | This type represents an @Id@ declaration in the QuasiQuoted syntax.
 --
@@ -527,12 +528,11 @@ mkUnboundEntityDef ps parsedEntDef =
                     EntityIdField $
                         maybe autoIdField (unboundIdDefToFieldDef (defaultIdName ps) entNameHS) idField
                 , entityAttrs =
-                    parsedEntityDefEntityAttributes parsedEntDef
-                , entityFields =
-                    []
+                    attributeContent <$> parsedEntityDefEntityAttributes parsedEntDef
+                , entityFields = []
                 , entityUniques = entityConstraintDefsUniquesList entityConstraintDefs
                 , entityForeigns = []
-                , entityDerives = concat $ mapMaybe takeDerives textAttribs
+                , entityDerives = concat $ mapMaybe takeDerives (textFields ++ textDirectives)
                 , entityExtra = parsedEntityDefExtras parsedEntDef
                 , entitySum = parsedEntityDefIsSum parsedEntDef
                 , entityComments =
@@ -546,19 +546,22 @@ mkUnboundEntityDef ps parsedEntDef =
     (entNameHS, entNameDB) =
         entityNamesFromParsedDef ps parsedEntDef
 
-    attribs =
-        parsedEntityDefFieldAttributes parsedEntDef
+    fields = parsedEntityDefFields parsedEntDef
+    directives = parsedEntityDefDirectives parsedEntDef
 
     cols :: [UnboundFieldDef]
-    cols = foldMap (toList . commentedField ps) attribs
+    cols = foldMap (toList . commentedField ps) fields
 
-    textAttribs :: [[Text]]
-    textAttribs = fmap tokenContent . fst <$> attribs
+    textFields :: [[Text]]
+    textFields = entityFieldContent . fst <$> fields
+
+    textDirectives :: [[Text]]
+    textDirectives = directiveContent . fst <$> directives
 
     entityConstraintDefs =
         foldMap
             (maybe mempty (takeConstraint ps entNameHS cols) . NEL.nonEmpty)
-            textAttribs
+            (textFields ++ textDirectives)
 
     idField =
         case entityConstraintDefsIdField entityConstraintDefs of
@@ -574,10 +577,10 @@ mkUnboundEntityDef ps parsedEntDef =
 
     commentedField
         :: PersistSettings
-        -> ([Token], Maybe Text)
+        -> (EntityField, Maybe Text)
         -> Maybe UnboundFieldDef
-    commentedField s (tokens, mCommentText) = do
-        unb <- takeColsEx s (tokenContent <$> tokens)
+    commentedField s (field, mCommentText) = do
+        unb <- takeColsEx s (entityFieldContent field)
         pure $ unb{unboundFieldComments = mCommentText}
 
     autoIdField :: FieldDef

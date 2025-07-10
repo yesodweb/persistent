@@ -1,7 +1,11 @@
 # Changelog for persistent-postgresql
 
-## Unreleased
+## 2.13.7.0
 
+* [#1600](https://github.com/yesodweb/persistent/pull/1600)
+    * Add `migrateStructured` to `Database.Persist.Postgresql.Internal`.
+      This allows you to access a structured representation of the proposed migrations
+      for use in your application.
 * [#1547](https://github.com/yesodweb/persistent/pull/1547)
     * Bump `libpq` bounds
 

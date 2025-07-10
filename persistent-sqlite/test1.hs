@@ -1,3 +1,4 @@
+{- FOURMOLU_DISABLE -}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -8,7 +9,7 @@ import Control.Monad.IO.Class
 mkPersist [$persist|
 Person sql=PersonTable
     name String update Eq Ne Desc In
-    age Int update "Asc" Lt "some ignored attribute"
+    age Int update Asc Lt someIgnoredAttribute
     color String null Eq Ne sql=mycolorfield NotIn Ge
     PersonNameKey name
 Pet

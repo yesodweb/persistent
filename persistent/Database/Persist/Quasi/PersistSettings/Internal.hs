@@ -38,6 +38,11 @@ data PersistSettings = PersistSettings
     -- ^ Whether and with what severity to disallow tabs in entity source text.
     --
     -- @since 2.16.0.0
+    , psQuotedArgumentErrorLevel :: Maybe ParserErrorLevel
+    -- ^ Whether and with what severity to disallow quoted entity field attributes
+    -- and quoted directive arguments.
+    --
+    -- @since 2.17.1.0
     }
 
 defaultPersistSettings, upperCaseSettings, lowerCaseSettings :: PersistSettings
@@ -48,6 +53,7 @@ defaultPersistSettings =
         , psStrictFields = True
         , psIdName = "id"
         , psTabErrorLevel = Just LevelWarning
+        , psQuotedArgumentErrorLevel = Just LevelWarning
         }
 upperCaseSettings = defaultPersistSettings
 lowerCaseSettings =
@@ -181,3 +187,22 @@ getPsTabErrorLevel = psTabErrorLevel
 setPsTabErrorLevel
     :: Maybe ParserErrorLevel -> PersistSettings -> PersistSettings
 setPsTabErrorLevel l ps = ps{psTabErrorLevel = l}
+
+-- | Retrieve the severity of the error generated when the parser encounters a
+-- quoted entity field attribute or quoted directive argument.
+-- If it is @Nothing@, quoted arguments are permitted in both entity field
+-- definitions and directives.
+--
+-- @since 2.17.1.0
+getPsQuotedArgumentErrorLevel :: PersistSettings -> Maybe ParserErrorLevel
+getPsQuotedArgumentErrorLevel = psQuotedArgumentErrorLevel
+
+-- | Set the severity of the error generated when the parser encounters a
+-- quoted entity field attribute.
+-- If set to @Nothing@, quoted arguments are permitted in both entity field
+-- definitions and directives.
+--
+-- @since 2.17.1.0
+setPsQuotedArgumentErrorLevel
+    :: Maybe ParserErrorLevel -> PersistSettings -> PersistSettings
+setPsQuotedArgumentErrorLevel l ps = ps{psQuotedArgumentErrorLevel = l}
