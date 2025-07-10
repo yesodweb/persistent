@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ViewPatterns #-}
 
 module Database.Persist.Postgresql.Internal
@@ -13,26 +14,21 @@ import qualified Database.PostgreSQL.Simple.Internal as PG
 import qualified Database.PostgreSQL.Simple.ToField as PGTF
 import qualified Database.PostgreSQL.Simple.TypeInfo.Static as PS
 import qualified Database.PostgreSQL.Simple.Types as PG
+import qualified Database.PostgreSQL.Simple.Interval as Interval
 
 import qualified Blaze.ByteString.Builder.Char8 as BBB
-import qualified Data.Attoparsec.ByteString.Char8 as P
-import Data.Bits ((.&.))
+import Control.Monad ((<=<))
+import Data.Bits (toIntegralSized)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Builder as BB
-import qualified Data.ByteString.Char8 as B8
-import Data.Char (ord)
 import Data.Data (Typeable)
-import Data.Fixed (Fixed(..), Pico)
-import Data.Int (Int64)
+import Data.Fixed (Fixed(..), Micro, Pico)
 import qualified Data.IntMap as I
 import Data.Maybe (fromMaybe)
-import Data.String.Conversions.Monomorphic (toStrictByteString)
-import Data.Text (Text)
-import qualified Data.Text as T
-import qualified Data.Text.Encoding as T
-import Data.Time (NominalDiffTime, localTimeToUTC, utc)
+import Data.Time (NominalDiffTime, localTimeToUTC, nominalDiffTimeToSeconds, secondsToNominalDiffTime, utc)
 
 import Database.Persist.Sql
+import Database.Persist.Postgresql.Interval ()
 
 -- | Newtype used to avoid orphan instances for @postgresql-simple@ classes.
 --
@@ -117,7 +113,7 @@ builtinGetters = I.fromList
     , (k PS.time,        convertPV PersistTimeOfDay)
     , (k PS.timestamp,   convertPV (PersistUTCTime. localTimeToUTC utc))
     , (k PS.timestamptz, convertPV PersistUTCTime)
-    , (k PS.interval,    convertPV (PersistLiteralEscaped . pgIntervalToBs))
+    , (k PS.interval,    convertPV $ toPersistValue @Interval.Interval)
     , (k PS.bit,         convertPV PersistInt64)
     , (k PS.varbit,      convertPV PersistInt64)
     , (k PS.numeric,     convertPV PersistRational)
@@ -148,7 +144,7 @@ builtinGetters = I.fromList
     , (1183,             listOf PersistTimeOfDay)
     , (1115,             listOf PersistUTCTime)
     , (1185,             listOf PersistUTCTime)
-    , (1187,             listOf (PersistLiteralEscaped . pgIntervalToBs))
+    , (1187,             listOf $ toPersistValue @Interval.Interval)
     , (1561,             listOf PersistInt64)
     , (1563,             listOf PersistInt64)
     , (1231,             listOf PersistRational)
@@ -188,97 +184,41 @@ unBinary (PG.Binary x) = x
 newtype PgInterval = PgInterval { getPgInterval :: NominalDiffTime }
   deriving (Eq, Show)
 
-pgIntervalToBs :: PgInterval -> ByteString
-pgIntervalToBs = toStrictByteString . show . getPgInterval
-
 instance PGTF.ToField PgInterval where
-    toField (PgInterval t) = PGTF.toField t
+    toField = PGTF.toField . fromMaybe (error "PgInterval.toField") . pgIntervalToInterval
 
 instance PGFF.FromField PgInterval where
-    fromField f mdata =
-      if PGFF.typeOid f /= PS.typoid PS.interval
-        then PGFF.returnError PGFF.Incompatible f ""
-        else case mdata of
-          Nothing  -> PGFF.returnError PGFF.UnexpectedNull f ""
-          Just dat -> case P.parseOnly (nominalDiffTime <* P.endOfInput) dat of
-            Left msg  ->  PGFF.returnError PGFF.ConversionFailed f msg
-            Right t   -> return $ PgInterval t
-
-      where
-        toPico :: Integer -> Pico
-        toPico = MkFixed
-
-        -- Taken from Database.PostgreSQL.Simple.Time.Internal.Parser
-        twoDigits :: P.Parser Int
-        twoDigits = do
-          a <- P.digit
-          b <- P.digit
-          let c2d c = ord c .&. 15
-          return $! c2d a * 10 + c2d b
-
-        -- Taken from Database.PostgreSQL.Simple.Time.Internal.Parser
-        seconds :: P.Parser Pico
-        seconds = do
-          real <- twoDigits
-          mc <- P.peekChar
-          case mc of
-            Just '.' -> do
-              t <- P.anyChar *> P.takeWhile1 P.isDigit
-              return $! parsePicos (fromIntegral real) t
-            _ -> return $! fromIntegral real
-         where
-          parsePicos :: Int64 -> B8.ByteString -> Pico
-          parsePicos a0 t = toPico (fromIntegral (t' * 10^n))
-            where n  = max 0 (12 - B8.length t)
-                  t' = B8.foldl' (\a c -> 10 * a + fromIntegral (ord c .&. 15)) a0
-                                 (B8.take 12 t)
-
-        parseSign :: P.Parser Bool
-        parseSign = P.choice [P.char '-' >> return True, return False]
-
-        -- Db stores it in [-]HHH:MM:SS.[SSSS]
-        -- For example, nominalDay is stored as 24:00:00
-        interval :: P.Parser (Bool, Int, Int, Pico)
-        interval = do
-            s  <- parseSign
-            h  <- P.decimal <* P.char ':'
-            m  <- twoDigits <* P.char ':'
-            ss <- seconds
-            if m < 60 && ss <= 60
-                then return (s, h, m, ss)
-                else fail "Invalid interval"
-
-        nominalDiffTime :: P.Parser NominalDiffTime
-        nominalDiffTime = do
-          (s, h, m, ss) <- interval
-          let pico   = ss + 60 * (fromIntegral m) + 60 * 60 * (fromIntegral (abs h))
-          return . fromRational . toRational $ if s then (-pico) else pico
-
-fromPersistValueError :: Text -- ^ Haskell type, should match Haskell name exactly, e.g. "Int64"
-                      -> Text -- ^ Database type(s), should appear different from Haskell name, e.g. "integer" or "INT", not "Int".
-                      -> PersistValue -- ^ Incorrect value
-                      -> Text -- ^ Error message
-fromPersistValueError haskellType databaseType received = T.concat
-    [ "Failed to parse Haskell type `"
-    , haskellType
-    , "`; expected "
-    , databaseType
-    , " from database, but received: "
-    , T.pack (show received)
-    , ". Potential solution: Check that your database schema matches your Persistent model definitions."
-    ]
+    fromField f =
+      maybe (PGFF.returnError PGFF.ConversionFailed f "invalid interval") pure
+        . intervalToPgInterval
+        <=< PGFF.fromField f
 
 instance PersistField PgInterval where
-    toPersistValue = PersistLiteralEscaped . pgIntervalToBs
-    fromPersistValue (PersistLiteral_ DbSpecific bs) =
-        fromPersistValue (PersistLiteralEscaped bs)
-    fromPersistValue x@(PersistLiteral_ Escaped bs) =
-      case P.parseOnly (P.signed P.rational <* P.char 's' <* P.endOfInput) bs of
-        Left _  -> Left $ fromPersistValueError "PgInterval" "Interval" x
-        Right i -> Right $ PgInterval i
-    fromPersistValue x = Left $ fromPersistValueError "PgInterval" "Interval" x
+    toPersistValue = toPersistValue . fromMaybe (error "PgInterval.toPersistValue") . pgIntervalToInterval
+    fromPersistValue =
+      maybe (Left "invalid interval") pure
+        . intervalToPgInterval
+        <=< fromPersistValue
 
 instance PersistFieldSql PgInterval where
   sqlType _ = SqlOther "interval"
 
+pgIntervalToInterval :: PgInterval -> Maybe Interval.Interval
+pgIntervalToInterval = fmap Interval.fromMicroseconds
+  . toIntegralSized
+  . (\ (MkFixed x) -> x)
+  . (realToFrac :: Pico -> Micro)
+  . nominalDiffTimeToSeconds
+  . getPgInterval
 
+intervalToPgInterval :: Interval.Interval -> Maybe PgInterval
+intervalToPgInterval interval
+  | Interval.months interval /= 0 = Nothing
+  | Interval.days interval /= 0 = Nothing
+  | otherwise = Just
+    . PgInterval
+    . secondsToNominalDiffTime
+    . (realToFrac :: Micro -> Pico)
+    . MkFixed
+    . toInteger
+    $ Interval.microseconds interval

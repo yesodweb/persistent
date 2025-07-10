@@ -19,12 +19,18 @@ import PgInit
 import Data.Time.Clock (NominalDiffTime)
 import Database.Persist.Postgresql (PgInterval(..))
 import Test.Hspec.QuickCheck
+import qualified Database.Persist.Postgresql.Interval as Interval
+import qualified Database.PostgreSQL.Simple.Interval as Interval
 
 share [mkPersist sqlSettings, mkMigrate "pgIntervalMigrate"] [persistLowerCase|
 PgIntervalDb
     interval_field PgInterval
     deriving Eq
     deriving Show
+
+IntervalDb
+    interval_field Interval.Interval
+    deriving Eq Show
 |]
 
 -- Postgres Interval has a 1 microsecond resolution, while NominalDiffTime has
@@ -41,3 +47,9 @@ specs = do
             rid <- insert eg
             r <- getJust rid
             liftIO $ r `shouldBe` eg
+
+        prop "interval round trips" $ \(m, d, u) -> runConnAssert $ do
+            let expected = IntervalDb $ Interval.MkInterval m d u
+            key <- insert expected
+            actual <- getJust key
+            liftIO $ actual `shouldBe` expected
