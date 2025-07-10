@@ -16,10 +16,11 @@
 module PgIntervalTest where
 
 import PgInit
-import Data.Time.Clock (NominalDiffTime)
+import Data.Time.Clock (secondsToNominalDiffTime)
+import Data.Fixed (Fixed(MkFixed))
 import Database.Persist.Postgresql (PgInterval(..))
 import Test.Hspec.QuickCheck
-import qualified Database.Persist.Postgresql.Interval as Interval
+import Database.Persist.Postgresql.Interval ()
 import qualified Database.PostgreSQL.Simple.Interval as Interval
 
 share [mkPersist sqlSettings, mkMigrate "pgIntervalMigrate"] [persistLowerCase|
@@ -33,17 +34,11 @@ IntervalDb
     deriving Eq Show
 |]
 
--- Postgres Interval has a 1 microsecond resolution, while NominalDiffTime has
--- picosecond resolution. Round to the nearest microsecond so that we can be
--- fine in the tests.
-truncate' :: NominalDiffTime -> NominalDiffTime
-truncate' x = (fromIntegral (round (x * 10^6))) / 10^6
-
 specs :: Spec
 specs = do
     describe "Postgres Interval Property tests" $ do
-        prop "Round trips" $ \time -> runConnAssert $ do
-            let eg = PgIntervalDb $ PgInterval (truncate' time)
+        prop "Round trips" $ \int64 -> runConnAssert $ do
+            let eg = PgIntervalDb . PgInterval . secondsToNominalDiffTime . MkFixed $ toInteger (int64 :: Int64) * 1000000
             rid <- insert eg
             r <- getJust rid
             liftIO $ r `shouldBe` eg
