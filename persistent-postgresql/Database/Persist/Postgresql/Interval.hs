@@ -1,5 +1,5 @@
-{-# OPTIONS_GHC -Wno-orphans #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Database.Persist.Postgresql.Interval where
 
@@ -14,20 +14,21 @@ import qualified Database.PostgreSQL.Simple.Interval.Unstable as Interval
 import qualified Database.PostgreSQL.Simple.ToField as Postgres
 
 instance Persist.PersistField Interval.Interval where
-  fromPersistValue persistValue = case persistValue of
-    Persist.PersistLiteral_ Persist.Unescaped byteString
-      | Just withoutPrefix <- Ascii.stripPrefix "interval '" byteString,
-        Just withoutSuffix <- Ascii.stripSuffix "'" withoutPrefix,
-        Right interval <- A.parseOnly Interval.parse withoutSuffix -> Right interval
-    _ -> Left $ "invalid interval: " <> Text.pack (show persistValue)
+    fromPersistValue persistValue = case persistValue of
+        Persist.PersistLiteral_ Persist.Unescaped byteString
+            | Just withoutPrefix <- Ascii.stripPrefix "interval '" byteString
+            , Just withoutSuffix <- Ascii.stripSuffix "'" withoutPrefix
+            , Right interval <- A.parseOnly Interval.parse withoutSuffix ->
+                Right interval
+        _ -> Left $ "invalid interval: " <> Text.pack (show persistValue)
 
-  toPersistValue =
-    Persist.PersistLiteral_ Persist.Unescaped
-      . LazyByteString.toStrict
-      . Builder.toLazyByteString
-      . ("interval " <>)
-      . Postgres.inQuotes
-      . Interval.render
+    toPersistValue =
+        Persist.PersistLiteral_ Persist.Unescaped
+            . LazyByteString.toStrict
+            . Builder.toLazyByteString
+            . ("interval " <>)
+            . Postgres.inQuotes
+            . Interval.render
 
 instance Persist.PersistFieldSql Interval.Interval where
-  sqlType = const $ Persist.SqlOther "interval"
+    sqlType = const $ Persist.SqlOther "interval"

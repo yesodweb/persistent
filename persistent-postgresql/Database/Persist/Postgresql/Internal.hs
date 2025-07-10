@@ -36,10 +36,10 @@ module Database.Persist.Postgresql.Internal
 import qualified Database.PostgreSQL.Simple as PG
 import qualified Database.PostgreSQL.Simple.FromField as PGFF
 import qualified Database.PostgreSQL.Simple.Internal as PG
+import qualified Database.PostgreSQL.Simple.Interval as Interval
 import qualified Database.PostgreSQL.Simple.ToField as PGTF
 import qualified Database.PostgreSQL.Simple.TypeInfo.Static as PS
 import qualified Database.PostgreSQL.Simple.Types as PG
-import qualified Database.PostgreSQL.Simple.Interval as Interval
 
 import qualified Blaze.ByteString.Builder.Char8 as BBB
 import Control.Arrow
@@ -65,7 +65,13 @@ import Data.Maybe
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
-import Data.Time (NominalDiffTime, localTimeToUTC, nominalDiffTimeToSeconds, secondsToNominalDiffTime, utc)
+import Data.Time
+    ( NominalDiffTime
+    , localTimeToUTC
+    , nominalDiffTimeToSeconds
+    , secondsToNominalDiffTime
+    , utc
+    )
 import Database.Persist.Postgresql.Interval ()
 import Database.Persist.Sql
 import qualified Database.Persist.Sql.Util as Util
@@ -240,39 +246,44 @@ instance PGTF.ToField PgInterval where
 
 instance PGFF.FromField PgInterval where
     fromField f =
-      maybe (PGFF.returnError PGFF.ConversionFailed f "invalid interval") pure
-        . intervalToPgInterval
-        <=< PGFF.fromField f
+        maybe (PGFF.returnError PGFF.ConversionFailed f "invalid interval") pure
+            . intervalToPgInterval
+            <=< PGFF.fromField f
 
 instance PersistField PgInterval where
-    toPersistValue = toPersistValue . fromMaybe (error "PgInterval.toPersistValue") . pgIntervalToInterval
+    toPersistValue =
+        toPersistValue
+            . fromMaybe (error "PgInterval.toPersistValue")
+            . pgIntervalToInterval
     fromPersistValue =
-      maybe (Left "invalid interval") pure
-        . intervalToPgInterval
-        <=< fromPersistValue
+        maybe (Left "invalid interval") pure
+            . intervalToPgInterval
+            <=< fromPersistValue
 
 instance PersistFieldSql PgInterval where
     sqlType _ = SqlOther "interval"
 
 pgIntervalToInterval :: PgInterval -> Maybe Interval.Interval
-pgIntervalToInterval = fmap Interval.fromMicroseconds
-  . toIntegralSized
-  . (\ (MkFixed x) -> x)
-  . (realToFrac :: Pico -> Micro)
-  . nominalDiffTimeToSeconds
-  . getPgInterval
+pgIntervalToInterval =
+    fmap Interval.fromMicroseconds
+        . toIntegralSized
+        . (\(MkFixed x) -> x)
+        . (realToFrac :: Pico -> Micro)
+        . nominalDiffTimeToSeconds
+        . getPgInterval
 
 intervalToPgInterval :: Interval.Interval -> Maybe PgInterval
 intervalToPgInterval interval
-  | Interval.months interval /= 0 = Nothing
-  | Interval.days interval /= 0 = Nothing
-  | otherwise = Just
-    . PgInterval
-    . secondsToNominalDiffTime
-    . (realToFrac :: Micro -> Pico)
-    . MkFixed
-    . toInteger
-    $ Interval.microseconds interval
+    | Interval.months interval /= 0 = Nothing
+    | Interval.days interval /= 0 = Nothing
+    | otherwise =
+        Just
+            . PgInterval
+            . secondsToNominalDiffTime
+            . (realToFrac :: Micro -> Pico)
+            . MkFixed
+            . toInteger
+            $ Interval.microseconds interval
 
 -- | Indicates whether a Postgres Column is safe to drop.
 --
