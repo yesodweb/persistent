@@ -48,29 +48,25 @@ import Control.Monad.Except
 import Control.Monad.IO.Unlift (MonadIO (..))
 import Control.Monad.Trans.Class (lift)
 import Data.Acquire (with)
-import qualified Data.Attoparsec.ByteString.Char8 as P
-import Data.Bits ((.&.))
+import Data.Bits (toIntegralSized)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Builder as BB
-import qualified Data.ByteString.Char8 as B8
-import Data.Char (ord)
 import Data.Conduit
 import qualified Data.Conduit.List as CL
 import Data.Data (Typeable)
 import Data.Either (partitionEithers)
-import Data.Fixed (Fixed (..), Pico)
+import Data.Fixed (Fixed (..), Micro, Pico)
 import Data.Function (on)
-import Data.Int (Int64)
 import qualified Data.IntMap as I
 import Data.List as List (find, foldl', groupBy, sort)
 import qualified Data.List.NonEmpty as NEL
 import qualified Data.Map as Map
 import Data.Maybe
-import Data.String.Conversions.Monomorphic (toStrictByteString)
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
-import Data.Time (NominalDiffTime, localTimeToUTC, utc)
+import Data.Time (NominalDiffTime, localTimeToUTC, nominalDiffTimeToSeconds, secondsToNominalDiffTime, utc)
+import Database.Persist.Postgresql.Interval ()
 import Database.Persist.Sql
 import qualified Database.Persist.Sql.Util as Util
 
