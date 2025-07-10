@@ -21,6 +21,7 @@ allow-newer:
 
 allow-older:
       postgresql-simple-interval:base
+    , postgresql-simple-interval:bytestring
 
 source-repository-package
     type: git
