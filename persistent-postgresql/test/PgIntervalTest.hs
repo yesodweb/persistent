@@ -17,10 +17,9 @@
 
 module PgIntervalTest where
 
-import Data.Fixed (Fixed (MkFixed))
+import Data.Fixed (Fixed (MkFixed), Micro, Pico)
 import Data.Time.Clock (secondsToNominalDiffTime)
 import Database.Persist.Postgresql (PgInterval (..))
-import Database.Persist.Postgresql.Interval ()
 import qualified Database.PostgreSQL.Simple.Interval as Interval
 import PgInit
 import Test.Hspec.QuickCheck
@@ -44,8 +43,12 @@ specs = do
         prop "Round trips" $ \int64 -> runConnAssert $ do
             let
                 eg =
-                    PgIntervalDb . PgInterval . secondsToNominalDiffTime . MkFixed $
-                        toInteger (int64 :: Int64) * 1000000
+                    PgIntervalDb
+                        . PgInterval
+                        . secondsToNominalDiffTime
+                        . (realToFrac :: Micro -> Pico)
+                        . MkFixed
+                        $ toInteger (int64 :: Int64)
             rid <- insert eg
             r <- getJust rid
             liftIO $ r `shouldBe` eg

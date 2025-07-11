@@ -72,7 +72,6 @@ import Data.Time
     , secondsToNominalDiffTime
     , utc
     )
-import Database.Persist.Postgresql.Interval ()
 import Database.Persist.Sql
 import qualified Database.Persist.Sql.Util as Util
 
