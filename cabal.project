@@ -31,8 +31,3 @@ source-repository-package
 --     type: git
 --     location: https://github.com/ysangkok/hedis
 --     tag: 6f36989836b49974f51a6ee8edaf156490590980
-
-source-repository-package
-  type: git
-  location: https://github.com/MercuryTechnologies/postgresql-simple-interval
-  tag: aa85e163194fb2be4d884f3cdebf4d699b96601a
