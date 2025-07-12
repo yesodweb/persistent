@@ -28,7 +28,7 @@ library
     , persistent          >=2.13.3  && <3
     , postgresql-libpq    >=0.9.4.2 && <0.12
     , postgresql-simple   >=0.6.1   && <0.8
-    , postgresql-simple-interval ==0.2025.7.11
+    , postgresql-simple-interval ==0.2025.7.12
     , resource-pool
     , resourcet           >=1.1.9
     , string-conversions
