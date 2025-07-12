@@ -37,7 +37,7 @@ IntervalDb
     deriving Eq Show
 |]
 
-clamp :: Ord a => a -> a -> a
+clamp :: (Ord a) => a -> a -> a -> a
 clamp lo hi = max lo . min hi
 
 -- Before version 15, PostgreSQL can't parse all possible intervals.
