@@ -68,7 +68,6 @@ test-suite test
   ghc-options:      -Wall
   build-depends:
       aeson
-    , attoparsec
     , base                       >=4.9 && <5
     , bytestring
     , containers
