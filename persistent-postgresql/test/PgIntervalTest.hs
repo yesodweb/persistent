@@ -44,11 +44,8 @@ clamp lo hi = max lo . min hi
 -- Each component is limited to the range of Int32.
 -- So anything beyond 2,147,483,647 hours will fail to parse.
 
-leastMicroseconds :: Int64
-leastMicroseconds = -2147483648 * 60 * 60 * 1000000
-
-mostMicroseconds :: Int64
-mostMicroseconds = 2147483647 * 60 * 60 * 1000000
+microsecondLimit :: Int64
+microsecondLimit = 2147483647 * 60 * 60 * 1000000
 
 specs :: Spec
 specs = do
@@ -62,14 +59,16 @@ specs = do
                         . (realToFrac :: Micro -> Pico)
                         . MkFixed
                         . toInteger
-                        $ clamp leastMicroseconds mostMicroseconds int64
+                        $ clamp (-microsecondLimit) microsecondLimit int64
             rid <- insert eg
             r <- getJust rid
             liftIO $ r `shouldBe` eg
 
         prop "interval round trips" $ \(m, d, u) -> runConnAssert $ do
             let
-                expected = IntervalDb . Interval.MkInterval m d $ clamp leastMicroseconds mostMicroseconds u
+                expected =
+                    IntervalDb . Interval.MkInterval m d $
+                        clamp (-microsecondLimit) microsecondLimit u
             key <- insert expected
             actual <- getJust key
             liftIO $ actual `shouldBe` expected
