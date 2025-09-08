@@ -237,6 +237,11 @@ unBinary (PG.Binary x) = x
 -- | Represent Postgres interval using NominalDiffTime
 --
 -- @since 2.11.0.0
+--
+-- Note that this type cannot be losslessly round tripped through PostgreSQL.
+-- For example the value @'PgInterval' 0.0000009@ will truncate extra
+-- precision. And the value @'PgInterval'  9223372036854.775808@ will overflow.
+-- Use the 'Interval.Interval' type if that is a problem for you.
 newtype PgInterval = PgInterval {getPgInterval :: NominalDiffTime}
     deriving (Eq, Show)
 
