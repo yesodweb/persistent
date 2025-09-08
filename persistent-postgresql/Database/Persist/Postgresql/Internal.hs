@@ -241,7 +241,7 @@ newtype PgInterval = PgInterval {getPgInterval :: NominalDiffTime}
     deriving (Eq, Show)
 
 instance PGTF.ToField PgInterval where
-    toField = PGTF.toField . fromMaybe (error "PgInterval.toField") . pgIntervalToInterval
+    toField = PGTF.toField . pgIntervalToInterval
 
 instance PGFF.FromField PgInterval where
     fromField f =
@@ -252,7 +252,6 @@ instance PGFF.FromField PgInterval where
 instance PersistField PgInterval where
     toPersistValue =
         toPersistValue
-            . fromMaybe (error "PgInterval.toPersistValue")
             . pgIntervalToInterval
     fromPersistValue =
         maybe (Left "invalid interval") pure
@@ -262,27 +261,19 @@ instance PersistField PgInterval where
 instance PersistFieldSql PgInterval where
     sqlType _ = SqlOther "interval"
 
-pgIntervalToInterval :: PgInterval -> Maybe Interval.Interval
+pgIntervalToInterval :: PgInterval -> Interval.Interval
 pgIntervalToInterval =
-    fmap Interval.fromMicroseconds
-        . toIntegralSized
-        . (\(MkFixed x) -> x)
-        . (realToFrac :: Pico -> Micro)
-        . nominalDiffTimeToSeconds
+    Interval.fromTimeSaturating mempty
         . getPgInterval
 
 intervalToPgInterval :: Interval.Interval -> Maybe PgInterval
-intervalToPgInterval interval
-    | Interval.months interval /= 0 = Nothing
-    | Interval.days interval /= 0 = Nothing
-    | otherwise =
-        Just
-            . PgInterval
-            . secondsToNominalDiffTime
-            . (realToFrac :: Micro -> Pico)
-            . MkFixed
-            . toInteger
-            $ Interval.microseconds interval
+intervalToPgInterval interval =
+    let
+        (calendarDiffDays, nominalDiffTime) = Interval.intoTime interval
+     in
+        if calendarDiffDays == mempty
+            then Just $ PgInterval nominalDiffTime
+            else Nothing
 
 -- | Indicates whether a Postgres Column is safe to drop.
 --
