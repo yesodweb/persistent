@@ -7,6 +7,7 @@
       This changes the behavior of `PgInterval` for very small and very large values.
     * Previously `PgInterval 0.000_000_9` would be rounded to `0.000_001` seconds, but now it is truncated to 0 seconds.
     * Previously `PgInterval 9_223_372_036_854.775_808` would overflow and throw a SQL error, but now it saturates to `9_223_372_036_854.775_807` seconds.
+    * The SQL representation of `PgInterval` now always includes the `interval` prefix, like `interval '1 second'`.
 
 ## 2.13.7.0
 
