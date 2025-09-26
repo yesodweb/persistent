@@ -88,10 +88,27 @@ ParentExplicit
 ChildExplicit
     name Text
     Foreign ParentExplicit OnDeleteCascade OnUpdateCascade fkparent name
+
+CustomIdReference
+    Id ForeignTargetId
+
 |]
 
 spec :: Spec
 spec = describe "ForeignRefSpec" $ do
+    describe "CustomIdReference" $ do
+        let
+            edef =
+                entityDef $ Proxy @CustomIdReference
+        it "should have a foreign reference" $ do
+            case getEntityId edef of
+                EntityIdField fieldDef ->
+                    fieldReference fieldDef
+                        `shouldBe`
+                            ForeignRef (EntityNameHS "ForeignTarget")
+                other ->
+                    fail $ "Expected EntityIdField, got: " <> show other
+
     describe "HasCustomName" $ do
         let
             edef =
@@ -99,9 +116,6 @@ spec = describe "ForeignRefSpec" $ do
         it "should have a custom db name" $ do
             entityDB edef
                 `shouldBe` EntityNameDB "custom_name"
-
-    it "should compile" $ do
-        True `shouldBe` True
 
     describe "ForeignPrimarySource" $ do
         let
