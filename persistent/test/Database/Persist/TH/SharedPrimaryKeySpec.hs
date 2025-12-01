@@ -1,30 +1,34 @@
-{-# LANGUAGE TypeApplications, DeriveGeneric #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE DataKinds, FlexibleInstances #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE StandaloneDeriving #-}
 
 module Database.Persist.TH.SharedPrimaryKeySpec where
 
 import TemplateTestImports
 
-import Data.Time
 import Data.Proxy
-import Test.Hspec
+import Data.Time
 import Database.Persist
 import Database.Persist.EntityDef
 import Database.Persist.Sql
 import Database.Persist.Sql.Util
 import Database.Persist.TH
+import Test.Hspec
 
-share [ mkPersist sqlSettings ] [persistLowerCase|
+share
+    [mkPersist sqlSettings]
+    [persistLowerCase|
 
 User
     name    String
@@ -49,7 +53,7 @@ RefDayKey
 spec :: Spec
 spec = describe "Shared Primary Keys" $ do
     let
-        getSqlType :: PersistEntity a => Proxy a -> SqlType
+        getSqlType :: (PersistEntity a) => Proxy a -> SqlType
         getSqlType p =
             case getEntityId (entityDef p) of
                 EntityIdField fd ->
@@ -77,49 +81,42 @@ spec = describe "Shared Primary Keys" $ do
     describe "PersistFieldSql" $ do
         it "should match underlying key" $ do
             sqlType (Proxy @UserId)
-                `shouldBe`
-                    sqlType (Proxy @ProfileId)
+                `shouldBe` sqlType (Proxy @ProfileId)
 
     describe "User" $ do
         it "has default ID key, SqlInt64" $ do
             sqlType (Proxy @UserId)
-                `shouldBe`
-                    SqlInt64
+                `shouldBe` SqlInt64
 
         testSqlTypeEquivalent (Proxy @User)
 
-    describe "Profile"  $ do
+    describe "Profile" $ do
         it "has same ID key type as User" $ do
             sqlType (Proxy @ProfileId)
-                `shouldBe`
-                    sqlType (Proxy @UserId)
-        testSqlTypeEquivalent(Proxy @Profile)
+                `shouldBe` sqlType (Proxy @UserId)
+        testSqlTypeEquivalent (Proxy @Profile)
 
     describe "Profile2" $ do
         it "has same ID key type as User" $ do
             sqlType (Proxy @Profile2Id)
-                `shouldBe`
-                    sqlType (Proxy @UserId)
+                `shouldBe` sqlType (Proxy @UserId)
         testSqlTypeEquivalent (Proxy @Profile2)
 
     describe "getEntityId FieldDef" $ do
         it "should match underlying primary key" $ do
             getSqlType (Proxy @User)
-                `shouldBe`
-                    getSqlType (Proxy @Profile)
+                `shouldBe` getSqlType (Proxy @Profile)
 
     describe "DayKeyTable" $ do
         testSqlTypeEquivalent (Proxy @DayKeyTable)
 
         it "sqlType has Day type" $ do
             sqlType (Proxy @Day)
-                `shouldBe`
-                    sqlType (Proxy @DayKeyTableId)
+                `shouldBe` sqlType (Proxy @DayKeyTableId)
 
         it "getSqlType has Day type" $ do
             sqlType (Proxy @Day)
-                `shouldBe`
-                    getSqlType (Proxy @DayKeyTable)
+                `shouldBe` getSqlType (Proxy @DayKeyTable)
 
     describe "RefDayKey" $ do
         let
@@ -129,13 +126,11 @@ spec = describe "Shared Primary Keys" $ do
 
         it "has same sqltype as underlying" $ do
             fieldSqlType dayKeyField
-                `shouldBe`
-                    sqlType (Proxy @Day)
+                `shouldBe` sqlType (Proxy @Day)
 
         it "has the right fieldType" $ do
             fieldType dayKeyField
-                `shouldBe`
-                    FTTypeCon Nothing "DayKeyTableId"
+                `shouldBe` FTTypeCon Nothing "DayKeyTableId"
 
         it "has the right type" $ do
             let

@@ -1,15 +1,17 @@
 {-# LANGUAGE ScopedTypeVariables #-}
+
 module ReadWriteTest where
 
 import Init
 import PersistentTestModels
 
-
-specsWith :: forall m. Runner SqlBackend m => RunDb SqlBackend m -> Spec
+specsWith :: forall m. (Runner SqlBackend m) => RunDb SqlBackend m -> Spec
 specsWith originalRunDb = describe "ReadWriteTest" $ do
-    let personFilters = [] :: [Filter Person]
+    let
+        personFilters = [] :: [Filter Person]
     describe "SqlReadBackend" $ do
-        let runDb :: RunDb SqlReadBackend m
+        let
+            runDb :: RunDb SqlReadBackend m
             runDb = changeBackend SqlReadBackend originalRunDb
         it "type checks on all PersistStoreRead functions" $ do
             runDb $ do
@@ -29,12 +31,14 @@ specsWith originalRunDb = describe "ReadWriteTest" $ do
                 pure ()
 
     describe "SqlWriteBackend" $ do
-        let runDb :: RunDb SqlWriteBackend m
+        let
+            runDb :: RunDb SqlWriteBackend m
             runDb = changeBackend SqlWriteBackend originalRunDb
 
         it "type checks on PersistStoreWrite and Read functions" $ do
             runDb $ do
-                let person = Person "Matt Parsons" 30 Nothing
+                let
+                    person = Person "Matt Parsons" 30 Nothing
                 k <- insert person
                 mperson <- get k
                 Just person @== mperson
@@ -46,7 +50,8 @@ specsWith originalRunDb = describe "ReadWriteTest" $ do
 
         it "type checks on PersistUniqueWrite/Read functions" $ do
             runDb $ do
-                let name_ = "Matt Parsons New"
+                let
+                    name_ = "Matt Parsons New"
                     person = Person name_ 30 Nothing
                 _mkey0 <- insertUnique person
                 mkey1 <- insertUnique person
@@ -54,13 +59,11 @@ specsWith originalRunDb = describe "ReadWriteTest" $ do
                 mperson <- selectFirst [PersonName ==. name_] []
                 fmap entityVal mperson @== Just person
 
-                let nameLuke = "Luke Seale New"
+                let
+                    nameLuke = "Luke Seale New"
                     personLuke = Person nameLuke 31 Nothing
                 mkey2 <- insertUnique_ personLuke
                 mkey3 <- insertUnique_ personLuke
                 mkey3 @== Nothing
                 mpersonLuke <- selectFirst [PersonName ==. nameLuke] []
                 fmap entityVal mpersonLuke @== Just personLuke
-
-
-

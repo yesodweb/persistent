@@ -1,13 +1,15 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE OverloadedStrings, DataKinds, FlexibleInstances #-}
-{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
 module MigrationReferenceSpec where
@@ -17,7 +19,9 @@ import PgInit
 import Control.Monad.Trans.Writer (censor, mapWriterT)
 import Data.Text (Text, isInfixOf)
 
-share [mkPersist sqlSettings, mkMigrate "referenceMigrate"] [persistLowerCase|
+share
+    [mkPersist sqlSettings, mkMigrate "referenceMigrate"]
+    [persistLowerCase|
 
 LocationCapabilities
     Id Text
@@ -47,10 +51,10 @@ spec = describe "MigrationReferenceSpec" $ do
             isReference :: Text -> Bool
             isReference migration = "REFERENCES" `isInfixOf` migration
 
-        runMigration
-            $ mapWriterT (censor noForeignKeys)
-            $ referenceMigrate
+        runMigration $
+            mapWriterT (censor noForeignKeys) $
+                referenceMigrate
 
-        runMigration
-            $ mapWriterT (censor onlyForeignKeys)
-            $ referenceMigrate
+        runMigration $
+            mapWriterT (censor onlyForeignKeys) $
+                referenceMigrate

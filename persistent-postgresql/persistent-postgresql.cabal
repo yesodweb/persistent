@@ -1,5 +1,5 @@
 name:               persistent-postgresql
-version:            2.13.6.2
+version:            2.14.0.0
 license:            MIT
 license-file:       LICENSE
 author:             Felipe Lessa, Michael Snoyman <michael@snoyman.com>
@@ -28,6 +28,7 @@ library
     , persistent          >=2.13.3  && <3
     , postgresql-libpq    >=0.9.4.2 && <0.12
     , postgresql-simple   >=0.6.1   && <0.8
+    , postgresql-simple-interval >=1 && < 1.1
     , resource-pool
     , resourcet           >=1.1.9
     , string-conversions
@@ -82,6 +83,7 @@ test-suite test
     , persistent-postgresql
     , persistent-qq
     , persistent-test
+    , postgresql-simple-interval
     , QuickCheck
     , quickcheck-instances
     , resourcet

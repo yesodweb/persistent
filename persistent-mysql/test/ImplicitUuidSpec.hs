@@ -44,7 +44,8 @@ wipe = db $ do
     rawExecute "DROP TABLE IF EXISTS with_def_uuid;" []
     void $ runMigrationSilent implicitUuidMigrate
 
-itDb :: String -> SqlPersistT (LoggingT (ResourceT IO)) a -> SpecWith (Arg (IO ()))
+itDb
+    :: String -> SqlPersistT (LoggingT (ResourceT IO)) a -> SpecWith (Arg (IO ()))
 itDb msg action = it msg $ db $ void action
 
 pass :: IO ()
@@ -54,10 +55,12 @@ spec :: Spec
 spec = describe "ImplicitUuidSpec" $ before_ wipe $ do
     describe "WithDefUuidKey" $ do
         it "works on UUIDs" $ do
-            let withDefUuidKey = WithDefUuidKey (UUID "Hello")
+            let
+                withDefUuidKey = WithDefUuidKey (UUID "Hello")
             pass
     describe "getEntityId" $ do
-        let Just idField = getEntityIdField (entityDef (Proxy @WithDefUuid))
+        let
+            Just idField = getEntityIdField (entityDef (Proxy @WithDefUuid))
         it "has a SqlString SqlType" $ asIO $ do
             fieldSqlType idField `shouldBe` SqlString
         it "is an implicit ID column" $ asIO $ do
@@ -65,10 +68,12 @@ spec = describe "ImplicitUuidSpec" $ before_ wipe $ do
 
     describe "insert" $ do
         itDb "successfully has a default" $ do
-            let matt = WithDefUuid
-                    { withDefUuidName =
-                        "Matt"
-                    }
+            let
+                matt =
+                    WithDefUuid
+                        { withDefUuidName =
+                            "Matt"
+                        }
             k <- insert matt
             mrec <- get k
             uuids <- selectList @WithDefUuid [] []

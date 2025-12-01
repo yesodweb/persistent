@@ -18,7 +18,10 @@ import TemplateTestImports
 
 import Database.Persist.TH.PersistWith.Model2 as Model2
 
-mkPersistWith sqlSettings $(discoverEntities) [persistLowerCase|
+mkPersistWith
+    sqlSettings
+    $(discoverEntities)
+    [persistLowerCase|
 
 IceCream
     flavor  FlavorId

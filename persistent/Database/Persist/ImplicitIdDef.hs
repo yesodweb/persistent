@@ -13,25 +13,29 @@
 module Database.Persist.ImplicitIdDef
     ( -- * The Type
       ImplicitIdDef
+
       -- * Construction
     , mkImplicitIdDef
-    -- * Autoincrementing Integer Key
+
+      -- * Autoincrementing Integer Key
     , autoIncrementingInteger
-    -- * Getters
-    -- * Setters
+
+      -- * Getters
+
+      -- * Setters
     , setImplicitIdDefMaxLen
     , unsafeClearDefaultImplicitId
     ) where
 
 import Language.Haskell.TH
 
-import Database.Persist.ImplicitIdDef.Internal
-import Database.Persist.Types.Base
-    ( FieldType(..)
-    , SqlType(..)
-    )
 import Database.Persist.Class (BackendKey)
+import Database.Persist.ImplicitIdDef.Internal
 import Database.Persist.Names
+import Database.Persist.Types.Base
+    ( FieldType (..)
+    , SqlType (..)
+    )
 
 -- | This is the default variant. Setting the implicit ID definition to this
 -- value should not have any change at all on how entities are defined by
@@ -46,10 +50,10 @@ autoIncrementingInteger =
         , iidFieldSqlType =
             SqlInt64
         , iidType = \isMpsGeneric mpsBackendType ->
-            ConT ''BackendKey `AppT`
-                if isMpsGeneric
-                then VarT (mkName "backend")
-                else mpsBackendType
+            ConT ''BackendKey
+                `AppT` if isMpsGeneric
+                    then VarT (mkName "backend")
+                    else mpsBackendType
         , iidDefault =
             Nothing
         , iidMaxLen =

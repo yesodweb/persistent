@@ -1,5 +1,5 @@
 name:               persistent
-version:            2.17.0.0
+version:            2.17.1.0
 license:            MIT
 license-file:       LICENSE
 author:             Michael Snoyman <michael@snoyman.com>
@@ -81,10 +81,11 @@ library
     Database.Persist.Names
     Database.Persist.PersistValue
     Database.Persist.Quasi
-    Database.Persist.Quasi.PersistSettings
-    Database.Persist.Quasi.PersistSettings.Internal
     Database.Persist.Quasi.Internal
     Database.Persist.Quasi.Internal.ModelParser
+    Database.Persist.Quasi.Internal.TypeParser
+    Database.Persist.Quasi.PersistSettings
+    Database.Persist.Quasi.PersistSettings.Internal
     Database.Persist.Sql
     Database.Persist.Sql.Migration
     Database.Persist.Sql.Types.Internal

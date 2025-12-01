@@ -25,7 +25,9 @@ import Language.Haskell.TH.Syntax
 import Database.Persist.ImplicitIdDef
 import Database.Persist.ImplicitIdDef.Internal (fieldTypeFromTypeable)
 
-mkPersist sqlSettings [persistLowerCase|
+mkPersist
+    sqlSettings
+    [persistLowerCase|
 
 User
     name    String
@@ -51,10 +53,11 @@ $(pure [])
 
 spec :: Spec
 spec = describe "DiscoverEntitiesSpec" $ do
-    let entities = $(discoverEntities)
+    let
+        entities = $(discoverEntities)
     it "should have all three entities" $ do
-        entities `shouldMatchList`
-            [ entityDef $ Proxy @User
-            , entityDef $ Proxy @Dog
-            , entityDef $ Proxy @Cat
-            ]
+        entities
+            `shouldMatchList` [ entityDef $ Proxy @User
+                              , entityDef $ Proxy @Dog
+                              , entityDef $ Proxy @Cat
+                              ]

@@ -1,56 +1,56 @@
-{-|
-@since 2.9.0
-
-Module: module Database.Persist.Sql.Raw.QQ
-Description: QuasiQuoters for performing raw sql queries
-
-This module exports convenient QuasiQuoters to perform raw SQL queries.
-All QuasiQuoters follow the same pattern and are analogous to the similar named
-functions exported from 'Database.Persist.Sql'. Neither the quoted
-function's behaviour, nor it's return value is altered during the translation
-and all documentation provided with it holds.
-
-The QuasiQuoters in this module perform a simple substitution on the query text,
-that allows value substitutions, table name substitutions as well as column name
-substitutions.
--}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -fno-warn-unused-imports #-}
-module Database.Persist.Sql.Raw.QQ (
-      -- * Sql QuasiQuoters
+
+-- |
+-- @since 2.9.0
+--
+-- Module: module Database.Persist.Sql.Raw.QQ
+-- Description: QuasiQuoters for performing raw sql queries
+--
+-- This module exports convenient QuasiQuoters to perform raw SQL queries.
+-- All QuasiQuoters follow the same pattern and are analogous to the similar named
+-- functions exported from 'Database.Persist.Sql'. Neither the quoted
+-- function's behaviour, nor it's return value is altered during the translation
+-- and all documentation provided with it holds.
+--
+-- The QuasiQuoters in this module perform a simple substitution on the query text,
+-- that allows value substitutions, table name substitutions as well as column name
+-- substitutions.
+module Database.Persist.Sql.Raw.QQ
+    ( -- * Sql QuasiQuoters
       queryQQ
     , queryResQQ
     , sqlQQ
     , executeQQ
     , executeCountQQ
-    , ToRow(..)
+    , ToRow (..)
     ) where
 
-import Prelude
 import Control.Arrow (first, second)
 import Control.Monad.Reader (ask)
-import           Data.List.NonEmpty (NonEmpty(..), (<|))
-import qualified Data.List.NonEmpty as NonEmpty
+import Data.List (intercalate, replicate)
 import qualified Data.List as List
+import Data.List.NonEmpty (NonEmpty (..), (<|))
+import qualified Data.List.NonEmpty as NonEmpty
+import Data.Maybe (Maybe (..), fromMaybe)
+import Data.Monoid (mempty, (<>))
 import Data.Text (Text)
 import qualified Data.Text as Text
-import Data.List (replicate, intercalate)
-import Data.Maybe (fromMaybe, Maybe(..))
-import Data.Monoid (mempty, (<>))
+import Language.Haskell.Meta.Parse
 import qualified Language.Haskell.TH as TH
 import Language.Haskell.TH.Quote
-import Language.Haskell.Meta.Parse
+import Prelude
 
-import Database.Persist.Class (toPersistValue)
 import Database.Persist
+import Database.Persist.Class (toPersistValue)
 import Database.Persist.Sql
 
 class ToRow a where
     toRow :: a -> NonEmpty PersistValue
 
-instance PersistField a => ToRow (Single a) where
+instance (PersistField a) => ToRow (Single a) where
     toRow (Single a) = toPersistValue a :| []
 
 instance (PersistField a, PersistField b) => ToRow (a, b) where
@@ -59,49 +59,59 @@ instance (PersistField a, PersistField b) => ToRow (a, b) where
 instance (PersistField a, PersistField b, PersistField c) => ToRow (a, b, c) where
     toRow (a, b, c) = toPersistValue a <| toRow (b, c)
 
-instance (PersistField a, PersistField b, PersistField c, PersistField d) => ToRow (a, b, c, d) where
+instance
+    (PersistField a, PersistField b, PersistField c, PersistField d)
+    => ToRow (a, b, c, d)
+    where
     toRow (a, b, c, d) = toPersistValue a <| toRow (b, c, d)
 
-instance (PersistField a, PersistField b, PersistField c, PersistField d, PersistField e) => ToRow (a, b, c, d, e) where
+instance
+    (PersistField a, PersistField b, PersistField c, PersistField d, PersistField e)
+    => ToRow (a, b, c, d, e)
+    where
     toRow (a, b, c, d, e) = toPersistValue a <| toRow (b, c, d, e)
 
 data Token
-  = Literal String
-  | Value String
-  | Values String
-  | Rows String
-  | TableName String
-  | ColumnName String
-  deriving Show
+    = Literal String
+    | Value String
+    | Values String
+    | Rows String
+    | TableName String
+    | ColumnName String
+    deriving (Show)
 
 parseHaskell :: (String -> Token) -> String -> String -> [Token]
 parseHaskell cons = go
   where
-    go a []          = [Literal (reverse a)]
-    go a ('\\':x:xs) = go (x:a) xs
-    go a ['\\']      = go ('\\':a) []
-    go a ('}':xs)    = cons (reverse a) : parseStr [] xs
-    go a (x:xs)      = go (x:a) xs
+    go a [] = [Literal (reverse a)]
+    go a ('\\' : x : xs) = go (x : a) xs
+    go a ['\\'] = go ('\\' : a) []
+    go a ('}' : xs) = cons (reverse a) : parseStr [] xs
+    go a (x : xs) = go (x : a) xs
 
 parseStr :: String -> String -> [Token]
-parseStr a []           = [Literal (reverse a)]
-parseStr a ('\\':x:xs)  = parseStr (x:a) xs
-parseStr a ['\\']       = parseStr ('\\':a) []
-parseStr a ('#':'{':xs) = Literal (reverse a) : parseHaskell Value      [] xs
-parseStr a ('%':'{':xs) = Literal (reverse a) : parseHaskell Values     [] xs
-parseStr a ('*':'{':xs) = Literal (reverse a) : parseHaskell Rows       [] xs
-parseStr a ('^':'{':xs) = Literal (reverse a) : parseHaskell TableName  [] xs
-parseStr a ('@':'{':xs) = Literal (reverse a) : parseHaskell ColumnName [] xs
-parseStr a (x:xs)       = parseStr (x:a) xs
+parseStr a [] = [Literal (reverse a)]
+parseStr a ('\\' : x : xs) = parseStr (x : a) xs
+parseStr a ['\\'] = parseStr ('\\' : a) []
+parseStr a ('#' : '{' : xs) = Literal (reverse a) : parseHaskell Value [] xs
+parseStr a ('%' : '{' : xs) = Literal (reverse a) : parseHaskell Values [] xs
+parseStr a ('*' : '{' : xs) = Literal (reverse a) : parseHaskell Rows [] xs
+parseStr a ('^' : '{' : xs) = Literal (reverse a) : parseHaskell TableName [] xs
+parseStr a ('@' : '{' : xs) = Literal (reverse a) : parseHaskell ColumnName [] xs
+parseStr a (x : xs) = parseStr (x : a) xs
 
-interpolateValues :: PersistField a => NonEmpty a -> (String, [[PersistValue]]) -> (String, [[PersistValue]])
+interpolateValues
+    :: (PersistField a)
+    => NonEmpty a -> (String, [[PersistValue]]) -> (String, [[PersistValue]])
 interpolateValues xs =
-    first (mkPlaceholders values <>) .
-    second (NonEmpty.toList values :)
+    first (mkPlaceholders values <>)
+        . second (NonEmpty.toList values :)
   where
     values = NonEmpty.map toPersistValue xs
 
-interpolateRows :: ToRow a => NonEmpty a -> (String, [[PersistValue]]) -> (String, [[PersistValue]])
+interpolateRows
+    :: (ToRow a)
+    => NonEmpty a -> (String, [[PersistValue]]) -> (String, [[PersistValue]])
 interpolateRows xs (sql, vals) =
     (placeholders <> sql, values : vals)
   where
@@ -122,40 +132,50 @@ timesCommaSeparated n = intercalate "," . replicate n
 
 makeExpr :: TH.ExpQ -> [Token] -> TH.ExpQ
 makeExpr fun toks = do
-    [| do
-        (sql, vals) <- $(go toks)
-        $(fun) (Text.pack sql) (concat vals) |]
+    [|
+        do
+            (sql, vals) <- $(go toks)
+            $(fun) (Text.pack sql) (concat vals)
+        |]
   where
     go :: [Token] -> TH.ExpQ
     go [] =
-        [| return (mempty :: String, []) |]
-    go (Literal a:xs) =
-        [| first (a <>) <$> $(go xs) |]
-    go (Value a:xs) = do
-        [| (\(str, vals) -> ("?" <> str, [toPersistValue $(reifyExp a)] : vals)) <$> ($(go xs)) |]
-    go (Values a:xs) =
-        [| interpolateValues $(reifyExp a) <$> $(go xs) |]
-    go (Rows a:xs) =
-        [| interpolateRows $(reifyExp a) <$> $(go xs) |]
-    go (ColumnName a:xs) =
-        [| getFieldName $(reifyExp a) >>= \field ->
-            first (Text.unpack field <>) <$> $(go xs) |]
-    go (TableName a:xs) = do
-        [| getTableName (error "record" :: $(TH.conT (TH.mkName a))) >>= \table ->
-            first (Text.unpack table <>) <$> $(go xs) |]
+        [|return (mempty :: String, [])|]
+    go (Literal a : xs) =
+        [|first (a <>) <$> $(go xs)|]
+    go (Value a : xs) = do
+        [|
+            (\(str, vals) -> ("?" <> str, [toPersistValue $(reifyExp a)] : vals))
+                <$> ($(go xs))
+            |]
+    go (Values a : xs) =
+        [|interpolateValues $(reifyExp a) <$> $(go xs)|]
+    go (Rows a : xs) =
+        [|interpolateRows $(reifyExp a) <$> $(go xs)|]
+    go (ColumnName a : xs) =
+        [|
+            getFieldName $(reifyExp a) >>= \field ->
+                first (Text.unpack field <>) <$> $(go xs)
+            |]
+    go (TableName a : xs) = do
+        [|
+            getTableName (error "record" :: $(TH.conT (TH.mkName a))) >>= \table ->
+                first (Text.unpack table <>) <$> $(go xs)
+            |]
 
 reifyExp :: String -> TH.Q TH.Exp
 reifyExp s =
     case parseExp s of
-        Left e -> TH.reportError e >> [| mempty |]
+        Left e -> TH.reportError e >> [|mempty|]
         Right v -> return v
 
 makeQQ :: TH.Q TH.Exp -> QuasiQuoter
-makeQQ x = QuasiQuoter
-    (makeExpr x . parseStr [])
-    (error "Cannot use qc as a pattern")
-    (error "Cannot use qc as a type")
-    (error "Cannot use qc as a dec")
+makeQQ x =
+    QuasiQuoter
+        (makeExpr x . parseStr [])
+        (error "Cannot use qc as a pattern")
+        (error "Cannot use qc as a type")
+        (error "Cannot use qc as a dec")
 
 -- | QuasiQuoter for performing raw sql queries, analoguous to
 -- 'Database.Persist.Sql.rawSql'
@@ -205,28 +225,28 @@ makeQQ x = QuasiQuoter
 --
 -- @since 2.9.0
 sqlQQ :: QuasiQuoter
-sqlQQ = makeQQ [| rawSql |]
+sqlQQ = makeQQ [|rawSql|]
 
 -- | Analoguous to 'Database.Persist.Sql.rawExecute'
 --
 -- @since 2.9.0
 executeQQ :: QuasiQuoter
-executeQQ = makeQQ [| rawExecute |]
+executeQQ = makeQQ [|rawExecute|]
 
 -- | Analoguous to 'Database.Persist.Sql.rawExecuteCount'
 --
 -- @since 2.9.0
 executeCountQQ :: QuasiQuoter
-executeCountQQ = makeQQ [| rawExecuteCount |]
+executeCountQQ = makeQQ [|rawExecuteCount|]
 
 -- | Analoguous to 'Database.Persist.Sql.rawQuery'
 --
 -- @since 2.9.0
 queryQQ :: QuasiQuoter
-queryQQ = makeQQ [| rawQuery |]
+queryQQ = makeQQ [|rawQuery|]
 
 -- | Analoguous to 'Database.Persist.Sql.rawQueryRes'
 --
 -- @since 2.9.0
 queryResQQ :: QuasiQuoter
-queryResQQ = makeQQ [| rawQueryRes |]
+queryResQQ = makeQQ [|rawQueryRes|]

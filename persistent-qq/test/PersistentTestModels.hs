@@ -11,7 +11,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
-
 {-# OPTIONS_GHC -ddump-splices #-}
 
 module PersistentTestModels where
@@ -29,16 +28,17 @@ import PersistTestPetCollarType
 import PersistTestPetType
 
 share
-    [ mkPersist sqlSettings { mpsGeneric = True }
+    [ mkPersist sqlSettings{mpsGeneric = True}
     , mkMigrate "testMigrate"
-    ] [persistUpperCase|
+    ]
+    [persistUpperCase|
 
 -- Dedented comment
   -- Header-level comment
     -- Indented comment
   Person json
     name Text
-    age Int "some ignored -- \" attribute"
+    age Int some="ignored -- \" attribute"
     color Text Maybe -- this is a comment sql=foobarbaz
     PersonNameKey name -- this is a comment sql=foobarbaz
     deriving Show Eq
@@ -112,12 +112,14 @@ share
 
 |]
 
-deriving instance Show (BackendKey backend) => Show (PetGeneric backend)
-deriving instance Eq (BackendKey backend) => Eq (PetGeneric backend)
+deriving instance (Show (BackendKey backend)) => Show (PetGeneric backend)
+deriving instance (Eq (BackendKey backend)) => Eq (PetGeneric backend)
 
-share [ mkPersist sqlSettings { mpsPrefixFields = False, mpsGeneric = True }
-      , mkMigrate "noPrefixMigrate"
-      ] [persistLowerCase|
+share
+    [ mkPersist sqlSettings{mpsPrefixFields = False, mpsGeneric = True}
+    , mkMigrate "noPrefixMigrate"
+    ]
+    [persistLowerCase|
 NoPrefix1
     someFieldName Int
 NoPrefix2
@@ -129,23 +131,27 @@ NoPrefix2
     deriving Show Eq
 |]
 
-deriving instance Show (BackendKey backend) => Show (NoPrefix1Generic backend)
-deriving instance Eq (BackendKey backend) => Eq (NoPrefix1Generic backend)
+deriving instance (Show (BackendKey backend)) => Show (NoPrefix1Generic backend)
+deriving instance (Eq (BackendKey backend)) => Eq (NoPrefix1Generic backend)
 
-deriving instance Show (BackendKey backend) => Show (NoPrefix2Generic backend)
-deriving instance Eq (BackendKey backend) => Eq (NoPrefix2Generic backend)
+deriving instance (Show (BackendKey backend)) => Show (NoPrefix2Generic backend)
+deriving instance (Eq (BackendKey backend)) => Eq (NoPrefix2Generic backend)
 
 -- | Reverses the order of the fields of an entity.  Used to test
 -- @??@ placeholders of 'rawSql'.
 newtype ReverseFieldOrder a = RFO {unRFO :: a} deriving (Eq, Show)
-instance ToJSON (Key (ReverseFieldOrder a))   where toJSON = error "ReverseFieldOrder"
-instance FromJSON (Key (ReverseFieldOrder a)) where parseJSON = error "ReverseFieldOrder"
+
+instance ToJSON (Key (ReverseFieldOrder a)) where
+    toJSON = error "ReverseFieldOrder"
+instance FromJSON (Key (ReverseFieldOrder a)) where
+    parseJSON = error "ReverseFieldOrder"
 instance (PersistEntity a) => PersistEntity (ReverseFieldOrder a) where
     type PersistEntityBackend (ReverseFieldOrder a) = PersistEntityBackend a
 
-    newtype Key (ReverseFieldOrder a) = RFOKey { unRFOKey :: BackendKey SqlBackend } deriving (Show, Read, Eq, Ord, PersistField, PersistFieldSql)
+    newtype Key (ReverseFieldOrder a) = RFOKey {unRFOKey :: BackendKey SqlBackend}
+        deriving (Show, Read, Eq, Ord, PersistField, PersistFieldSql)
     keyFromValues = fmap RFOKey . fromPersistValue . head
-    keyToValues   = (:[]) . toPersistValue . unRFOKey
+    keyToValues = (: []) . toPersistValue . unRFOKey
 
     entityDef = revFields . entityDef . unRfoProxy
       where
@@ -158,7 +164,7 @@ instance (PersistEntity a) => PersistEntity (ReverseFieldOrder a) where
     persistFieldDef = persistFieldDef . unEFRFO
     fromPersistValues = fmap RFO . fromPersistValues . reverse
 
-    newtype Unique      (ReverseFieldOrder a)   = URFO  {unURFO  :: Unique      a  }
+    newtype Unique (ReverseFieldOrder a) = URFO {unURFO :: Unique a}
     persistUniqueToFieldNames = NEL.reverse . persistUniqueToFieldNames . unURFO
     persistUniqueToValues = reverse . persistUniqueToValues . unURFO
     persistUniqueKeys = map URFO . reverse . persistUniqueKeys . unRFO
@@ -170,11 +176,11 @@ cleanDB
     :: (MonadIO m, PersistQuery backend, PersistStoreWrite (BaseBackend backend))
     => ReaderT backend m ()
 cleanDB = do
-  deleteWhere ([] :: [Filter (PersonGeneric backend)])
-  deleteWhere ([] :: [Filter (Person1Generic backend)])
-  deleteWhere ([] :: [Filter (PetGeneric backend)])
-  deleteWhere ([] :: [Filter (MaybeOwnedPetGeneric backend)])
-  deleteWhere ([] :: [Filter (NeedsPetGeneric backend)])
-  deleteWhere ([] :: [Filter (OutdoorPetGeneric backend)])
-  deleteWhere ([] :: [Filter (UserPTGeneric backend)])
-  deleteWhere ([] :: [Filter (EmailPTGeneric backend)])
+    deleteWhere ([] :: [Filter (PersonGeneric backend)])
+    deleteWhere ([] :: [Filter (Person1Generic backend)])
+    deleteWhere ([] :: [Filter (PetGeneric backend)])
+    deleteWhere ([] :: [Filter (MaybeOwnedPetGeneric backend)])
+    deleteWhere ([] :: [Filter (NeedsPetGeneric backend)])
+    deleteWhere ([] :: [Filter (OutdoorPetGeneric backend)])
+    deleteWhere ([] :: [Filter (UserPTGeneric backend)])
+    deleteWhere ([] :: [Filter (EmailPTGeneric backend)])

@@ -3,12 +3,11 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE TypeOperators #-}
-
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Database.Persist.Sql.Orphan.PersistStore
     ( withRawQuery
-    , BackendKey(..)
+    , BackendKey (..)
     , toSqlKey
     , fromSqlKey
     , getFieldName
@@ -45,40 +44,41 @@ import Database.Persist.Sql.Raw
 import Database.Persist.Sql.Types
 import Database.Persist.Sql.Types.Internal
 import Database.Persist.Sql.Util
-       ( commaSeparated
-       , dbIdColumns
-       , keyAndEntityColumnNames
-       , mkInsertValues
-       , mkUpdateText
-       , parseEntityValues
-       , updatePersistValue
-       )
+    ( commaSeparated
+    , dbIdColumns
+    , keyAndEntityColumnNames
+    , mkInsertValues
+    , mkUpdateText
+    , parseEntityValues
+    , updatePersistValue
+    )
 
-withRawQuery :: MonadIO m
-             => Text
-             -> [PersistValue]
-             -> ConduitM [PersistValue] Void IO a
-             -> ReaderT SqlBackend m a
+withRawQuery
+    :: (MonadIO m)
+    => Text
+    -> [PersistValue]
+    -> ConduitM [PersistValue] Void IO a
+    -> ReaderT SqlBackend m a
 withRawQuery sql vals sink = do
     srcRes <- rawQueryRes sql vals
     liftIO $ with srcRes (\src -> runConduit $ src .| sink)
 
-toSqlKey :: ToBackendKey SqlBackend record => Int64 -> Key record
+toSqlKey :: (ToBackendKey SqlBackend record) => Int64 -> Key record
 toSqlKey = fromBackendKey . SqlBackendKey
 
-fromSqlKey :: ToBackendKey SqlBackend record => Key record -> Int64
+fromSqlKey :: (ToBackendKey SqlBackend record) => Key record -> Int64
 fromSqlKey = unSqlBackendKey . toBackendKey
 
-whereStmtForKey :: PersistEntity record => SqlBackend -> Key record -> Text
+whereStmtForKey :: (PersistEntity record) => SqlBackend -> Key record -> Text
 whereStmtForKey conn k =
-    T.intercalate " AND "
-  $ Foldable.toList
-  $ fmap (<> "=? ")
-  $ dbIdColumns conn entDef
+    T.intercalate " AND " $
+        Foldable.toList $
+            fmap (<> "=? ") $
+                dbIdColumns conn entDef
   where
     entDef = entityDef $ dummyFromKey k
 
-whereStmtForKeys :: PersistEntity record => SqlBackend -> [Key record] -> Text
+whereStmtForKeys :: (PersistEntity record) => SqlBackend -> [Key record] -> Text
 whereStmtForKeys conn ks = T.intercalate " OR " $ whereStmtForKey conn `fmap` ks
 
 -- | get the SQL string for the table that a PersistEntity represents
@@ -86,11 +86,13 @@ whereStmtForKeys conn ks = T.intercalate " OR " $ whereStmtForKey conn `fmap` ks
 --
 -- Your backend may provide a more convenient tableName function
 -- which does not operate in a Monad
-getTableName :: forall record m backend.
-             ( PersistEntity record
-             , BackendCompatible SqlBackend backend
-             , Monad m
-             ) => record -> ReaderT backend m Text
+getTableName
+    :: forall record m backend
+     . ( PersistEntity record
+       , BackendCompatible SqlBackend backend
+       , Monad m
+       )
+    => record -> ReaderT backend m Text
 getTableName rec = withCompatibleBackend $ do
     conn <- ask
     return $ connEscapeTableName conn (entityDef $ Just rec)
@@ -104,36 +106,77 @@ tableDBName rec = getEntityDBName $ entityDef (Just rec)
 --
 -- Your backend may provide a more convenient fieldName function
 -- which does not operate in a Monad
-getFieldName :: forall record typ m backend.
-             ( PersistEntity record
-             , PersistEntityBackend record ~ SqlBackend
-             , BackendCompatible SqlBackend backend
-             , Monad m
-             )
-             => EntityField record typ -> ReaderT backend m Text
+getFieldName
+    :: forall record typ m backend
+     . ( PersistEntity record
+       , PersistEntityBackend record ~ SqlBackend
+       , BackendCompatible SqlBackend backend
+       , Monad m
+       )
+    => EntityField record typ -> ReaderT backend m Text
 getFieldName rec = withCompatibleBackend $ do
     conn <- ask
     return $ connEscapeFieldName conn (fieldDB $ persistFieldDef rec)
 
 -- | useful for a backend to implement fieldName by adding escaping
-fieldDBName :: forall record typ. (PersistEntity record) => EntityField record typ -> FieldNameDB
+fieldDBName
+    :: forall record typ
+     . (PersistEntity record) => EntityField record typ -> FieldNameDB
 fieldDBName = fieldDB . persistFieldDef
 
-
 instance PersistCore SqlBackend where
-    newtype BackendKey SqlBackend = SqlBackendKey { unSqlBackendKey :: Int64 }
+    newtype BackendKey SqlBackend = SqlBackendKey {unSqlBackendKey :: Int64}
         deriving stock (Show, Read, Eq, Ord, Generic)
-        deriving newtype (Num, Integral, PersistField, PersistFieldSql, PathPiece, ToHttpApiData, FromHttpApiData, Real, Enum, Bounded, A.ToJSON, A.FromJSON)
+        deriving newtype
+            ( Num
+            , Integral
+            , PersistField
+            , PersistFieldSql
+            , PathPiece
+            , ToHttpApiData
+            , FromHttpApiData
+            , Real
+            , Enum
+            , Bounded
+            , A.ToJSON
+            , A.FromJSON
+            )
 
 instance PersistCore SqlReadBackend where
-    newtype BackendKey SqlReadBackend = SqlReadBackendKey { unSqlReadBackendKey :: Int64 }
+    newtype BackendKey SqlReadBackend = SqlReadBackendKey {unSqlReadBackendKey :: Int64}
         deriving stock (Show, Read, Eq, Ord, Generic)
-        deriving newtype (Num, Integral, PersistField, PersistFieldSql, PathPiece, ToHttpApiData, FromHttpApiData, Real, Enum, Bounded, A.ToJSON, A.FromJSON)
+        deriving newtype
+            ( Num
+            , Integral
+            , PersistField
+            , PersistFieldSql
+            , PathPiece
+            , ToHttpApiData
+            , FromHttpApiData
+            , Real
+            , Enum
+            , Bounded
+            , A.ToJSON
+            , A.FromJSON
+            )
 
 instance PersistCore SqlWriteBackend where
-    newtype BackendKey SqlWriteBackend = SqlWriteBackendKey { unSqlWriteBackendKey :: Int64 }
+    newtype BackendKey SqlWriteBackend = SqlWriteBackendKey {unSqlWriteBackendKey :: Int64}
         deriving stock (Show, Read, Eq, Ord, Generic)
-        deriving newtype (Num, Integral, PersistField, PersistFieldSql, PathPiece, ToHttpApiData, FromHttpApiData, Real, Enum, Bounded, A.ToJSON, A.FromJSON)
+        deriving newtype
+            ( Num
+            , Integral
+            , PersistField
+            , PersistFieldSql
+            , PathPiece
+            , ToHttpApiData
+            , FromHttpApiData
+            , Real
+            , Enum
+            , Bounded
+            , A.ToJSON
+            , A.FromJSON
+            )
 
 instance BackendCompatible SqlBackend SqlBackend where
     projectBackend = id
@@ -148,22 +191,26 @@ instance PersistStoreWrite SqlBackend where
     update _ [] = return ()
     update k upds = do
         conn <- ask
-        let wher = whereStmtForKey conn k
-        let sql = T.concat
-                [ "UPDATE "
-                , connEscapeTableName conn (entityDef $ Just $ recordTypeFromKey k)
-                , " SET "
-                , T.intercalate "," $ map (mkUpdateText conn) upds
-                , " WHERE "
-                , wher
-                ]
+        let
+            wher = whereStmtForKey conn k
+        let
+            sql =
+                T.concat
+                    [ "UPDATE "
+                    , connEscapeTableName conn (entityDef $ Just $ recordTypeFromKey k)
+                    , " SET "
+                    , T.intercalate "," $ map (mkUpdateText conn) upds
+                    , " WHERE "
+                    , wher
+                    ]
         rawExecute sql $
             map updatePersistValue upds `mappend` keyToValues k
 
     insert_ val = do
         conn <- ask
-        let vals = mkInsertValues val
-        case connInsertSql conn (entityDef (Just val)) vals  of
+        let
+            vals = mkInsertValues val
+        case connInsertSql conn (entityDef (Just val)) vals of
             ISRSingle sql -> do
                 withRawQuery sql vals $ do
                     pure ()
@@ -174,34 +221,48 @@ instance PersistStoreWrite SqlBackend where
 
     insert val = do
         conn <- ask
-        let esql = connInsertSql conn t vals
+        let
+            esql = connInsertSql conn t vals
         key <-
             case esql of
                 ISRSingle sql -> withRawQuery sql vals $ do
                     x <- CL.head
                     case x of
                         Just [PersistInt64 i] -> case keyFromValues [PersistInt64 i] of
-                            Left err -> error $ "SQL insert: keyFromValues: PersistInt64 " `mappend` show i `mappend` " " `mappend` unpack err
+                            Left err ->
+                                error $
+                                    "SQL insert: keyFromValues: PersistInt64 "
+                                        `mappend` show i
+                                        `mappend` " "
+                                        `mappend` unpack err
                             Right k -> return k
                         Nothing -> error $ "SQL insert did not return a result giving the generated ID"
                         Just vals' -> case keyFromValues vals' of
-                            Left e -> error $ "Invalid result from a SQL insert, got: " ++ show vals' ++ ". Error was: " ++ unpack e
+                            Left e ->
+                                error $
+                                    "Invalid result from a SQL insert, got: "
+                                        ++ show vals'
+                                        ++ ". Error was: "
+                                        ++ unpack e
                             Right k -> return k
-
                 ISRInsertGet sql1 sql2 -> do
                     rawExecute sql1 vals
                     withRawQuery sql2 [] $ do
                         mm <- CL.head
-                        let m = maybe
-                                  (Left $ "No results from ISRInsertGet: " `mappend` tshow (sql1, sql2))
-                                  Right mm
+                        let
+                            m =
+                                maybe
+                                    (Left $ "No results from ISRInsertGet: " `mappend` tshow (sql1, sql2))
+                                    Right
+                                    mm
 
                         -- TODO: figure out something better for MySQL
-                        let convert x =
+                        let
+                            convert x =
                                 case x of
                                     [PersistByteString i] -> case readInteger i of -- mssql
-                                                            Just (ret,"") -> [PersistInt64 $ fromIntegral ret]
-                                                            _ -> x
+                                        Just (ret, "") -> [PersistInt64 $ fromIntegral ret]
+                                        _ -> x
                                     _ -> x
                             -- Yes, it's just <|>. Older bases don't have the
                             -- instance for Either.
@@ -214,18 +275,23 @@ instance PersistStoreWrite SqlBackend where
                 ISRManyKeys sql fs -> do
                     rawExecute sql vals
                     case entityPrimary t of
-                       Nothing ->
-                           error $ "ISRManyKeys is used when Primary is defined " ++ show sql
-                       Just pdef ->
-                            let pks = Foldable.toList $ fmap fieldHaskell $ compositeFields pdef
-                                keyvals = map snd $ filter (\(a, _) -> let ret=isJust (find (== a) pks) in ret) $ zip (map fieldHaskell $ getEntityFields t) fs
-                            in  case keyFromValues keyvals of
+                        Nothing ->
+                            error $ "ISRManyKeys is used when Primary is defined " ++ show sql
+                        Just pdef ->
+                            let
+                                pks = Foldable.toList $ fmap fieldHaskell $ compositeFields pdef
+                                keyvals =
+                                    map snd $
+                                        filter (\(a, _) -> let ret = isJust (find (== a) pks) in ret) $
+                                            zip (map fieldHaskell $ getEntityFields t) fs
+                             in
+                                case keyFromValues keyvals of
                                     Right k -> return k
-                                    Left e  -> error $ "ISRManyKeys: unexpected keyvals result: " `mappend` unpack e
+                                    Left e -> error $ "ISRManyKeys: unexpected keyvals result: " `mappend` unpack e
 
         return key
       where
-        tshow :: Show a => a -> Text
+        tshow :: (Show a) => a -> Text
         tshow = T.pack . show
         throw = liftIO . throwIO . userError . T.unpack
         t = entityDef $ Just val
@@ -241,39 +307,49 @@ instance PersistStoreWrite SqlBackend where
                 case insertManyFn ent valss of
                     ISRSingle sql -> rawSql sql (concat valss)
                     _ -> error "ISRSingle is expected from the connInsertManySql function"
-                where
-                    ent = entityDef vals
-                    valss = map mkInsertValues vals
+              where
+                ent = entityDef vals
+                valss = map mkInsertValues vals
 
     insertMany_ vals0 = runChunked (length $ getEntityFields t) insertMany_' vals0
       where
         t = entityDef vals0
         insertMany_' vals = do
-          conn <- ask
-          let valss = map mkInsertValues vals
-          let sql = T.concat
-                  [ "INSERT INTO "
-                  , connEscapeTableName conn t
-                  , "("
-                  , T.intercalate "," $ map (connEscapeFieldName conn . fieldDB) $ getEntityFields t
-                  , ") VALUES ("
-                  , T.intercalate "),(" $ replicate (length valss) $ T.intercalate "," $ map (const "?") (getEntityFields t)
-                  , ")"
-                  ]
-          rawExecute sql (concat valss)
+            conn <- ask
+            let
+                valss = map mkInsertValues vals
+            let
+                sql =
+                    T.concat
+                        [ "INSERT INTO "
+                        , connEscapeTableName conn t
+                        , "("
+                        , T.intercalate "," $ map (connEscapeFieldName conn . fieldDB) $ getEntityFields t
+                        , ") VALUES ("
+                        , T.intercalate "),(" $
+                            replicate (length valss) $
+                                T.intercalate "," $
+                                    map (const "?") (getEntityFields t)
+                        , ")"
+                        ]
+            rawExecute sql (concat valss)
 
     replace k val = do
         conn <- ask
-        let t = entityDef $ Just val
-        let wher = whereStmtForKey conn k
-        let sql = T.concat
-                [ "UPDATE "
-                , connEscapeTableName conn t
-                , " SET "
-                , T.intercalate "," (map (go conn . fieldDB) $ getEntityFields t)
-                , " WHERE "
-                , wher
-                ]
+        let
+            t = entityDef $ Just val
+        let
+            wher = whereStmtForKey conn k
+        let
+            sql =
+                T.concat
+                    [ "UPDATE "
+                    , connEscapeTableName conn t
+                    , " SET "
+                    , T.intercalate "," (map (go conn . fieldDB) $ getEntityFields t)
+                    , " WHERE "
+                    , wher
+                    ]
             vals = mkInsertValues val `mappend` keyToValues k
         rawExecute sql vals
       where
@@ -283,8 +359,10 @@ instance PersistStoreWrite SqlBackend where
 
     insertEntityMany es' = do
         conn <- ask
-        let entDef = entityDef $ map entityVal es'
-        let columnNames = keyAndEntityColumnNames entDef conn
+        let
+            entDef = entityDef $ map entityVal es'
+        let
+            columnNames = keyAndEntityColumnNames entDef conn
         runChunked (length columnNames) go es'
       where
         go = insrepHelper "INSERT"
@@ -294,35 +372,41 @@ instance PersistStoreWrite SqlBackend where
     repsertMany [] = return ()
     repsertMany krsDups = do
         conn <- ask
-        let krs = nubBy ((==) `on` fst) (reverse krsDups)
-        let rs = snd `fmap` krs
-        let ent = entityDef rs
-        let nr  = length krs
-        let toVals (k,r)
-                = case entityPrimary ent of
+        let
+            krs = nubBy ((==) `on` fst) (reverse krsDups)
+        let
+            rs = snd `fmap` krs
+        let
+            ent = entityDef rs
+        let
+            nr = length krs
+        let
+            toVals (k, r) =
+                case entityPrimary ent of
                     Nothing -> keyToValues k <> (mkInsertValues r)
-                    Just _  -> mkInsertValues r
+                    Just _ -> mkInsertValues r
         case connRepsertManySql conn of
             (Just mkSql) -> rawExecute (mkSql ent nr) (concatMap toVals krs)
             Nothing -> mapM_ repsert' krs
               where
                 repsert' (key, value) = do
-                  mExisting <- get key
-                  case mExisting of
-                    Nothing -> insertKey key value
-                    Just _ -> replace key value
+                    mExisting <- get key
+                    case mExisting of
+                        Nothing -> insertKey key value
+                        Just _ -> replace key value
 
     delete k = do
         conn <- ask
         rawExecute (sql conn) (keyToValues k)
       where
         wher conn = whereStmtForKey conn k
-        sql conn = T.concat
-            [ "DELETE FROM "
-            , connEscapeTableName conn (entityDef $ Just $ recordTypeFromKey k)
-            , " WHERE "
-            , wher conn
-            ]
+        sql conn =
+            T.concat
+                [ "DELETE FROM "
+                , connEscapeTableName conn (entityDef $ Just $ recordTypeFromKey k)
+                , " WHERE "
+                , wher conn
+                ]
 instance PersistStoreWrite SqlWriteBackend where
     insert v = withBaseBackend $ insert v
     insertMany vs = withBaseBackend $ insertMany vs
@@ -341,24 +425,32 @@ instance PersistStoreRead SqlBackend where
         return $ Map.lookup k mEs
 
     -- inspired by Database.Persist.Sql.Orphan.PersistQuery.selectSourceRes
-    getMany []      = return Map.empty
-    getMany ks@(k:_)= do
+    getMany [] = return Map.empty
+    getMany ks@(k : _) = do
         conn <- ask
-        let t = entityDef . dummyFromKey $ k
-        let cols = commaSeparated . Foldable.toList . keyAndEntityColumnNames t
-        let wher = whereStmtForKeys conn ks
-        let sql = T.concat
-                [ "SELECT "
-                , cols conn
-                , " FROM "
-                , connEscapeTableName conn t
-                , " WHERE "
-                , wher
-                ]
-        let parse vals
-                = case parseEntityValues t vals of
-                    Left s -> liftIO $ throwIO $
-                        PersistMarshalError ("getBy: " <> s)
+        let
+            t = entityDef . dummyFromKey $ k
+        let
+            cols = commaSeparated . Foldable.toList . keyAndEntityColumnNames t
+        let
+            wher = whereStmtForKeys conn ks
+        let
+            sql =
+                T.concat
+                    [ "SELECT "
+                    , cols conn
+                    , " FROM "
+                    , connEscapeTableName conn t
+                    , " WHERE "
+                    , wher
+                    ]
+        let
+            parse vals =
+                case parseEntityValues t vals of
+                    Left s ->
+                        liftIO $
+                            throwIO $
+                                PersistMarshalError ("getBy: " <> s)
                     Right row -> return row
         withRawQuery sql (Foldable.foldMap keyToValues ks) $ do
             es <- CL.mapM parse .| CL.consume
@@ -377,27 +469,33 @@ dummyFromKey = Just . recordTypeFromKey
 recordTypeFromKey :: Key record -> record
 recordTypeFromKey _ = error "dummyFromKey"
 
-insrepHelper :: (MonadIO m, PersistEntity val)
-             => Text
-             -> [Entity val]
-             -> ReaderT SqlBackend m ()
-insrepHelper _       []  = return ()
+insrepHelper
+    :: (MonadIO m, PersistEntity val)
+    => Text
+    -> [Entity val]
+    -> ReaderT SqlBackend m ()
+insrepHelper _ [] = return ()
 insrepHelper command es = do
     conn <- ask
-    let columnNames = Foldable.toList $ keyAndEntityColumnNames entDef conn
+    let
+        columnNames = Foldable.toList $ keyAndEntityColumnNames entDef conn
     rawExecute (sql conn columnNames) vals
   where
     entDef = entityDef $ map entityVal es
-    sql conn columnNames = T.concat
-        [ command
-        , " INTO "
-        , connEscapeTableName conn entDef
-        , "("
-        , T.intercalate "," columnNames
-        , ") VALUES ("
-        , T.intercalate "),(" $ replicate (length es) $ T.intercalate "," $ fmap (const "?") columnNames
-        , ")"
-        ]
+    sql conn columnNames =
+        T.concat
+            [ command
+            , " INTO "
+            , connEscapeTableName conn entDef
+            , "("
+            , T.intercalate "," columnNames
+            , ") VALUES ("
+            , T.intercalate "),(" $
+                replicate (length es) $
+                    T.intercalate "," $
+                        fmap (const "?") columnNames
+            , ")"
+            ]
     vals = Foldable.foldMap entityValues es
 
 runChunked
@@ -406,13 +504,16 @@ runChunked
     -> ([a] -> ReaderT SqlBackend m ())
     -> [a]
     -> ReaderT SqlBackend m ()
-runChunked _ _ []     = return ()
+runChunked _ _ [] = return ()
 runChunked width m xs = do
     conn <- ask
     case connMaxParams conn of
         Nothing -> m xs
-        Just maxParams -> let chunkSize = maxParams `div` width in
-            mapM_ m (chunksOf chunkSize xs)
+        Just maxParams ->
+            let
+                chunkSize = maxParams `div` width
+             in
+                mapM_ m (chunksOf chunkSize xs)
 
 -- Implement this here to avoid depending on the split package
 chunksOf :: Int -> [a] -> [[a]]

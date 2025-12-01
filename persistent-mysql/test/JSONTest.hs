@@ -28,6 +28,9 @@ import MyInit
 specs :: Spec
 specs = describe "JSONTest" $ do
     it "can select json with rawsql" $ db $ do
-        let testJSON = toJSON $ [object [ "test" .= ("value" :: Text) ]]
-        [[PersistByteString value]] <- runConduit $ rawQuery "select JSON_ARRAY(JSON_OBJECT('test', 'value'))" [] .| CL.consume
+        let
+            testJSON = toJSON $ [object ["test" .= ("value" :: Text)]]
+        [[PersistByteString value]] <-
+            runConduit $
+                rawQuery "select JSON_ARRAY(JSON_OBJECT('test', 'value'))" [] .| CL.consume
         liftIO $ Just testJSON `shouldBe` (decode $ BSL.fromStrict value)

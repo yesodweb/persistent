@@ -12,7 +12,6 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
-
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
 import MyInit
@@ -22,7 +21,13 @@ import Data.Fixed
 import Data.Int (Int8)
 import Data.IntMap (IntMap)
 import qualified Data.Text as T
-import Data.Time (Day, TimeOfDay, UTCTime(..), timeOfDayToTime, timeToTimeOfDay)
+import Data.Time
+    ( Day
+    , TimeOfDay
+    , UTCTime (..)
+    , timeOfDayToTime
+    , timeToTimeOfDay
+    )
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
 import Database.Persist.Sql
 import Test.QuickCheck
@@ -49,11 +54,13 @@ import qualified MpsNoPrefixTest
 import qualified PersistUniqueTest
 import qualified PersistentTest
 import qualified TypeLitFieldDefsTest
+
 -- FIXME: Not used... should it be?
 -- import qualified PrimaryTest
 import qualified RawSqlTest
 import qualified ReadWriteTest
 import qualified Recursive
+
 -- TODO: can't use this as MySQL can't do DEFAULT CURRENT_DATE
 import qualified CustomConstraintTest
 import qualified ForeignKey
@@ -70,7 +77,9 @@ import qualified UpsertTest
 type Tuple a b = (a, b)
 
 -- Test lower case names
-share [mkPersist persistSettings, mkMigrate "dataTypeMigrate"] [persistLowerCase|
+share
+    [mkPersist persistSettings, mkMigrate "dataTypeMigrate"]
+    [persistLowerCase|
 DataTypeTable no-json
     text Text
     textMaxLen Text maxlen=100
@@ -97,35 +106,37 @@ DataTypeTable no-json
 |]
 
 instance Arbitrary (DataTypeTableGeneric backend) where
-  arbitrary = DataTypeTable
-     <$> arbText                -- text
-     <*> (T.take 100 <$> arbText)          -- textManLen
-     <*> arbitrary              -- bytes
-     <*> liftA2 (,) arbitrary arbText      -- bytesTextTuple
-     <*> (BS.take 100 <$> arbitrary)       -- bytesMaxLen
-     <*> arbitrary              -- int
-     <*> arbitrary              -- intList
-     <*> arbitrary              -- intMap
-     <*> arbitrary              -- double
-     <*> arbitrary              -- bool
-     <*> arbitrary              -- day
-     <*> arbitrary              -- pico
-     <*> (truncateTimeOfDay =<< arbitrary) -- time
-     <*> (truncateUTCTime   =<< arbitrary) -- utc
-     <*> (truncateTimeOfDay =<< arbitrary) -- timeFrac
-     <*> (truncateUTCTime   =<< arbitrary) -- utcFrac
-     <*> arbitrary              -- tinyint
-     <*> choose (-8, 7)         -- tinyint4
+    arbitrary =
+        DataTypeTable
+            <$> arbText -- text
+            <*> (T.take 100 <$> arbText) -- textManLen
+            <*> arbitrary -- bytes
+            <*> liftA2 (,) arbitrary arbText -- bytesTextTuple
+            <*> (BS.take 100 <$> arbitrary) -- bytesMaxLen
+            <*> arbitrary -- int
+            <*> arbitrary -- intList
+            <*> arbitrary -- intMap
+            <*> arbitrary -- double
+            <*> arbitrary -- bool
+            <*> arbitrary -- day
+            <*> arbitrary -- pico
+            <*> (truncateTimeOfDay =<< arbitrary) -- time
+            <*> (truncateUTCTime =<< arbitrary) -- utc
+            <*> (truncateTimeOfDay =<< arbitrary) -- timeFrac
+            <*> (truncateUTCTime =<< arbitrary) -- utcFrac
+            <*> arbitrary -- tinyint
+            <*> choose (-8, 7) -- tinyint4
 setup :: (HasCallStack, MonadUnliftIO m) => Migration -> ReaderT SqlBackend m ()
 setup migration = do
-  printMigration migration
-  _ <- runMigrationUnsafe migration
-  pure ()
+    printMigration migration
+    _ <- runMigrationUnsafe migration
+    pure ()
 
 main :: IO ()
 main = do
     runConn $ do
-        mapM_ setup
+        mapM_
+            setup
             [ PersistentTest.testMigrate
             , PersistentTest.noPrefixMigrate
             , PersistentTest.customPrefixMigrate
@@ -147,8 +158,8 @@ main = do
             , CustomPrimaryKeyReferenceTest.migration
             , MigrationColumnLengthTest.migration
             , TransactionLevelTest.migration
-            -- , LongIdentifierTest.migration
-            , ForeignKey.compositeMigrate
+            , -- , LongIdentifierTest.migration
+              ForeignKey.compositeMigrate
             ]
         PersistentTest.cleanDB
         ForeignKey.cleanDB
@@ -177,7 +188,7 @@ main = do
             , TestFn "tinyint" dataTypeTableTinyint
             , TestFn "tinyint4" dataTypeTableTinyint4
             ]
-            [ ("pico", dataTypeTablePico) ]
+            [("pico", dataTypeTablePico)]
             dataTypeTableDouble
         HtmlTest.specsWith
             db
@@ -191,8 +202,9 @@ main = do
         MaxLenTest.specsWith db
         Recursive.specsWith db
         SumTypeTest.specsWith db (Just (runMigrationSilent SumTypeTest.sumTypeMigrate))
-        MigrationOnlyTest.specsWith db
-            (Just $ do
+        MigrationOnlyTest.specsWith
+            db
+            ( Just $ do
                 void $ rawExecute "DROP TABLE IF EXISTS referencing;" []
                 void $ rawExecute "DROP TABLE IF EXISTS two_field;" []
                 void $ runMigrationSilent MigrationOnlyTest.migrateAll1
@@ -210,7 +222,9 @@ main = do
         ForeignKey.specsWith db
         MpsNoPrefixTest.specsWith db
         MpsCustomPrefixTest.specsWith db
-        EmptyEntityTest.specsWith db (Just (runMigrationSilent EmptyEntityTest.migration))
+        EmptyEntityTest.specsWith
+            db
+            (Just (runMigrationSilent EmptyEntityTest.migration))
         CompositeTest.specsWith db
         PersistUniqueTest.specsWith db
         CustomPersistFieldTest.specsWith db
@@ -224,12 +238,13 @@ main = do
         MigrationTest.specsWith db
         CustomConstraintTest.specs db
         -- TODO: implement automatic truncation for too long foreign keys, so we can run this test.
-        xdescribe "The migration for this test currently fails because of MySQL's 64 character limit for identifiers. See https://github.com/yesodweb/persistent/issues/1000 for details" $
-            LongIdentifierTest.specsWith db
+        xdescribe
+            "The migration for this test currently fails because of MySQL's 64 character limit for identifiers. See https://github.com/yesodweb/persistent/issues/1000 for details"
+            $ LongIdentifierTest.specsWith db
         GeneratedColumnTestSQL.specsWith db
         JSONTest.specs
 
-roundFn :: RealFrac a => a -> Integer
+roundFn :: (RealFrac a) => a -> Integer
 roundFn = round
 
 roundTime :: TimeOfDay -> TimeOfDay

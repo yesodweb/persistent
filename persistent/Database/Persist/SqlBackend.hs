@@ -5,14 +5,14 @@ module Database.Persist.SqlBackend
     ( -- * The type and construction
       SqlBackend
     , mkSqlBackend
-    , MkSqlBackendArgs(..)
+    , MkSqlBackendArgs (..)
     , SqlBackendHooks
     , emptySqlBackendHooks
-    -- * Utilities
 
-    -- $utilities
+      -- * Utilities
+      -- $utilities
 
-    -- ** SqlBackend Getters
+      -- ** SqlBackend Getters
     , getRDBMS
     , getEscapedFieldName
     , getEscapedRawName
@@ -21,7 +21,8 @@ module Database.Persist.SqlBackend
     , getConnUpsertSql
     , getConnVault
     , getConnHooks
-    -- ** SqlBackend Setters
+
+      -- ** SqlBackend Setters
     , setConnMaxParams
     , setConnRepsertManySql
     , setConnInsertManySql
@@ -30,21 +31,24 @@ module Database.Persist.SqlBackend
     , setConnVault
     , modifyConnVault
     , setConnHooks
-    -- ** SqlBackendHooks
+
+      -- ** SqlBackendHooks
     ) where
 
 import Control.Monad.Reader
 import Data.List.NonEmpty (NonEmpty)
 import Data.Text (Text)
 import Data.Vault.Strict (Vault)
-import Database.Persist.Class.PersistStore (BackendCompatible(..))
+import Database.Persist.Class.PersistStore (BackendCompatible (..))
 import Database.Persist.Names
 import Database.Persist.SqlBackend.Internal
 import qualified Database.Persist.SqlBackend.Internal as SqlBackend
-       (SqlBackend(..))
+    ( SqlBackend (..)
+    )
 import Database.Persist.SqlBackend.Internal.InsertSqlResult
 import Database.Persist.SqlBackend.Internal.MkSqlBackend as Mk
-       (MkSqlBackendArgs(..))
+    ( MkSqlBackendArgs (..)
+    )
 import Database.Persist.Types.Base
 
 -- $utilities
@@ -144,7 +148,7 @@ getConnUpsertSql = do
 --
 -- @since 2.13.3.0
 getConnVault
-    ::  (BackendCompatible SqlBackend backend, MonadReader backend m)
+    :: (BackendCompatible SqlBackend backend, MonadReader backend m)
     => m Vault
 getConnVault = do
     asks (SqlBackend.connVault . projectBackend)
@@ -153,7 +157,7 @@ getConnVault = do
 --
 -- @since 2.13.3.0
 getConnHooks
-    ::  (BackendCompatible SqlBackend backend, MonadReader backend m)
+    :: (BackendCompatible SqlBackend backend, MonadReader backend m)
     => m SqlBackendHooks
 getConnHooks = do
     asks (SqlBackend.connHooks . projectBackend)
@@ -168,7 +172,6 @@ getRDBMS
 getRDBMS = do
     asks (SqlBackend.connRDBMS . projectBackend)
 
-
 -- | Set the maximum parameters that may be issued in a given SQL query. This
 -- should be used only if the database backend have this limitation.
 --
@@ -178,7 +181,7 @@ setConnMaxParams
     -> SqlBackend
     -> SqlBackend
 setConnMaxParams i sb =
-    sb { connMaxParams = Just i }
+    sb{connMaxParams = Just i}
 
 -- | Set the 'connRepsertManySql' field on the 'SqlBackend'. This should only be
 -- set by the database backend library. If this is not set, a slow default will
@@ -190,7 +193,7 @@ setConnRepsertManySql
     -> SqlBackend
     -> SqlBackend
 setConnRepsertManySql mkQuery sb =
-    sb { connRepsertManySql = Just mkQuery }
+    sb{connRepsertManySql = Just mkQuery}
 
 -- | Set the 'connInsertManySql' field on the 'SqlBackend'. This should only be
 -- used by the database backend library to provide an efficient implementation
@@ -202,7 +205,7 @@ setConnInsertManySql
     -> SqlBackend
     -> SqlBackend
 setConnInsertManySql mkQuery sb =
-    sb { connInsertManySql = Just mkQuery }
+    sb{connInsertManySql = Just mkQuery}
 
 -- | Set the 'connUpsertSql' field on the 'SqlBackend'. This should only be used
 -- by the database backend library to provide an efficient implementation of
@@ -214,7 +217,7 @@ setConnUpsertSql
     -> SqlBackend
     -> SqlBackend
 setConnUpsertSql mkQuery sb =
-    sb { connUpsertSql = Just mkQuery }
+    sb{connUpsertSql = Just mkQuery}
 
 -- | Set the 'connPutManySql field on the 'SqlBackend'. This should only be used
 -- by the database backend library to provide an efficient implementation of
@@ -225,26 +228,26 @@ setConnPutManySql
     :: (EntityDef -> Int -> Text)
     -> SqlBackend
     -> SqlBackend
-setConnPutManySql  mkQuery sb =
-    sb { connPutManySql = Just mkQuery }
+setConnPutManySql mkQuery sb =
+    sb{connPutManySql = Just mkQuery}
 
 -- | Set the vault on the provided database backend.
 --
 -- @since 2.13.0
 setConnVault :: Vault -> SqlBackend -> SqlBackend
 setConnVault vault sb =
-    sb { connVault = vault }
+    sb{connVault = vault}
 
 -- | Modify the vault on the provided database backend.
 --
 -- @since 2.13.0
-modifyConnVault :: (Vault -> Vault) -> SqlBackend  -> SqlBackend
+modifyConnVault :: (Vault -> Vault) -> SqlBackend -> SqlBackend
 modifyConnVault f sb =
-    sb { connVault = f $ connVault sb }
+    sb{connVault = f $ connVault sb}
 
 -- | Set hooks on the provided database backend.
 --
 -- @since 2.13.0
 setConnHooks :: SqlBackendHooks -> SqlBackend -> SqlBackend
 setConnHooks hooks sb =
-    sb { connHooks = hooks }
+    sb{connHooks = hooks}

@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveLift #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -5,23 +6,22 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections #-}
-{-# LANGUAGE CPP #-}
 
 module Database.Persist.Quasi.Internal.ModelParser
     ( SourceLoc (..)
-    , Token (..)
-    , tokenContent
-    , anyToken
-    , ParsedEntityDef
-    , parsedEntityDefComments
-    , parsedEntityDefEntityName
-    , parsedEntityDefIsSum
-    , parsedEntityDefEntityAttributes
-    , parsedEntityDefFieldAttributes
-    , parsedEntityDefExtras
-    , parsedEntityDefSpan
+    , Attribute (..)
+    , attribute
+    , attributeContent
+    , Directive (..)
+    , directiveContent
+    , EntityField (..)
+    , entityField
+    , entityFieldContent
+    , FieldName (..)
+    , fieldName
+    , ParsedEntityDef (..)
     , parseSource
-    , memberBlockAttrs
+    , memberEntityFields
     , ParserWarning
     , parserWarningMessage
     , ParseResult
@@ -34,7 +34,7 @@ module Database.Persist.Quasi.Internal.ModelParser
     ) where
 
 import Control.Applicative (Alternative)
-import Control.Monad (MonadPlus, mzero, void)
+import Control.Monad (MonadPlus, void)
 import Control.Monad.Reader (MonadReader, ReaderT, asks, runReaderT)
 import Control.Monad.State
 import Control.Monad.Writer
@@ -42,7 +42,7 @@ import Data.Char (isSpace)
 import Data.Either (partitionEithers)
 import Data.Foldable (fold)
 import Data.Functor.Identity
-import Data.List (find, intercalate)
+import Data.List (intercalate)
 import Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.List.NonEmpty as NEL
 import qualified Data.Map as M
@@ -52,11 +52,12 @@ import qualified Data.Set as Set
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Data.Void
+import Database.Persist.Quasi.Internal.TypeParser
 import Database.Persist.Quasi.PersistSettings.Internal
 import Database.Persist.Types
 import Database.Persist.Types.SourceSpan
 import Language.Haskell.TH.Syntax (Lift)
-import Text.Megaparsec hiding (Token)
+import Text.Megaparsec
 import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
 import qualified Text.Megaparsec.Stream as TMS
@@ -101,6 +102,7 @@ newtype Parser a = Parser
         , MonadState ExtraState
         , MonadReader PersistSettings
         , MonadParsec Void String
+        , MonadFail
         )
 
 type EntityParseError = ParseErrorBundle String Void
@@ -211,19 +213,18 @@ tryOrWarn msg p l r = do
             else parseError err
 
 -- | Attempts to parse with a provided parser. If it fails with an error matching
--- the provided predicate, it registers a delayed error with the provided message and falls
+-- the provided predicate, it registers a delayed error and falls
 -- back to the second provided parser.
 --
 -- This is useful when registering errors in space consumers and other parsers that are called
 -- with `try`, since a non-delayed error in this context will cause backtracking and not
 -- get reported to the user.
 tryOrRegisterError
-    :: String
-    -> (ParseError String Void -> Bool)
+    :: (ParseError String Void -> Bool)
     -> Parser a
     -> Parser a
     -> Parser a
-tryOrRegisterError msg p l r = do
+tryOrRegisterError p l r = do
     parserState <- getParserState
     withRecovery (delayedError $ statePosState parserState) l
   where
@@ -244,7 +245,7 @@ tryOrReport
     -> Parser a
     -> Parser a
 tryOrReport level msg p l r = case level of
-    Just LevelError -> tryOrRegisterError msg p l r
+    Just LevelError -> tryOrRegisterError p l r
     Just LevelWarning -> tryOrWarn msg p l r
     Nothing -> r
 
@@ -258,36 +259,112 @@ data SourceLoc = SourceLoc
     }
     deriving (Show, Lift)
 
--- @since 2.16.0.0
-data Token
-    = Quotation Text
-    | Equality Text Text
+-- | An attribute of an entity field definition or a directive.
+--
+-- @since 2.17.1.0
+data Attribute
+    = Assignment Text Text
     | Parenthetical Text
-    | BlockKey Text
     | PText Text
+    | -- | Quoted field attributes are deprecated since 2.17.1.0.
+      Quotation Text
     deriving (Eq, Ord, Show)
 
+-- | The name of an entity block or extra block.
+--
+-- @since 2.17.1.0
+newtype BlockKey = BlockKey Text
+    deriving (Show)
+
+-- | A parsed comment or doc comment.
+--
 -- @since 2.16.0.0
 data CommentToken
     = DocComment Text
     | Comment Text
     deriving (Eq, Ord, Show)
 
--- | Converts a token into a Text representation for second-stage parsing or presentation to the user
+-- | Converts an attribute into a Text representation for second-stage parsing or
+-- presentation to the user
 --
 -- @since 2.16.0.0
-tokenContent :: Token -> Text
-tokenContent = \case
-    Quotation s -> s
-    Equality l r -> mconcat [l, "=", r]
+attributeContent :: Attribute -> Text
+attributeContent = \case
+    Assignment l r -> mconcat [l, "=", r]
     Parenthetical s -> s
     PText s -> s
-    BlockKey s -> s
+    Quotation s -> s
+
+-- | Converts a directive into a Text representation for second-stage parsing or
+-- presentation to the user
+--
+-- @since 2.17.1.0
+directiveContent :: Directive -> [Text]
+directiveContent d =
+    [directiveNameContent $ directiveName d]
+        <> (attributeContent <$> directiveAttributes d)
+
+entityFieldContent :: EntityField -> [Text]
+entityFieldContent f =
+    [ fieldNameAndStrictnessAsText f
+    , (typeExprContent . entityFieldType) f
+    ]
+        ++ fmap attributeContent (entityFieldAttributes f)
+
+blockKeyContent :: BlockKey -> Text
+blockKeyContent (BlockKey t) = t
+
+directiveNameContent :: DirectiveName -> Text
+directiveNameContent (DirectiveName t) = t
+
+-- | Generates the field name of an EntityField, accompanied by
+-- its strictness sigil, if one is present.
+-- This is only needed temporarily, and can eventually be refactored away.
+--
+-- @since 2.17.1.0
+fieldNameAndStrictnessAsText :: EntityField -> Text
+fieldNameAndStrictnessAsText f =
+    let
+        s = case entityFieldStrictness f of
+            Just Strict -> "!"
+            Just Lazy -> "~"
+            Nothing -> ""
+        (FieldName fn) = entityFieldName f
+     in
+        s <> fn
 
 commentContent :: CommentToken -> Text
 commentContent = \case
     Comment s -> s
     DocComment s -> s
+
+quotedAttributeErrorMessage :: String
+quotedAttributeErrorMessage = "Unexpected quotation mark in field or directive attribute"
+
+attribute :: Parser Attribute
+attribute = do
+    quotedFieldAttributeErrorLevel <- asks psQuotedArgumentErrorLevel
+    tryOrReport
+        quotedFieldAttributeErrorLevel
+        "Quoted field attributes are deprecated since 2.17.1.0, and will be removed in or after 2.18.0.0"
+        isQuotedAttributeError
+        attribute'
+        (Quotation . Text.pack <$> quotation)
+  where
+    isQuotedAttributeError (FancyError _ s) = s == Set.singleton (ErrorFail quotedAttributeErrorMessage)
+    isQuotedAttributeError _ = False
+
+attribute' :: Parser Attribute
+attribute' = do
+    q <- lookAhead (optional $ char '"')
+    case q of
+        Just _ -> fail quotedAttributeErrorMessage
+        Nothing ->
+            choice
+                [ try assignment
+                , parenthetical
+                , ptext
+                ]
 
 docComment :: Parser (SourcePos, CommentToken)
 docComment = do
@@ -365,6 +442,9 @@ spaceConsumerN =
         skipComment
         empty
 
+-- This catch-all character class is used in a variety of places, and includes characters
+-- which have syntactic function. As we continue to iterate on the parser, we may want to consider
+-- shrinking or eliminating `contentChar`.
 contentChar :: Parser Char
 contentChar =
     choice
@@ -408,23 +488,28 @@ charLiteral = label "literal character" $ do
                 _ -> unexpected (Tokens $ char2 :| [])
         _ -> pure char1
 
-equality :: Parser Token
-equality = label "equality expression" $ do
+assignment :: Parser Attribute
+assignment = label "assignment expression" $ do
     L.lexeme spaceConsumer $ do
         lhs <- some contentChar
         _ <- char '='
         rhs <-
             choice
-                [ quotation'
+                [ quotation
                 , sqlLiteral
                 , parentheticalInner
+                , try sqlFunctionApplication
                 , some $ contentChar <|> char '(' <|> char ')'
                 ]
-        pure $ Equality (Text.pack lhs) (Text.pack rhs)
+        pure $ Assignment (Text.pack lhs) (Text.pack rhs)
   where
     parentheticalInner = do
         str <- parenthetical'
         pure . init . drop 1 $ str
+    sqlFunctionApplication = do
+        fn <- some contentChar
+        argString <- parentheticalInner
+        pure $ mconcat [fn, "(", argString, ")"]
 
 sqlTypeName :: Parser String
 sqlTypeName =
@@ -449,15 +534,10 @@ sqlLiteral = label "SQL literal" $ do
             , fromMaybe "" st
             ]
 
-quotation :: Parser Token
-quotation = label "quotation" $ do
-    str <- L.lexeme spaceConsumer quotation'
-    pure . Quotation $ Text.pack str
+quotation :: Parser String
+quotation = char '"' *> manyTill charLiteral (char '"')
 
-quotation' :: Parser String
-quotation' = char '"' *> manyTill charLiteral (char '"')
-
-parenthetical :: Parser Token
+parenthetical :: Parser Attribute
 parenthetical = label "parenthetical" $ do
     str <- L.lexeme spaceConsumer parenthetical'
     pure . Parenthetical . Text.pack . init . drop 1 $ str
@@ -470,33 +550,41 @@ parenthetical' = do
     q = mconcat <$> some (c <|> parenthetical')
     c = (: []) <$> choice [contentChar, nonLineSpaceChar, char '"']
 
-blockKey :: Parser Token
+blockKey :: Parser BlockKey
 blockKey = label "block key" $ do
     fl <- upperChar
     rl <- many alphaNumChar
     pure . BlockKey . Text.pack $ fl : rl
 
-ptext :: Parser Token
-ptext = label "plain token" $ do
+fieldStrictness :: Parser FieldStrictness
+fieldStrictness =
+    label "strictness sigil" $
+        (Strict <$ char '!') <|> (Lazy <$ char '~')
+
+fieldName :: Parser FieldName
+fieldName = label "field name" $ do
+    fl <- lowerChar
+    rl <- many fieldNameChar
+    pure . FieldName . Text.pack $ fl : rl
+  where
+    fieldNameChar =
+        choice
+            [ alphaNumChar
+            , char '_'
+            ]
+
+ptext :: Parser Attribute
+ptext = label "plain attribute" $ do
     str <- L.lexeme spaceConsumer $ some contentChar
     pure . PText . Text.pack $ str
-
--- @since 2.16.0.0
-anyToken :: Parser Token
-anyToken =
-    choice
-        [ try equality
-        , quotation
-        , parenthetical
-        , ptext
-        ]
 
 data ParsedEntityDef = ParsedEntityDef
     { parsedEntityDefComments :: [Text]
     , parsedEntityDefEntityName :: EntityNameHS
     , parsedEntityDefIsSum :: Bool
-    , parsedEntityDefEntityAttributes :: [Attr]
-    , parsedEntityDefFieldAttributes :: [([Token], Maybe Text)]
+    , parsedEntityDefEntityAttributes :: [Attribute]
+    , parsedEntityDefFields :: [(EntityField, Maybe Text)]
+    , parsedEntityDefDirectives :: [(Directive, Maybe Text)]
     , parsedEntityDefExtras :: M.Map Text [ExtraLine]
     , parsedEntityDefSpan :: Maybe SourceSpan
     }
@@ -511,7 +599,7 @@ data DocCommentBlock = DocCommentBlock
 data EntityHeader = EntityHeader
     { entityHeaderSum :: Bool
     , entityHeaderTableName :: Text
-    , entityHeaderRemainingTokens :: [Token]
+    , entityHeaderRemainingAttributes :: [Attribute]
     , entityHeaderPos :: SourcePos
     }
     deriving (Show)
@@ -531,23 +619,33 @@ entityBlockLastPos eb = case entityBlockMembers eb of
     [] -> entityBlockFirstPos eb
     members -> maximum $ fmap memberEndPos members
 
-entityBlockBlockAttrs :: EntityBlock -> [BlockAttr]
-entityBlockBlockAttrs = foldMap f <$> entityBlockMembers
+entityBlockEntityFields :: EntityBlock -> [EntityField]
+entityBlockEntityFields = foldMap f <$> entityBlockMembers
   where
     f m = case m of
         MemberExtraBlock _ -> []
-        MemberBlockAttr ba -> [ba]
+        MemberEntityField ba -> [ba]
+        MemberDirective _ -> []
 
 entityBlockExtraBlocks :: EntityBlock -> [ExtraBlock]
 entityBlockExtraBlocks = foldMap f <$> entityBlockMembers
   where
     f m = case m of
         MemberExtraBlock eb -> [eb]
-        MemberBlockAttr _ -> []
+        MemberEntityField _ -> []
+        MemberDirective _ -> []
+
+entityBlockDirectives :: EntityBlock -> [Directive]
+entityBlockDirectives = foldMap f <$> entityBlockMembers
+  where
+    f m = case m of
+        MemberExtraBlock _ -> []
+        MemberEntityField _ -> []
+        MemberDirective bd -> [bd]
 
 data ExtraBlockHeader = ExtraBlockHeader
     { extraBlockHeaderKey :: Text
-    , extraBlockHeaderRemainingTokens :: [Token]
+    , extraBlockHeaderRemainingAttributes :: [Attribute]
     , extraBlockHeaderPos :: SourcePos
     }
     deriving (Show)
@@ -555,53 +653,86 @@ data ExtraBlockHeader = ExtraBlockHeader
 data ExtraBlock = ExtraBlock
     { extraBlockDocCommentBlock :: Maybe DocCommentBlock
     , extraBlockExtraBlockHeader :: ExtraBlockHeader
-    , extraBlockMembers :: NonEmpty Member
+    , extraBlockLines :: NonEmpty ExtraBlockLine
     }
     deriving (Show)
 
-data BlockAttr = BlockAttr
-    { blockAttrDocCommentBlock :: Maybe DocCommentBlock
-    , blockAttrTokens :: [Token]
-    , blockAttrPos :: SourcePos
+data FieldStrictness = Strict | Lazy
+    deriving (Show)
+
+newtype FieldName = FieldName Text
+    deriving (Show, Eq)
+
+newtype DirectiveName = DirectiveName Text
+    deriving (Show, Eq)
+
+data EntityField = EntityField
+    { entityFieldDocCommentBlock :: Maybe DocCommentBlock
+    , entityFieldStrictness :: Maybe FieldStrictness
+    , entityFieldName :: FieldName
+    , entityFieldType :: TypeExpr
+    , entityFieldAttributes :: [Attribute]
+    , entityFieldPos :: SourcePos
     }
     deriving (Show)
 
-data Member = MemberExtraBlock ExtraBlock | MemberBlockAttr BlockAttr
+data Directive = Directive
+    { directiveDocCommentBlock :: Maybe DocCommentBlock
+    , directiveName :: DirectiveName
+    , directiveAttributes :: [Attribute]
+    , directivePos :: SourcePos
+    }
+    deriving (Show)
+
+data Member
+    = MemberExtraBlock ExtraBlock
+    | MemberEntityField EntityField
+    | MemberDirective Directive
+    deriving (Show)
+
+data ExtraBlockLine = ExtraBlockLine
+    { extraBlockLineDocCommentBlock :: Maybe DocCommentBlock
+    , extraBlockLineTokens :: [String]
+    , extraBlockLinePos :: SourcePos
+    }
     deriving (Show)
 
 -- | The source position at the beginning of the member's final line.
 memberEndPos :: Member -> SourcePos
-memberEndPos (MemberBlockAttr fs) = blockAttrPos fs
-memberEndPos (MemberExtraBlock ex) = memberEndPos . NEL.last . extraBlockMembers $ ex
+memberEndPos (MemberEntityField fs) = entityFieldPos fs
+memberEndPos (MemberDirective d) = directivePos d
+memberEndPos (MemberExtraBlock ex) = extraBlockLinePos . NEL.last . extraBlockLines $ ex
 
--- | Represents an entity member as a list of BlockAttrs
+-- | Represents an entity member as a list of EntityFields
 --
 -- @since 2.16.0.0
-memberBlockAttrs :: Member -> [BlockAttr]
-memberBlockAttrs (MemberBlockAttr fs) = [fs]
-memberBlockAttrs (MemberExtraBlock ex) = foldMap memberBlockAttrs . extraBlockMembers $ ex
+memberEntityFields :: Member -> [EntityField]
+memberEntityFields (MemberEntityField fs) = [fs]
+memberEntityFields (MemberDirective _) = []
+memberEntityFields (MemberExtraBlock _) = []
 
 extraBlocksAsMap :: [ExtraBlock] -> M.Map Text [ExtraLine]
 extraBlocksAsMap exs = M.fromList $ fmap asPair exs
   where
     asPair ex =
-        (extraBlockHeaderKey . extraBlockExtraBlockHeader $ ex, extraLines ex)
-    extraLines ex = foldMap asExtraLine (extraBlockMembers ex)
-    asExtraLine (MemberBlockAttr fs) = [tokenContent <$> blockAttrTokens fs]
-    asExtraLine _ = []
+        ( extraBlockHeaderKey . extraBlockExtraBlockHeader $ ex
+        , NEL.toList (extraLines ex)
+        )
+    extraLines :: ExtraBlock -> NonEmpty [Text]
+    extraLines ex = fmap Text.pack . extraBlockLineTokens <$> extraBlockLines ex
 
 entityHeader :: Parser EntityHeader
 entityHeader = do
     pos <- getSourcePos
     plus <- optional (char '+')
     en <- validHSpace *> L.lexeme spaceConsumer blockKey
-    rest <- L.lexeme spaceConsumer (many anyToken)
+    rest <- L.lexeme spaceConsumer (many attribute)
     _ <- setLastDocumentablePosition
     pure
         EntityHeader
             { entityHeaderSum = isJust plus
-            , entityHeaderTableName = tokenContent en
-            , entityHeaderRemainingTokens = rest
+            , entityHeaderTableName = blockKeyContent en
+            , entityHeaderRemainingAttributes = rest
             , entityHeaderPos = pos
             }
 
@@ -627,7 +758,7 @@ getDcb = do
     let
         candidates = dropWhile (\(_sp, ct) -> not (isDocComment ct)) comments
         filteredCandidates = dropWhile (commentIsIncorrectlyPositioned es) candidates
-    pure $ docCommentBlockFromPositionedTokens filteredCandidates
+    pure $ docCommentBlockFromPositionedAttributes filteredCandidates
   where
     commentIsIncorrectlyPositioned
         :: ExtraState -> (SourcePos, CommentToken) -> Bool
@@ -638,51 +769,110 @@ getDcb = do
 extraBlock :: Parser Member
 extraBlock = L.indentBlock spaceConsumerN innerParser
   where
-    mkExtraBlockMember dcb (header, blockAttrs) =
+    mkExtraBlockMember dcb (header, extraBlockLines) =
         MemberExtraBlock
             ExtraBlock
                 { extraBlockExtraBlockHeader = header
-                , extraBlockMembers = ensureNonEmpty blockAttrs
+                , extraBlockLines = ensureNonEmpty extraBlockLines
                 , extraBlockDocCommentBlock = dcb
                 }
-    ensureNonEmpty members = case NEL.nonEmpty members of
+    ensureNonEmpty lines = case NEL.nonEmpty lines of
         Just nel -> nel
-        Nothing -> error "unreachable" -- members is known to be non-empty
+        Nothing -> error "unreachable" -- lines is known to be non-empty
     innerParser = do
         dcb <- getDcb
         header <- extraBlockHeader
         pure $
-            L.IndentSome Nothing (return . mkExtraBlockMember dcb . (header,)) blockAttr
+            L.IndentSome
+                Nothing
+                (return . mkExtraBlockMember dcb . (header,))
+                extraBlockLine
 
 extraBlockHeader :: Parser ExtraBlockHeader
 extraBlockHeader = do
     pos <- getSourcePos
     tn <- L.lexeme spaceConsumer blockKey
-    rest <- L.lexeme spaceConsumer (many anyToken)
+    rest <- L.lexeme spaceConsumer (many attribute)
     _ <- setLastDocumentablePosition
     pure $
         ExtraBlockHeader
-            { extraBlockHeaderKey = tokenContent tn
-            , extraBlockHeaderRemainingTokens = rest
+            { extraBlockHeaderKey = blockKeyContent tn
+            , extraBlockHeaderRemainingAttributes = rest
             , extraBlockHeaderPos = pos
             }
 
-blockAttr :: Parser Member
-blockAttr = do
+extraBlockLine :: Parser ExtraBlockLine
+extraBlockLine = do
     dcb <- getDcb
     pos <- getSourcePos
-    line <- some anyToken
+    tokens <- some $ L.lexeme spaceConsumer (some contentChar)
     _ <- setLastDocumentablePosition
     pure $
-        MemberBlockAttr
-            BlockAttr
-                { blockAttrDocCommentBlock = dcb
-                , blockAttrTokens = line
-                , blockAttrPos = pos
+        ExtraBlockLine
+            { extraBlockLineDocCommentBlock = dcb
+            , extraBlockLineTokens = tokens
+            , extraBlockLinePos = pos
+            }
+
+entityField :: Parser Member
+entityField = do
+    dcb <- getDcb
+    pos <- getSourcePos
+    ss <- optional fieldStrictness
+    fn <- L.lexeme spaceConsumer fieldName
+    ft <- L.lexeme spaceConsumer typeExpr -- Note that `typeExpr` consumes outer parentheses.
+    fa <- L.lexeme spaceConsumer (many attribute)
+    _ <- setLastDocumentablePosition
+    lookAhead (void newline <|> eof)
+    pure $
+        MemberEntityField
+            EntityField
+                { entityFieldDocCommentBlock = dcb
+                , entityFieldStrictness = ss
+                , entityFieldName = fn
+                , entityFieldType = ft
+                , entityFieldAttributes = fa
+                , entityFieldPos = pos
+                }
+
+directiveNameP :: Parser DirectiveName
+directiveNameP =
+    label "directive name" $
+        DirectiveName . Text.pack
+            <$> choice
+                [ string "deriving"
+                , directiveName'
+                ]
+  where
+    directiveName' = do
+        fl <- upperChar
+        rl <- many alphaNumChar
+        pure (fl : rl)
+
+directive :: Parser Member
+directive = do
+    dcb <- getDcb
+    pos <- getSourcePos
+    dn <- L.lexeme spaceConsumer directiveNameP
+    args <- many $ L.lexeme spaceConsumer attribute
+    _ <- setLastDocumentablePosition
+    lookAhead (void newline <|> eof)
+    pure $
+        MemberDirective
+            Directive
+                { directiveDocCommentBlock = dcb
+                , directiveName = dn
+                , directiveAttributes = args
+                , directivePos = pos
                 }
 
 member :: Parser Member
-member = try extraBlock <|> blockAttr
+member =
+    choice
+        [ try extraBlock
+        , directive
+        , entityField
+        ]
 
 entityBlock :: Parser EntityBlock
 entityBlock = do
@@ -710,9 +900,9 @@ isDocComment tok = case tok of
     DocComment _ -> True
     _ -> False
 
-docCommentBlockFromPositionedTokens
+docCommentBlockFromPositionedAttributes
     :: [(SourcePos, CommentToken)] -> Maybe DocCommentBlock
-docCommentBlockFromPositionedTokens ptoks =
+docCommentBlockFromPositionedAttributes ptoks =
     case NEL.nonEmpty ptoks of
         Nothing -> Nothing
         Just nel ->
@@ -744,7 +934,8 @@ toParsedEntityDef mSourceLoc eb =
         , parsedEntityDefEntityName = entityNameHS
         , parsedEntityDefIsSum = isSum
         , parsedEntityDefEntityAttributes = entityAttributes
-        , parsedEntityDefFieldAttributes = parsedFieldAttributes
+        , parsedEntityDefFields = parsedFields
+        , parsedEntityDefDirectives = parsedDirectives
         , parsedEntityDefExtras = extras
         , parsedEntityDefSpan = mSpan
         }
@@ -754,13 +945,15 @@ toParsedEntityDef mSourceLoc eb =
             []
             docCommentBlockLines
             (entityBlockDocCommentBlock eb)
-    entityAttributes =
-        tokenContent <$> (entityHeaderRemainingTokens . entityBlockEntityHeader) eb
+    entityAttributes = entityHeaderRemainingAttributes . entityBlockEntityHeader $ eb
     isSum = entityHeaderSum . entityBlockEntityHeader $ eb
     entityNameHS = EntityNameHS . entityHeaderTableName . entityBlockEntityHeader $ eb
 
-    attributePair a = (blockAttrTokens a, docCommentBlockText <$> blockAttrDocCommentBlock a)
-    parsedFieldAttributes = fmap attributePair (entityBlockBlockAttrs eb)
+    fieldPair a = (a, docCommentBlockText <$> entityFieldDocCommentBlock a)
+    parsedFields = fmap fieldPair (entityBlockEntityFields eb)
+
+    directivePair d = (d, docCommentBlockText <$> directiveDocCommentBlock d)
+    parsedDirectives = fmap directivePair (entityBlockDirectives eb)
 
     extras = extraBlocksAsMap (entityBlockExtraBlocks eb)
     filepath = maybe "" locFile mSourceLoc

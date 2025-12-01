@@ -18,7 +18,6 @@ module Database.Persist.TH.SumSpec where
 
 import TemplateTestImports
 
-
 import Database.Persist.TH.MultiBlockSpec.Model
 
 share
@@ -40,4 +39,3 @@ Lamp
 spec :: Spec
 spec = do
     it "should warn" True
-

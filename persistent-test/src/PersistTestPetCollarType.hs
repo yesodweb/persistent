@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveGeneric #-}
+
 module PersistTestPetCollarType where
 
 import Data.Aeson

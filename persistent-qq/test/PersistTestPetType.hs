@@ -1,4 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
+
 module PersistTestPetType where
 
 import Database.Persist.TH

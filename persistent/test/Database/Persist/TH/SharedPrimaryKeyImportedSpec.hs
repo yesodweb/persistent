@@ -1,32 +1,37 @@
-{-# LANGUAGE TypeApplications, DeriveGeneric #-}
-{-# LANGUAGE DataKinds, ExistentialQuantification #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE StandaloneDeriving #-}
 
 module Database.Persist.TH.SharedPrimaryKeyImportedSpec where
 
 import TemplateTestImports
 
+import Control.Monad.IO.Class
 import Data.Proxy
-import Test.Hspec
 import Database.Persist
 import Database.Persist.Sql
 import Database.Persist.Sql.Util
 import Database.Persist.TH
 import Language.Haskell.TH
-import Control.Monad.IO.Class
+import Test.Hspec
 
 import Database.Persist.TH.SharedPrimaryKeySpec (User, UserId)
 
-mkPersistWith sqlSettings $(discoverEntities) [persistLowerCase|
+mkPersistWith
+    sqlSettings
+    $(discoverEntities)
+    [persistLowerCase|
 
 ProfileX
     Id      UserId
@@ -39,17 +44,15 @@ ProfileX
 -- module.
 spec :: Spec
 spec = describe "Shared Primary Keys Imported" $ do
-
     describe "PersistFieldSql" $ do
         it "should match underlying key" $ do
             sqlType (Proxy @UserId)
-                `shouldBe`
-                    sqlType (Proxy @ProfileXId)
+                `shouldBe` sqlType (Proxy @ProfileXId)
 
     describe "getEntityId FieldDef" $ do
         it "should match underlying primary key" $ do
             let
-                getSqlType :: PersistEntity a => Proxy a -> SqlType
+                getSqlType :: (PersistEntity a) => Proxy a -> SqlType
                 getSqlType p =
                     case getEntityId (entityDef p) of
                         EntityIdField fd ->
@@ -57,9 +60,7 @@ spec = describe "Shared Primary Keys Imported" $ do
                         _ ->
                             SqlOther "Composite Key"
             getSqlType (Proxy @User)
-                `shouldBe`
-                    getSqlType (Proxy @ProfileX)
-
+                `shouldBe` getSqlType (Proxy @ProfileX)
 
     describe "foreign reference should work" $ do
         it "should have a foreign reference" $ do
@@ -68,5 +69,4 @@ spec = describe "Shared Primary Keys Imported" $ do
                 Just fd =
                     getEntityIdField (entityDef (Proxy @ProfileX))
             fieldReference fd
-                `shouldBe`
-                    ForeignRef (EntityNameHS "User")
+                `shouldBe` ForeignRef (EntityNameHS "User")

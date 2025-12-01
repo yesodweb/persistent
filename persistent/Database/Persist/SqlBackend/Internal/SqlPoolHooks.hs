@@ -1,6 +1,7 @@
 module Database.Persist.SqlBackend.Internal.SqlPoolHooks
-  ( SqlPoolHooks(..)
-  ) where
+    ( SqlPoolHooks (..)
+    ) where
+
 import Control.Exception (SomeException)
 import Database.Persist.SqlBackend.Internal.IsolationLevel
 

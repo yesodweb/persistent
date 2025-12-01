@@ -1,7 +1,7 @@
 module Database.Persist.SqlBackend.Internal.InsertSqlResult where
 
-import Database.Persist.Types.Base (PersistValue)
 import Data.Text (Text)
+import Database.Persist.Types.Base (PersistValue)
 
 data InsertSqlResult
     = ISRSingle Text
