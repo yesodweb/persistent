@@ -1073,7 +1073,7 @@ getColumn
         parseCascade txt =
             case txt of
                 "NO ACTION" ->
-                    Nothing
+                    Just NoAction
                 "CASCADE" ->
                     Just Cascade
                 "SET NULL" ->
