@@ -1,6 +1,6 @@
 # Changelog for persistent-mysql
 
-##  2.13.2.0
+##  2.14.0.0
 
 * [#1610](https://github.com/yesodweb/persistent/pull/1610)
     * Added `NoAction` as a `CascadeAction` 
