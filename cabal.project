@@ -18,6 +18,7 @@ allow-newer:
     , postgresql-simple:base
     , postgresql-simple:template-haskell
     , bytestring-lexing:base
+    , postgresql-simple-interval:persistent
 
 source-repository-package
     type: git
