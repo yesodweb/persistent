@@ -620,7 +620,7 @@ renderFieldCascade (FieldCascade onUpdate onDelete) =
 -- change.
 --
 -- @since 2.11.0
-data CascadeAction = Cascade | Restrict | SetNull | SetDefault
+data CascadeAction = Cascade | Restrict | SetNull | SetDefault | NoAction
     deriving (Show, Eq, Read, Ord, Lift)
 
 -- | Render a 'CascadeAction' to 'Text' such that it can be used in a SQL
@@ -633,6 +633,7 @@ renderCascadeAction action = case action of
     Restrict -> "RESTRICT"
     SetNull -> "SET NULL"
     SetDefault -> "SET DEFAULT"
+    NoAction -> "NO ACTION"
 
 data PersistException
     = -- | Generic Exception

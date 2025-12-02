@@ -1,5 +1,10 @@
 # Changelog for persistent
 
+# 2.18.0.0
+
+* [#1610](https://github.com/yesodweb/persistent/pull/1610)
+  * Added `NoAction` as a `CascadeAction` 
+
 # 2.17.1.0
 
 * [#1601](https://github.com/yesodweb/persistent/pull/1601)

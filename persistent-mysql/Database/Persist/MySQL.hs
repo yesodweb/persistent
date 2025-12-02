@@ -854,7 +854,7 @@ getColumn
                         "CASCADE" -> Just Cascade
                         "SET NULL" -> Just SetNull
                         "SET DEFAULT" -> Just SetDefault
-                        "NO ACTION" -> Nothing
+                        "NO ACTION" -> Just NoAction
                         _ ->
                             error $ "Unexpected value in parseCascadeAction: " <> show txt
 
@@ -1506,7 +1506,9 @@ data HandleUpdateCollision record where
     -- | Only copy the field if it is not equal to the provided value.
     CopyUnlessEq
         :: (PersistField typ)
-        => EntityField record typ -> typ -> HandleUpdateCollision record
+        => EntityField record typ
+        -> typ
+        -> HandleUpdateCollision record
 
 -- | Copy the field into the database only if the value in the
 -- corresponding record is non-@NULL@.
@@ -1514,7 +1516,8 @@ data HandleUpdateCollision record where
 -- @since  2.6.2
 copyUnlessNull
     :: (PersistField typ)
-    => EntityField record (Maybe typ) -> HandleUpdateCollision record
+    => EntityField record (Maybe typ)
+    -> HandleUpdateCollision record
 copyUnlessNull field = CopyUnlessEq field Nothing
 
 -- | Copy the field into the database only if the value in the
@@ -1527,7 +1530,8 @@ copyUnlessNull field = CopyUnlessEq field Nothing
 -- @since  2.6.2
 copyUnlessEmpty
     :: (Monoid.Monoid typ, PersistField typ)
-    => EntityField record typ -> HandleUpdateCollision record
+    => EntityField record typ
+    -> HandleUpdateCollision record
 copyUnlessEmpty field = CopyUnlessEq field Monoid.mempty
 
 -- | Copy the field into the database only if the field is not equal to the
@@ -1540,7 +1544,9 @@ copyUnlessEmpty field = CopyUnlessEq field Monoid.mempty
 -- @since  2.6.2
 copyUnlessEq
     :: (PersistField typ)
-    => EntityField record typ -> typ -> HandleUpdateCollision record
+    => EntityField record typ
+    -> typ
+    -> HandleUpdateCollision record
 copyUnlessEq = CopyUnlessEq
 
 -- | Copy the field directly from the record.

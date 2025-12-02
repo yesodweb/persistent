@@ -1,5 +1,10 @@
 # Changelog for persistent-postgresql
 
+# 2.14.0.1
+
+* [#1610](https://github.com/yesodweb/persistent/pull/1610)
+  * Update suggested migrations to handle `NoAction` as a `CascadeAction`  
+
 ## 2.14.0.0
 
 * [#1604](https://github.com/yesodweb/persistent/pull/1604)
