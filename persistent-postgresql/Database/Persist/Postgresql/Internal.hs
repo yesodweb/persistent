@@ -910,6 +910,9 @@ getColumns
     -> EntityDef
     -> [Column]
     -> IO [Either Text (Either Column (ConstraintNameDB, [FieldNameDB]))]
+    -- ^ Left Text: error
+    -- Right (Left Column): a column
+    -- Right (Right ...): a constraint
 getColumns getter def cols = do
     let
         sqlv =

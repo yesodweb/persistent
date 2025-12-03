@@ -41,6 +41,7 @@ library
   exposed-modules:
     Database.Persist.Postgresql
     Database.Persist.Postgresql.Internal
+    Database.Persist.Postgresql.Internal.Migration
     Database.Persist.Postgresql.JSON
 
   ghc-options:      -Wall
