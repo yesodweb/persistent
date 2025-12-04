@@ -62,6 +62,7 @@ test-suite test
     ImplicitUuidSpec
     JSONTest
     MigrationReferenceSpec
+    MigrationSpec
     PgInit
     PgIntervalTest
     UpsertWhere

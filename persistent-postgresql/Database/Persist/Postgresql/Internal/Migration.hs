@@ -17,6 +17,7 @@ import Data.Either (partitionEithers)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe
+import qualified Data.Set as Set
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
@@ -33,9 +34,17 @@ import Database.Persist.Sql
 newtype SchemaState = SchemaState (Map EntityNameDB EntitySchemaState)
     deriving (Eq, Show)
 
--- | The state of a particular entity in the database; we generate migrations
--- based on the diff of this versus an EntityDef.
-data EntitySchemaState = EntitySchemaState
+-- | The state of a particular entity (i.e. table) in the database; we generate
+-- migrations based on the diff of this versus an EntityDef.
+data EntitySchemaState
+    = -- | The table does not exist in the database
+      EntityDoesNotExist
+    | -- | The table does exist in the database
+      EntityExists ExistingEntitySchemaState
+    deriving (Eq, Show)
+
+-- | Information about an existing table in the database
+data ExistingEntitySchemaState = ExistingEntitySchemaState
     { essColumns :: [Column]
     -- ^ The columns in this entity
     , essConstraints :: Map ConstraintNameDB [FieldNameDB]
@@ -46,35 +55,51 @@ data EntitySchemaState = EntitySchemaState
     deriving (Eq, Show)
 
 -- | Query a database in order to assemble a SchemaState containing information
--- about each of the entities in the given list.
+-- about each of the entities in the given list. Every entity name in the input
+-- should be present in the returned Map.
 collectSchemaState
     :: (Text -> IO Statement) -> [EntityNameDB] -> IO (Either Text SchemaState)
 collectSchemaState getStmt entityNames = runExceptT $ do
+    existence <- getTableExistence getStmt entityNames
     columns <- getColumnsWithoutReferences getStmt entityNames
     constraints <- getConstraints getStmt entityNames
     foreignKeyReferences <- getForeignKeyReferences getStmt entityNames
 
     fmap (SchemaState . Map.fromList) $
         for entityNames $ \entityNameDB -> do
-            let
-                addColumnReference column =
-                    column
-                        { cReference = Map.lookup (cName column) =<< Map.lookup entityNameDB foreignKeyReferences
-                        }
-
-            essColumns <- case Map.lookup entityNameDB columns of
-                Just cols ->
-                    pure (map addColumnReference cols)
+            tableExists <- case Map.lookup entityNameDB existence of
+                Just e -> pure e
                 Nothing ->
                     throwError
-                        ("Missing entity name from columns map: " <> unEntityNameDB entityNameDB)
+                        ("Missing entity name from existence map: " <> unEntityNameDB entityNameDB)
 
-            let
-                essConstraints = fromMaybe Map.empty (Map.lookup entityNameDB constraints)
-            pure
-                ( entityNameDB
-                , EntitySchemaState{essColumns, essConstraints}
-                )
+            if tableExists
+                then do
+                    let
+                        addColumnReference column =
+                            column
+                                { cReference =
+                                    Map.lookup (cName column) =<< Map.lookup entityNameDB foreignKeyReferences
+                                }
+
+                    essColumns <- case Map.lookup entityNameDB columns of
+                        Just cols ->
+                            pure (map addColumnReference cols)
+                        Nothing ->
+                            throwError
+                                ("Missing entity name from columns map: " <> unEntityNameDB entityNameDB)
+
+                    let
+                        essConstraints = fromMaybe Map.empty (Map.lookup entityNameDB constraints)
+                    pure
+                        ( entityNameDB
+                        , EntityExists $ ExistingEntitySchemaState{essColumns, essConstraints}
+                        )
+                else
+                    pure
+                        ( entityNameDB
+                        , EntityDoesNotExist
+                        )
 
 runStmt
     :: (Show a)
@@ -90,6 +115,44 @@ runStmt getStmt sql values process = do
             (stmtQuery stmt values)
             (\src -> runConduit $ src .| CL.map process .| CL.consume)
     pure results
+
+-- | Check for the existence of each of the input tables. The keys in the
+-- returned Map are exactly the entity names in the argument; True means the
+-- table exists.
+getTableExistence
+    :: (Text -> IO Statement)
+    -> [EntityNameDB]
+    -> ExceptT Text IO (Map EntityNameDB Bool)
+getTableExistence getStmt entityNames = do
+    results <-
+        liftIO $
+            runStmt
+                getStmt
+                getTableExistenceSql
+                [PersistArray (map (PersistText . unEntityNameDB) entityNames)]
+                processTable
+    case partitionEithers results of
+        ([], xs) ->
+            let
+                existing = Set.fromList xs
+             in
+                pure $ Map.fromList $ map (\n -> (n, Set.member n existing)) entityNames
+        (errs, _) -> throwError (T.intercalate "\n" errs)
+  where
+    getTableExistenceSql =
+        "SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname != 'pg_catalog'"
+            <> " AND schemaname != 'information_schema' AND tablename=ANY (?)"
+
+    processTable :: [PersistValue] -> Either Text EntityNameDB
+    processTable resultRow = do
+        fmap EntityNameDB $
+            case resultRow of
+                [PersistText tableName] ->
+                    pure tableName
+                [PersistByteString tableName] ->
+                    pure (T.decodeUtf8 tableName)
+                other ->
+                    throwError $ T.pack $ "Invalid result from information_schema: " ++ show other
 
 -- | Get all columns for the listed tables from the database, ignoring foreign
 -- key references (those are filled in later).
@@ -350,7 +413,13 @@ getForeignKeyReferences getStmt entityNames = do
         :: [PersistValue]
         -> Either Text (Map EntityNameDB (Map FieldNameDB ColumnReference))
     processForeignKeyReference resultRow = do
-        (sourceTableName, sourceColumnName, refTableName, constraintName, updRule, delRule) <-
+        ( sourceTableName
+            , sourceColumnName
+            , refTableName
+            , constraintName
+            , updRule
+            , delRule
+            ) <-
             case resultRow of
                 [ PersistText srcTable
                     , PersistText srcColumn
@@ -373,14 +442,17 @@ getForeignKeyReferences getStmt entityNames = do
         fcOnUpdate <- parseCascade updRule
         fcOnDelete <- parseCascade delRule
 
-        let columnRef = ColumnReference
-                { crTableName = refTableName
-                , crConstraintName = constraintName
-                , crFieldCascade = FieldCascade
-                    { fcOnUpdate = Just fcOnUpdate
-                    , fcOnDelete = Just fcOnDelete
+        let
+            columnRef =
+                ColumnReference
+                    { crTableName = refTableName
+                    , crConstraintName = constraintName
+                    , crFieldCascade =
+                        FieldCascade
+                            { fcOnUpdate = Just fcOnUpdate
+                            , fcOnDelete = Just fcOnDelete
+                            }
                     }
-                }
 
         pure $ Map.singleton sourceTableName (Map.singleton sourceColumnName columnRef)
 
