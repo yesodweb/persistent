@@ -1,5 +1,11 @@
 # Changelog for persistent-postgresql
 
+# 2.14.1.0
+
+* [#1612](https://github.com/yesodweb/persistent/pull/1612)
+  * Speed up migrations by avoiding N+1 queries.
+    You can now migrate a large set of entities much faster, by using the new `migrateEntitiesStructured` function.
+
 # 2.14.0.1
 
 * [#1610](https://github.com/yesodweb/persistent/pull/1610)
