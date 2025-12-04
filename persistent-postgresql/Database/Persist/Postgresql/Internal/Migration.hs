@@ -13,7 +13,6 @@ import Control.Monad
 import Control.Monad.Except
 import Control.Monad.IO.Class
 import Data.Acquire (with)
-import Debug.Trace
 import Data.Conduit
 import qualified Data.Conduit.List as CL
 import Data.Either (partitionEithers)
@@ -493,7 +492,6 @@ migrateEntitiesStructured
     -> IO (Either [Text] [AlterDB])
 migrateEntitiesStructured getStmt allDefs defsToMigrate = do
     r <- collectSchemaState getStmt (map getEntityDBName defsToMigrate)
-    -- putStrLn $ "collectSchemaState: " <> show r
     pure $ case r of
         Right schemaState ->
             migrateEntitiesFromSchemaState schemaState allDefs defsToMigrate
@@ -654,10 +652,7 @@ getAlters
     -> ([Column], [(ConstraintNameDB, [FieldNameDB])])
     -> ([AlterColumn], [AlterTable])
 getAlters defs def (c1, u1) (c2, u2) =
-    if getEntityDBName def == EntityNameDB "child"
-        then traceShow ((c1, u1), (c2, u2)) $
-                traceShowId (getAltersC c1 c2, getAltersU u1 u2)
-        else (getAltersC c1 c2, getAltersU u1 u2)
+  (getAltersC c1 c2, getAltersU u1 u2)
   where
     getAltersC [] old =
         map (\x -> Drop x $ SafeToRemove $ safeToRemove def $ cName x) old
