@@ -382,3 +382,23 @@ spec = describe "MigrationSpec" $ do
                 expectationFailure $ show err
             Right alters ->
                 map (snd . showAlterDb) alters `shouldBe` []
+
+    it "migrates a clean DB" $ runConnAssert $ do
+        cleanDB
+
+        connPrepare <- getConnPrepare
+        result <-
+            liftIO $ migrateEntitiesStructured connPrepare allEntityDefs allEntityDefs
+
+        cleanDB
+
+        case result of
+            Right [] ->
+                pure ()
+            Left err ->
+                expectationFailure $ show err
+            Right alters -> do
+                traverse (flip rawExecute [] . snd . showAlterDb) alters
+                result2 <-
+                    liftIO $ migrateEntitiesStructured connPrepare allEntityDefs allEntityDefs
+                result2 `shouldBe` Right []

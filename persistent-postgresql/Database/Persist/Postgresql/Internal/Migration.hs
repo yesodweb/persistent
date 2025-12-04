@@ -492,6 +492,7 @@ migrateEntitiesStructured
     -> IO (Either [Text] [AlterDB])
 migrateEntitiesStructured getStmt allDefs defsToMigrate = do
     r <- collectSchemaState getStmt (map getEntityDBName defsToMigrate)
+    putStrLn $ "collectSchemaState: " <> show r
     pure $ case r of
         Right schemaState ->
             migrateEntitiesFromSchemaState schemaState allDefs defsToMigrate
