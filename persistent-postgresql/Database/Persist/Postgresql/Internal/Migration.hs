@@ -63,7 +63,6 @@ migrateEntitiesStructured getStmt allDefs defsToMigrate = do
         Left err ->
             Left [err]
 
-
 -- | Returns a structured representation of all of the
 -- DB changes required to migrate the Entity to the state
 -- described in Haskell, assuming it currently does not
