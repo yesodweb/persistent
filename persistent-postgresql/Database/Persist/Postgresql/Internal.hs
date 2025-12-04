@@ -54,8 +54,8 @@ import Data.Time
     , localTimeToUTC
     , utc
     )
-import Database.Persist.Sql
 import Database.Persist.Postgresql.Internal.Migration
+import Database.Persist.Sql
 
 -- | Newtype used to avoid orphan instances for @postgresql-simple@ classes.
 --

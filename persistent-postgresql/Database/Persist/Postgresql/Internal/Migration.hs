@@ -1,8 +1,8 @@
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE ViewPatterns #-}
 
 -- | Generate postgresql migrations for a set of EntityDefs, either from scratch
 -- or based on the current state of a database.
@@ -16,6 +16,8 @@ import Data.Acquire (with)
 import Data.Conduit
 import qualified Data.Conduit.List as CL
 import Data.Either (partitionEithers)
+import Data.List as List
+import qualified Data.List.NonEmpty as NEL
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe
@@ -26,8 +28,6 @@ import qualified Data.Text.Encoding as T
 import Data.Traversable
 import Database.Persist.Sql
 import qualified Database.Persist.Sql.Util as Util
-import qualified Data.List.NonEmpty as NEL
-import Data.List as List
 
 -- | In order to ensure that generating migrations is fast and avoids N+1
 -- queries, we split it into two phases. The first phase involves querying the
@@ -504,15 +504,17 @@ migrateEntitiesFromSchemaState
     -> [EntityDef]
     -> Either [Text] [AlterDB]
 migrateEntitiesFromSchemaState (SchemaState schemaStateMap) allDefs defsToMigrate =
-    let go :: EntityDef -> Either Text [AlterDB]
+    let
+        go :: EntityDef -> Either Text [AlterDB]
         go entity = do
-            let name = getEntityDBName entity
+            let
+                name = getEntityDBName entity
             case Map.lookup name schemaStateMap of
                 Just entityState ->
                     Right $ migrateEntityFromSchemaState entityState allDefs entity
                 Nothing ->
                     Left $ T.pack $ "No entry for entity in schemaState: " <> show name
-    in
+     in
         case partitionEithers (map go defsToMigrate) of
             ([], xs) -> Right (concat xs)
             (errs, _) -> Left errs
@@ -526,7 +528,7 @@ migrateEntityFromSchemaState schemaState allDefs entity =
     case schemaState of
         EntityDoesNotExist ->
             (addTable newcols entity) : uniques ++ references ++ foreignsAlt
-        EntityExists ExistingEntitySchemaState { essColumns, essConstraints } ->
+        EntityExists ExistingEntitySchemaState{essColumns, essConstraints} ->
             let
                 (acs, ats) =
                     getAlters
@@ -538,8 +540,7 @@ migrateEntityFromSchemaState schemaState allDefs entity =
                 ats' = map (AlterTable name) ats
              in
                 acs' ++ ats'
-
-    where
+  where
     name = getEntityDBName entity
     (newcols', udefs, fdefs) = postgresMkColumns allDefs entity
     newcols = filter (not . safeToRemove entity . cName) newcols'
@@ -554,7 +555,6 @@ migrateEntityFromSchemaState schemaState allDefs entity =
             )
             newcols
     foreignsAlt = mapMaybe (mkForeignAlt entity) fdefs
-
 
 -- | Indicates whether a Postgres Column is safe to drop.
 --
