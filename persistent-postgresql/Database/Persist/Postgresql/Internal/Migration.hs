@@ -566,8 +566,9 @@ migrateEntityFromSchemaState schemaState allDefs entity =
     -- more info
     dubiouslyRemoveReferences oldCol =
         case List.find (\c -> cName c == cName oldCol) newcols of
-            Just new | isNothing (cReference new) ->
-                oldCol { cReference = Nothing }
+            Just new
+                | isNothing (cReference new) ->
+                    oldCol{cReference = Nothing}
             _ ->
                 -- otherwise no-op, `getAlters` will handle dropping this for us.
                 oldCol
@@ -652,7 +653,7 @@ getAlters
     -> ([Column], [(ConstraintNameDB, [FieldNameDB])])
     -> ([AlterColumn], [AlterTable])
 getAlters defs def (c1, u1) (c2, u2) =
-  (getAltersC c1 c2, getAltersU u1 u2)
+    (getAltersC c1 c2, getAltersU u1 u2)
   where
     getAltersC [] old =
         map (\x -> Drop x $ SafeToRemove $ safeToRemove def $ cName x) old
