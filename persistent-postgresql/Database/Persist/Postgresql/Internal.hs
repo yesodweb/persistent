@@ -48,7 +48,6 @@ import qualified Data.ByteString.Builder as BB
 import Data.Fixed (Pico)
 import qualified Data.IntMap as I
 import Data.Maybe
-import Data.Text (Text)
 import Data.Time
     ( NominalDiffTime
     , localTimeToUTC
@@ -261,30 +260,3 @@ intervalToPgInterval interval =
         if calendarDiffDays == mempty
             then Just $ PgInterval nominalDiffTime
             else Nothing
-
--- | Returns a structured representation of all of the
--- DB changes required to migrate the Entity from its
--- current state in the database to the state described in
--- Haskell.
---
--- @since 2.17.1.0
-migrateStructured
-    :: [EntityDef]
-    -> (Text -> IO Statement)
-    -> EntityDef
-    -> IO (Either [Text] [AlterDB])
-migrateStructured allDefs getter entity =
-    migrateEntitiesStructured getter allDefs [entity]
-
--- | Returns a structured representation of all of the
--- DB changes required to migrate the Entity to the state
--- described in Haskell, assuming it currently does not
--- exist in the database.
---
--- @since 2.17.1.0
-mockMigrateStructured
-    :: [EntityDef]
-    -> EntityDef
-    -> [AlterDB]
-mockMigrateStructured allDefs entity =
-    migrateEntityFromSchemaState EntityDoesNotExist allDefs entity
