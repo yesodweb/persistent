@@ -537,7 +537,7 @@ migrateEntityFromSchemaState schemaState allDefs entity =
                         allDefs
                         entity
                         (newcols, udspair)
-                        (essColumns, Map.toList essConstraints)
+                        (map dubiouslyRemoveReferences essColumns, Map.toList essConstraints)
                 acs' = map (AlterColumn name) acs
                 ats' = map (AlterTable name) ats
              in
@@ -557,6 +557,22 @@ migrateEntityFromSchemaState schemaState allDefs entity =
             )
             newcols
     foreignsAlt = mapMaybe (mkForeignAlt entity) fdefs
+
+    -- HACK! This shouldn't really be here; it was added to preserve existing
+    -- behaviour. The migrator currently expects to only see cReference set in
+    -- the old columns if it is also set in the new ones. This means that the
+    -- migrator sometimes behaves incorrectly for standalone Foreign
+    -- declarations, like Child in the ForeignKey test in persistent-test.
+    --
+    -- See https://github.com/yesodweb/persistent/issues/1611#issuecomment-3613251095 for
+    -- more info
+    dubiouslyRemoveReferences oldCol =
+        case List.find (\c -> cName c == cName oldCol) newcols of
+            Just new | isNothing (cReference new) ->
+                oldCol { cReference = Nothing }
+            _ ->
+                -- otherwise no-op, `getAlters` will handle dropping this for us.
+                oldCol
 
 -- | Indicates whether a Postgres Column is safe to drop.
 --
