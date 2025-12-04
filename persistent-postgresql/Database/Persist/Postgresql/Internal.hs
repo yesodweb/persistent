@@ -13,6 +13,7 @@ module Database.Persist.Postgresql.Internal
     , AlterColumn (..)
     , SafeToRemove
     , migrateStructured
+    , migrateEntitiesStructured
     , mockMigrateStructured
     , addTable
     , findAlters

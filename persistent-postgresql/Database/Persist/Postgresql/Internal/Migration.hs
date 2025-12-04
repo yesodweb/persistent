@@ -43,6 +43,27 @@ migrateStructured
 migrateStructured allDefs getter entity =
     migrateEntitiesStructured getter allDefs [entity]
 
+-- | Returns a structured representation of all of the DB changes required to
+-- migrate the listed entities from their current state in the database to the
+-- state described in Haskell. This function avoids N+1 queries, so if you
+-- have a lot of entities to migrate, it's much faster to use this rather than
+-- using 'migrateStructured' in a loop.
+--
+-- @since 2.14.1.0
+migrateEntitiesStructured
+    :: (Text -> IO Statement)
+    -> [EntityDef]
+    -> [EntityDef]
+    -> IO (Either [Text] [AlterDB])
+migrateEntitiesStructured getStmt allDefs defsToMigrate = do
+    r <- collectSchemaState getStmt (map getEntityDBName defsToMigrate)
+    pure $ case r of
+        Right schemaState ->
+            migrateEntitiesFromSchemaState schemaState allDefs defsToMigrate
+        Left err ->
+            Left [err]
+
+
 -- | Returns a structured representation of all of the
 -- DB changes required to migrate the Entity to the state
 -- described in Haskell, assuming it currently does not
@@ -507,23 +528,6 @@ parseCascade txt =
 mapLeft :: (a1 -> a2) -> Either a1 b -> Either a2 b
 mapLeft _ (Right x) = Right x
 mapLeft f (Left x) = Left (f x)
-
--- | Returns a structured representation of all of the
--- DB changes required to migrate the Entity from its
--- current state in the database to the state described in
--- Haskell.
-migrateEntitiesStructured
-    :: (Text -> IO Statement)
-    -> [EntityDef]
-    -> [EntityDef]
-    -> IO (Either [Text] [AlterDB])
-migrateEntitiesStructured getStmt allDefs defsToMigrate = do
-    r <- collectSchemaState getStmt (map getEntityDBName defsToMigrate)
-    pure $ case r of
-        Right schemaState ->
-            migrateEntitiesFromSchemaState schemaState allDefs defsToMigrate
-        Left err ->
-            Left [err]
 
 migrateEntitiesFromSchemaState
     :: SchemaState
