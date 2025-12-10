@@ -19,8 +19,8 @@ import PgInit
 
 import Data.Foldable (traverse_)
 import qualified Data.Map as Map
-import qualified Data.Set as Set
 import Data.Proxy
+import qualified Data.Set as Set
 import qualified Data.Text as T
 import Database.Persist.Postgresql.Internal.Migration
 
