@@ -128,6 +128,14 @@ migrateManually = do
             , "  ADD CONSTRAINT unique_user_id2"
             , "  UNIQUE(user_id);"
             ]
+    -- Add an extra redundant FK constraint on passwords_2.user_id, so that we
+    -- can test that the migrator ignores it
+    rawEx $
+        T.concat
+            [ "ALTER TABLE passwords_2"
+            , "  ADD CONSTRAINT duplicate_passwords_2_user_id_fkey"
+            , "  FOREIGN KEY (user_id) REFERENCES users(id);"
+            ]
     rawEx $
         T.concat
             [ "CREATE TABLE admin_users("
@@ -371,6 +379,13 @@ spec = describe "MigrationSpec" $ do
                                                         }
                                                     ,
                                                         [ ColumnReference
+                                                            { crTableName = EntityNameDB{unEntityNameDB = "users"}
+                                                            , crConstraintName =
+                                                                ConstraintNameDB{unConstraintNameDB = "duplicate_passwords_2_user_id_fkey"}
+                                                            , crFieldCascade =
+                                                                FieldCascade{fcOnUpdate = Just NoAction, fcOnDelete = Just NoAction}
+                                                            }
+                                                        , ColumnReference
                                                             { crTableName = EntityNameDB{unEntityNameDB = "users"}
                                                             , crConstraintName =
                                                                 ConstraintNameDB{unConstraintNameDB = "passwords_2_user_id_fkey"}
