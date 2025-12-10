@@ -10,27 +10,28 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module MigrationSpec where
 
 import PgInit
 
+import Data.Foldable (traverse_)
 import qualified Data.Map as Map
 import Data.Proxy
 import qualified Data.Text as T
 import Database.Persist.Postgresql.Internal.Migration
-import qualified Database.Persist.SqlBackend.Internal as SqlBackend
 
-getConnPrepare
+getStmtGetter
     :: (Monad m) => SqlPersistT m (Text -> IO Statement)
-getConnPrepare = do
+getStmtGetter = do
     backend <- ask
-    pure (SqlBackend.connPrepare backend)
+    pure (getStmtConn backend)
 
 -- NB: we do not perform these migrations in main.hs
 share
-    [mkPersist persistSettings{mpsGeneric = False}, mkMigrate "migrate"]
+    [mkPersist persistSettings{mpsGeneric = False}]
     [persistLowerCase|
 User sql=users
     name Text
@@ -51,6 +52,13 @@ Password2 sql=passwords_2
     passwordHash Text
     userId UserId Maybe OnDeleteCascade OnUpdateSetNull
     UniqueUserId2 userId !force
+
+AdminUser sql=admin_users
+    userId UserId
+    Primary userId
+
+    promotedByUserId UserId
+    UniquePromotedByUserId promotedByUserId
 |]
 
 userEntityDef :: EntityDef
@@ -65,12 +73,16 @@ passwordEntityDef = entityDef (Proxy :: Proxy Password)
 password2EntityDef :: EntityDef
 password2EntityDef = entityDef (Proxy :: Proxy Password2)
 
+adminUserEntityDef :: EntityDef
+adminUserEntityDef = entityDef (Proxy :: Proxy AdminUser)
+
 allEntityDefs :: [EntityDef]
 allEntityDefs =
     [ userEntityDef
     , userFriendshipEntityDef
     , passwordEntityDef
     , password2EntityDef
+    , adminUserEntityDef
     ]
 
 migrateManually :: (HasCallStack, MonadIO m) => SqlPersistT m ()
@@ -116,6 +128,19 @@ migrateManually = do
             , "  ADD CONSTRAINT unique_user_id2"
             , "  UNIQUE(user_id);"
             ]
+    rawEx $
+        T.concat
+            [ "CREATE TABLE admin_users("
+            , "  user_id int8 not null references users(id) on delete restrict on update restrict primary key,"
+            , "  promoted_by_user_id int8 not null references users(id) on delete restrict on update restrict"
+            , ");"
+            ]
+    rawEx $
+        T.concat
+            [ "ALTER TABLE admin_users"
+            , "  ADD CONSTRAINT unique_promoted_by_user_id"
+            , "  UNIQUE(promoted_by_user_id);"
+            ]
     rawEx "CREATE TABLE ignored(id int8 primary key);"
 
 cleanDB :: (HasCallStack, MonadIO m) => SqlPersistT m ()
@@ -126,6 +151,7 @@ cleanDB = do
     rawEx "DROP TABLE IF EXISTS passwords;"
     rawEx "DROP TABLE IF EXISTS passwords_2;"
     rawEx "DROP TABLE IF EXISTS ignored;"
+    rawEx "DROP TABLE IF EXISTS admin_users;"
     rawEx "DROP TABLE IF EXISTS users;"
 
 spec :: Spec
@@ -133,13 +159,14 @@ spec = describe "MigrationSpec" $ do
     it "gathers schema state" $ runConnAssert $ do
         migrateManually
 
-        connPrepare <- getConnPrepare
+        getter <- getStmtGetter
         actual <-
             liftIO $
-                collectSchemaState connPrepare $
+                collectSchemaState getter $
                     map
                         EntityNameDB
                         [ "users"
+                        , "admin_users"
                         , "user_friendships"
                         , "passwords"
                         , "passwords_2"
@@ -150,55 +177,138 @@ spec = describe "MigrationSpec" $ do
 
         let
             expected =
-                SchemaState
+                ( SchemaState
                     ( Map.fromList
-                        [ (EntityNameDB{unEntityNameDB = "nonexistent"}, EntityDoesNotExist)
+                        [
+                            ( EntityNameDB{unEntityNameDB = "admin_users"}
+                            , EntityExists
+                                ( ExistingEntitySchemaState
+                                    { essColumns =
+                                        Map.fromList
+                                            [
+                                                ( FieldNameDB{unFieldNameDB = "promoted_by_user_id"}
+                                                ,
+                                                    ( Column
+                                                        { cName = FieldNameDB{unFieldNameDB = "promoted_by_user_id"}
+                                                        , cNull = False
+                                                        , cSqlType = SqlInt64
+                                                        , cDefault = Nothing
+                                                        , cGenerated = Nothing
+                                                        , cDefaultConstraintName = Nothing
+                                                        , cMaxLen = Nothing
+                                                        , cReference = Nothing
+                                                        }
+                                                    ,
+                                                        [ ColumnReference
+                                                            { crTableName = EntityNameDB{unEntityNameDB = "users"}
+                                                            , crConstraintName =
+                                                                ConstraintNameDB{unConstraintNameDB = "admin_users_promoted_by_user_id_fkey"}
+                                                            , crFieldCascade =
+                                                                FieldCascade{fcOnUpdate = Just Restrict, fcOnDelete = Just Restrict}
+                                                            }
+                                                        ]
+                                                    )
+                                                )
+                                            ,
+                                                ( FieldNameDB{unFieldNameDB = "user_id"}
+                                                ,
+                                                    ( Column
+                                                        { cName = FieldNameDB{unFieldNameDB = "user_id"}
+                                                        , cNull = False
+                                                        , cSqlType = SqlInt64
+                                                        , cDefault = Nothing
+                                                        , cGenerated = Nothing
+                                                        , cDefaultConstraintName = Nothing
+                                                        , cMaxLen = Nothing
+                                                        , cReference = Nothing
+                                                        }
+                                                    ,
+                                                        [ ColumnReference
+                                                            { crTableName = EntityNameDB{unEntityNameDB = "users"}
+                                                            , crConstraintName =
+                                                                ConstraintNameDB{unConstraintNameDB = "admin_users_user_id_fkey"}
+                                                            , crFieldCascade =
+                                                                FieldCascade{fcOnUpdate = Just Restrict, fcOnDelete = Just Restrict}
+                                                            }
+                                                        ]
+                                                    )
+                                                )
+                                            ]
+                                    , essUniqueConstraints =
+                                        Map.fromList
+                                            [
+                                                ( ConstraintNameDB{unConstraintNameDB = "unique_promoted_by_user_id"}
+                                                , [FieldNameDB{unFieldNameDB = "promoted_by_user_id"}]
+                                                )
+                                            ]
+                                    }
+                                )
+                            )
+                        , (EntityNameDB{unEntityNameDB = "nonexistent"}, EntityDoesNotExist)
                         ,
                             ( EntityNameDB{unEntityNameDB = "passwords"}
                             , EntityExists
                                 ( ExistingEntitySchemaState
                                     { essColumns =
-                                        [ Column
-                                            { cName = FieldNameDB{unFieldNameDB = "user_id"}
-                                            , cNull = True
-                                            , cSqlType = SqlInt64
-                                            , cDefault = Nothing
-                                            , cGenerated = Nothing
-                                            , cDefaultConstraintName = Nothing
-                                            , cMaxLen = Nothing
-                                            , cReference =
-                                                Just
-                                                    ( ColumnReference
-                                                        { crTableName = EntityNameDB{unEntityNameDB = "users"}
-                                                        , crConstraintName =
-                                                            ConstraintNameDB{unConstraintNameDB = "passwords_user_id_fkey"}
-                                                        , crFieldCascade =
-                                                            FieldCascade{fcOnUpdate = Just Restrict, fcOnDelete = Just Restrict}
+                                        Map.fromList
+                                            [
+                                                ( FieldNameDB{unFieldNameDB = "id"}
+                                                ,
+                                                    ( Column
+                                                        { cName = FieldNameDB{unFieldNameDB = "id"}
+                                                        , cNull = False
+                                                        , cSqlType = SqlInt64
+                                                        , cDefault = Nothing
+                                                        , cGenerated = Nothing
+                                                        , cDefaultConstraintName = Nothing
+                                                        , cMaxLen = Nothing
+                                                        , cReference = Nothing
                                                         }
+                                                    , []
                                                     )
-                                            }
-                                        , Column
-                                            { cName = FieldNameDB{unFieldNameDB = "password_hash"}
-                                            , cNull = False
-                                            , cSqlType = SqlString
-                                            , cDefault = Nothing
-                                            , cGenerated = Nothing
-                                            , cDefaultConstraintName = Nothing
-                                            , cMaxLen = Nothing
-                                            , cReference = Nothing
-                                            }
-                                        , Column
-                                            { cName = FieldNameDB{unFieldNameDB = "id"}
-                                            , cNull = False
-                                            , cSqlType = SqlInt64
-                                            , cDefault = Nothing
-                                            , cGenerated = Nothing
-                                            , cDefaultConstraintName = Nothing
-                                            , cMaxLen = Nothing
-                                            , cReference = Nothing
-                                            }
-                                        ]
-                                    , essConstraints =
+                                                )
+                                            ,
+                                                ( FieldNameDB{unFieldNameDB = "password_hash"}
+                                                ,
+                                                    ( Column
+                                                        { cName = FieldNameDB{unFieldNameDB = "password_hash"}
+                                                        , cNull = False
+                                                        , cSqlType = SqlString
+                                                        , cDefault = Nothing
+                                                        , cGenerated = Nothing
+                                                        , cDefaultConstraintName = Nothing
+                                                        , cMaxLen = Nothing
+                                                        , cReference = Nothing
+                                                        }
+                                                    , []
+                                                    )
+                                                )
+                                            ,
+                                                ( FieldNameDB{unFieldNameDB = "user_id"}
+                                                ,
+                                                    ( Column
+                                                        { cName = FieldNameDB{unFieldNameDB = "user_id"}
+                                                        , cNull = True
+                                                        , cSqlType = SqlInt64
+                                                        , cDefault = Nothing
+                                                        , cGenerated = Nothing
+                                                        , cDefaultConstraintName = Nothing
+                                                        , cMaxLen = Nothing
+                                                        , cReference = Nothing
+                                                        }
+                                                    ,
+                                                        [ ColumnReference
+                                                            { crTableName = EntityNameDB{unEntityNameDB = "users"}
+                                                            , crConstraintName =
+                                                                ConstraintNameDB{unConstraintNameDB = "passwords_user_id_fkey"}
+                                                            , crFieldCascade =
+                                                                FieldCascade{fcOnUpdate = Just Restrict, fcOnDelete = Just Restrict}
+                                                            }
+                                                        ]
+                                                    )
+                                                )
+                                            ]
+                                    , essUniqueConstraints =
                                         Map.fromList
                                             [
                                                 ( ConstraintNameDB{unConstraintNameDB = "unique_user_id"}
@@ -213,47 +323,65 @@ spec = describe "MigrationSpec" $ do
                             , EntityExists
                                 ( ExistingEntitySchemaState
                                     { essColumns =
-                                        [ Column
-                                            { cName = FieldNameDB{unFieldNameDB = "user_id"}
-                                            , cNull = True
-                                            , cSqlType = SqlInt64
-                                            , cDefault = Nothing
-                                            , cGenerated = Nothing
-                                            , cDefaultConstraintName = Nothing
-                                            , cMaxLen = Nothing
-                                            , cReference =
-                                                Just
-                                                    ( ColumnReference
-                                                        { crTableName = EntityNameDB{unEntityNameDB = "users"}
-                                                        , crConstraintName =
-                                                            ConstraintNameDB{unConstraintNameDB = "passwords_2_user_id_fkey"}
-                                                        , crFieldCascade =
-                                                            FieldCascade{fcOnUpdate = Just SetNull, fcOnDelete = Just Cascade}
+                                        Map.fromList
+                                            [
+                                                ( FieldNameDB{unFieldNameDB = "id"}
+                                                ,
+                                                    ( Column
+                                                        { cName = FieldNameDB{unFieldNameDB = "id"}
+                                                        , cNull = False
+                                                        , cSqlType = SqlInt64
+                                                        , cDefault = Nothing
+                                                        , cGenerated = Nothing
+                                                        , cDefaultConstraintName = Nothing
+                                                        , cMaxLen = Nothing
+                                                        , cReference = Nothing
                                                         }
+                                                    , []
                                                     )
-                                            }
-                                        , Column
-                                            { cName = FieldNameDB{unFieldNameDB = "password_hash"}
-                                            , cNull = False
-                                            , cSqlType = SqlString
-                                            , cDefault = Nothing
-                                            , cGenerated = Nothing
-                                            , cDefaultConstraintName = Nothing
-                                            , cMaxLen = Nothing
-                                            , cReference = Nothing
-                                            }
-                                        , Column
-                                            { cName = FieldNameDB{unFieldNameDB = "id"}
-                                            , cNull = False
-                                            , cSqlType = SqlInt64
-                                            , cDefault = Nothing
-                                            , cGenerated = Nothing
-                                            , cDefaultConstraintName = Nothing
-                                            , cMaxLen = Nothing
-                                            , cReference = Nothing
-                                            }
-                                        ]
-                                    , essConstraints =
+                                                )
+                                            ,
+                                                ( FieldNameDB{unFieldNameDB = "password_hash"}
+                                                ,
+                                                    ( Column
+                                                        { cName = FieldNameDB{unFieldNameDB = "password_hash"}
+                                                        , cNull = False
+                                                        , cSqlType = SqlString
+                                                        , cDefault = Nothing
+                                                        , cGenerated = Nothing
+                                                        , cDefaultConstraintName = Nothing
+                                                        , cMaxLen = Nothing
+                                                        , cReference = Nothing
+                                                        }
+                                                    , []
+                                                    )
+                                                )
+                                            ,
+                                                ( FieldNameDB{unFieldNameDB = "user_id"}
+                                                ,
+                                                    ( Column
+                                                        { cName = FieldNameDB{unFieldNameDB = "user_id"}
+                                                        , cNull = True
+                                                        , cSqlType = SqlInt64
+                                                        , cDefault = Nothing
+                                                        , cGenerated = Nothing
+                                                        , cDefaultConstraintName = Nothing
+                                                        , cMaxLen = Nothing
+                                                        , cReference = Nothing
+                                                        }
+                                                    ,
+                                                        [ ColumnReference
+                                                            { crTableName = EntityNameDB{unEntityNameDB = "users"}
+                                                            , crConstraintName =
+                                                                ConstraintNameDB{unConstraintNameDB = "passwords_2_user_id_fkey"}
+                                                            , crFieldCascade =
+                                                                FieldCascade{fcOnUpdate = Just SetNull, fcOnDelete = Just Cascade}
+                                                            }
+                                                        ]
+                                                    )
+                                                )
+                                            ]
+                                    , essUniqueConstraints =
                                         Map.fromList
                                             [
                                                 ( ConstraintNameDB{unConstraintNameDB = "unique_user_id2"}
@@ -268,56 +396,73 @@ spec = describe "MigrationSpec" $ do
                             , EntityExists
                                 ( ExistingEntitySchemaState
                                     { essColumns =
-                                        [ Column
-                                            { cName = FieldNameDB{unFieldNameDB = "user2_id"}
-                                            , cNull = True
-                                            , cSqlType = SqlInt64
-                                            , cDefault = Nothing
-                                            , cGenerated = Nothing
-                                            , cDefaultConstraintName = Nothing
-                                            , cMaxLen = Nothing
-                                            , cReference =
-                                                Just
-                                                    ( ColumnReference
-                                                        { crTableName = EntityNameDB{unEntityNameDB = "users"}
-                                                        , crConstraintName =
-                                                            ConstraintNameDB{unConstraintNameDB = "user_friendships_user2_id_fkey"}
-                                                        , crFieldCascade =
-                                                            FieldCascade{fcOnUpdate = Just Restrict, fcOnDelete = Just Restrict}
+                                        Map.fromList
+                                            [
+                                                ( FieldNameDB{unFieldNameDB = "id"}
+                                                ,
+                                                    ( Column
+                                                        { cName = FieldNameDB{unFieldNameDB = "id"}
+                                                        , cNull = False
+                                                        , cSqlType = SqlInt64
+                                                        , cDefault = Nothing
+                                                        , cGenerated = Nothing
+                                                        , cDefaultConstraintName = Nothing
+                                                        , cMaxLen = Nothing
+                                                        , cReference = Nothing
                                                         }
+                                                    , []
                                                     )
-                                            }
-                                        , Column
-                                            { cName = FieldNameDB{unFieldNameDB = "user1_id"}
-                                            , cNull = True
-                                            , cSqlType = SqlInt64
-                                            , cDefault = Nothing
-                                            , cGenerated = Nothing
-                                            , cDefaultConstraintName = Nothing
-                                            , cMaxLen = Nothing
-                                            , cReference =
-                                                Just
-                                                    ( ColumnReference
-                                                        { crTableName = EntityNameDB{unEntityNameDB = "users"}
-                                                        , crConstraintName =
-                                                            ConstraintNameDB{unConstraintNameDB = "user_friendships_user1_id_fkey"}
-                                                        , crFieldCascade =
-                                                            FieldCascade{fcOnUpdate = Just Restrict, fcOnDelete = Just Restrict}
+                                                )
+                                            ,
+                                                ( FieldNameDB{unFieldNameDB = "user1_id"}
+                                                ,
+                                                    ( Column
+                                                        { cName = FieldNameDB{unFieldNameDB = "user1_id"}
+                                                        , cNull = True
+                                                        , cSqlType = SqlInt64
+                                                        , cDefault = Nothing
+                                                        , cGenerated = Nothing
+                                                        , cDefaultConstraintName = Nothing
+                                                        , cMaxLen = Nothing
+                                                        , cReference = Nothing
                                                         }
+                                                    ,
+                                                        [ ColumnReference
+                                                            { crTableName = EntityNameDB{unEntityNameDB = "users"}
+                                                            , crConstraintName =
+                                                                ConstraintNameDB{unConstraintNameDB = "user_friendships_user1_id_fkey"}
+                                                            , crFieldCascade =
+                                                                FieldCascade{fcOnUpdate = Just Restrict, fcOnDelete = Just Restrict}
+                                                            }
+                                                        ]
                                                     )
-                                            }
-                                        , Column
-                                            { cName = FieldNameDB{unFieldNameDB = "id"}
-                                            , cNull = False
-                                            , cSqlType = SqlInt64
-                                            , cDefault = Nothing
-                                            , cGenerated = Nothing
-                                            , cDefaultConstraintName = Nothing
-                                            , cMaxLen = Nothing
-                                            , cReference = Nothing
-                                            }
-                                        ]
-                                    , essConstraints = Map.fromList []
+                                                )
+                                            ,
+                                                ( FieldNameDB{unFieldNameDB = "user2_id"}
+                                                ,
+                                                    ( Column
+                                                        { cName = FieldNameDB{unFieldNameDB = "user2_id"}
+                                                        , cNull = True
+                                                        , cSqlType = SqlInt64
+                                                        , cDefault = Nothing
+                                                        , cGenerated = Nothing
+                                                        , cDefaultConstraintName = Nothing
+                                                        , cMaxLen = Nothing
+                                                        , cReference = Nothing
+                                                        }
+                                                    ,
+                                                        [ ColumnReference
+                                                            { crTableName = EntityNameDB{unEntityNameDB = "users"}
+                                                            , crConstraintName =
+                                                                ConstraintNameDB{unConstraintNameDB = "user_friendships_user2_id_fkey"}
+                                                            , crFieldCascade =
+                                                                FieldCascade{fcOnUpdate = Just Restrict, fcOnDelete = Just Restrict}
+                                                            }
+                                                        ]
+                                                    )
+                                                )
+                                            ]
+                                    , essUniqueConstraints = Map.fromList []
                                     }
                                 )
                             )
@@ -326,52 +471,72 @@ spec = describe "MigrationSpec" $ do
                             , EntityExists
                                 ( ExistingEntitySchemaState
                                     { essColumns =
-                                        [ Column
-                                            { cName = FieldNameDB{unFieldNameDB = "title"}
-                                            , cNull = True
-                                            , cSqlType = SqlString
-                                            , cDefault = Nothing
-                                            , cGenerated = Nothing
-                                            , cDefaultConstraintName = Nothing
-                                            , cMaxLen = Nothing
-                                            , cReference = Nothing
-                                            }
-                                        , Column
-                                            { cName = FieldNameDB{unFieldNameDB = "name"}
-                                            , cNull = False
-                                            , cSqlType = SqlString
-                                            , cDefault = Nothing
-                                            , cGenerated = Nothing
-                                            , cDefaultConstraintName = Nothing
-                                            , cMaxLen = Nothing
-                                            , cReference = Nothing
-                                            }
-                                        , Column
-                                            { cName = FieldNameDB{unFieldNameDB = "id"}
-                                            , cNull = False
-                                            , cSqlType = SqlInt64
-                                            , cDefault = Nothing
-                                            , cGenerated = Nothing
-                                            , cDefaultConstraintName = Nothing
-                                            , cMaxLen = Nothing
-                                            , cReference = Nothing
-                                            }
-                                        ]
-                                    , essConstraints = Map.fromList []
+                                        Map.fromList
+                                            [
+                                                ( FieldNameDB{unFieldNameDB = "id"}
+                                                ,
+                                                    ( Column
+                                                        { cName = FieldNameDB{unFieldNameDB = "id"}
+                                                        , cNull = False
+                                                        , cSqlType = SqlInt64
+                                                        , cDefault = Nothing
+                                                        , cGenerated = Nothing
+                                                        , cDefaultConstraintName = Nothing
+                                                        , cMaxLen = Nothing
+                                                        , cReference = Nothing
+                                                        }
+                                                    , []
+                                                    )
+                                                )
+                                            ,
+                                                ( FieldNameDB{unFieldNameDB = "name"}
+                                                ,
+                                                    ( Column
+                                                        { cName = FieldNameDB{unFieldNameDB = "name"}
+                                                        , cNull = False
+                                                        , cSqlType = SqlString
+                                                        , cDefault = Nothing
+                                                        , cGenerated = Nothing
+                                                        , cDefaultConstraintName = Nothing
+                                                        , cMaxLen = Nothing
+                                                        , cReference = Nothing
+                                                        }
+                                                    , []
+                                                    )
+                                                )
+                                            ,
+                                                ( FieldNameDB{unFieldNameDB = "title"}
+                                                ,
+                                                    ( Column
+                                                        { cName = FieldNameDB{unFieldNameDB = "title"}
+                                                        , cNull = True
+                                                        , cSqlType = SqlString
+                                                        , cDefault = Nothing
+                                                        , cGenerated = Nothing
+                                                        , cDefaultConstraintName = Nothing
+                                                        , cMaxLen = Nothing
+                                                        , cReference = Nothing
+                                                        }
+                                                    , []
+                                                    )
+                                                )
+                                            ]
+                                    , essUniqueConstraints = Map.fromList []
                                     }
                                 )
                             )
                         ]
                     )
+                )
 
         actual `shouldBe` Right expected
 
     it "no-ops on a migrated DB" $ runConnAssert $ do
         migrateManually
 
-        connPrepare <- getConnPrepare
+        getter <- getStmtGetter
         result <-
-            liftIO $ migrateEntitiesStructured connPrepare allEntityDefs allEntityDefs
+            liftIO $ migrateEntitiesStructured getter allEntityDefs allEntityDefs
 
         cleanDB
 
@@ -386,9 +551,9 @@ spec = describe "MigrationSpec" $ do
     it "migrates a clean DB" $ runConnAssert $ do
         cleanDB
 
-        connPrepare <- getConnPrepare
+        getter <- getStmtGetter
         result <-
-            liftIO $ migrateEntitiesStructured connPrepare allEntityDefs allEntityDefs
+            liftIO $ migrateEntitiesStructured getter allEntityDefs allEntityDefs
 
         cleanDB
 
@@ -398,7 +563,7 @@ spec = describe "MigrationSpec" $ do
             Left err ->
                 expectationFailure $ show err
             Right alters -> do
-                traverse (flip rawExecute [] . snd . showAlterDb) alters
+                traverse_ (flip rawExecute [] . snd . showAlterDb) alters
                 result2 <-
-                    liftIO $ migrateEntitiesStructured connPrepare allEntityDefs allEntityDefs
+                    liftIO $ migrateEntitiesStructured getter allEntityDefs allEntityDefs
                 result2 `shouldBe` Right []

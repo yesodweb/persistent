@@ -97,12 +97,20 @@ data EntitySchemaState
 
 -- | Information about an existing table in the database
 data ExistingEntitySchemaState = ExistingEntitySchemaState
-    { essColumns :: [Column]
-    -- ^ The columns in this entity
-    , essConstraints :: Map ConstraintNameDB [FieldNameDB]
-    -- ^ A map of constraint names to the columns that are affected by those
-    -- constraints. Primary key and foreign key constraints are not included
-    -- here, since they are part of the 'Column'.
+    { essColumns :: Map FieldNameDB (Column, [ColumnReference])
+    -- ^ The columns in this entity, together with the set of foreign key
+    -- constraints that they are subject to. Usually the ColumnReference list
+    -- will contain 0-1 elements, but in the event that there are multiple FK
+    -- constraints applying to a given column in the database we need to keep
+    -- track of them all because we don't yet know which one has the right name
+    -- (based on what is in the corresponding model's EntityDef).
+    --
+    -- Note that cReference will be unset for these columns, for the same reason:
+    -- there may be multiple FK constraints and we don't yet know which one to
+    -- use.
+    , essUniqueConstraints :: Map ConstraintNameDB [FieldNameDB]
+    -- ^ A map of unique constraint names to the columns that are affected by
+    -- those constraints.
     }
     deriving (Eq, Show)
 
@@ -127,25 +135,25 @@ collectSchemaState getStmt entityNames = runExceptT $ do
 
             if tableExists
                 then do
-                    let
-                        addColumnReference column =
-                            column
-                                { cReference =
-                                    Map.lookup (cName column) =<< Map.lookup entityNameDB foreignKeyReferences
-                                }
-
                     essColumns <- case Map.lookup entityNameDB columns of
                         Just cols ->
-                            pure (map addColumnReference cols)
+                            pure $ Map.fromList $ flip map cols $ \c ->
+                                ( cName c
+                                ,
+                                    ( c
+                                    , fromMaybe [] $
+                                        Map.lookup (cName c) =<< Map.lookup entityNameDB foreignKeyReferences
+                                    )
+                                )
                         Nothing ->
                             throwError
                                 ("Missing entity name from columns map: " <> unEntityNameDB entityNameDB)
 
                     let
-                        essConstraints = fromMaybe Map.empty (Map.lookup entityNameDB constraints)
+                        essUniqueConstraints = fromMaybe Map.empty (Map.lookup entityNameDB constraints)
                     pure
                         ( entityNameDB
-                        , EntityExists $ ExistingEntitySchemaState{essColumns, essConstraints}
+                        , EntityExists $ ExistingEntitySchemaState{essColumns, essUniqueConstraints}
                         )
                 else
                     pure
@@ -421,12 +429,19 @@ getConstraints getStmt entityNames = do
                 (EntityNameDB tableName)
                 (Map.singleton (ConstraintNameDB constraintName) [FieldNameDB columnName])
 
--- | Get foreign key reference information for all columns in the supplied
--- tables from the database.
+-- | Get foreign key constraint information for all columns in the supplied
+-- tables from the database. We return a list of references per column because
+-- there may be duplicate FK constraints in the database.
+--
+-- Note that we only care about FKs where the column in question has ordinal
+-- position 1 i.e. is the first column appearing in the FK constraint.
+-- Eventually we may want to fill this gap so that multi-column FK constraints
+-- can be dealt with by this migrator, but for now that is not something that
+-- persistent-postgresql handles.
 getForeignKeyReferences
     :: (Text -> IO Statement)
     -> [EntityNameDB]
-    -> ExceptT Text IO (Map EntityNameDB (Map FieldNameDB ColumnReference))
+    -> ExceptT Text IO (Map EntityNameDB (Map FieldNameDB [ColumnReference]))
 getForeignKeyReferences getStmt entityNames = do
     results <-
         liftIO $
@@ -436,7 +451,7 @@ getForeignKeyReferences getStmt entityNames = do
                 [PersistArray (map (PersistText . unEntityNameDB) entityNames)]
                 processForeignKeyReference
     case partitionEithers results of
-        ([], xs) -> pure $ Map.unionsWith Map.union xs
+        ([], xs) -> pure $ Map.unionsWith (Map.unionWith (<>)) xs
         (errs, _) -> throwError (T.intercalate "\n" errs)
   where
     -- TODO: should this filter by schema?
@@ -459,11 +474,14 @@ getForeignKeyReferences getStmt entityNames = do
             , "WHERE tc.constraint_type='FOREIGN KEY' "
             , "AND kcu.ordinal_position=1 "
             , "AND kcu.table_name=ANY (?) "
+            , -- Define an explicit ordering just to be sure that in the event we
+              -- have bugs here, they can be reproduced consistently
+              "ORDER BY 1, 2, 3, 4"
             ]
 
     processForeignKeyReference
         :: [PersistValue]
-        -> Either Text (Map EntityNameDB (Map FieldNameDB ColumnReference))
+        -> Either Text (Map EntityNameDB (Map FieldNameDB [ColumnReference]))
     processForeignKeyReference resultRow = do
         ( sourceTableName
             , sourceColumnName
@@ -506,7 +524,8 @@ getForeignKeyReferences getStmt entityNames = do
                             }
                     }
 
-        pure $ Map.singleton sourceTableName (Map.singleton sourceColumnName columnRef)
+        pure $
+            Map.singleton sourceTableName (Map.singleton sourceColumnName [columnRef])
 
 parseCascade :: Text -> Either Text CascadeAction
 parseCascade txt =
@@ -558,14 +577,16 @@ migrateEntityFromSchemaState schemaState allDefs entity =
     case schemaState of
         EntityDoesNotExist ->
             (addTable newcols entity) : uniques ++ references ++ foreignsAlt
-        EntityExists ExistingEntitySchemaState{essColumns, essConstraints} ->
+        EntityExists ExistingEntitySchemaState{essColumns, essUniqueConstraints} ->
             let
                 (acs, ats) =
                     getAlters
                         allDefs
                         entity
                         (newcols, udspair)
-                        (map dubiouslyRemoveReferences essColumns, Map.toList essConstraints)
+                        ( map pickColumnReference (Map.elems essColumns)
+                        , Map.toList essUniqueConstraints
+                        )
                 acs' = map (AlterColumn name) acs
                 ats' = map (AlterTable name) ats
              in
@@ -586,21 +607,50 @@ migrateEntityFromSchemaState schemaState allDefs entity =
             newcols
     foreignsAlt = mapMaybe (mkForeignAlt entity) fdefs
 
-    -- HACK! This shouldn't really be here; it was added to preserve existing
-    -- behaviour. The migrator currently expects to only see cReference set in
-    -- the old columns if it is also set in the new ones. This means that the
-    -- migrator sometimes behaves incorrectly for standalone Foreign
-    -- declarations, like Child in the ForeignKey test in persistent-test.
+    -- HACK! This was added to preserve existing behaviour during a refactor.
+    -- The migrator currently expects to only see cReference set in the old
+    -- columns if it is also set in the new ones. It also ignores any existing
+    -- FK constraints in the database that don't match the expected FK
+    -- constraint name as defined by the Persistent EntityDef.
+    --
+    -- This means that the migrator sometimes behaves incorrectly for standalone
+    -- Foreign declarations, like Child in the ForeignKey test in
+    -- persistent-test, as well as in situations where there are duplicate FK
+    -- constraints for a given column.
     --
     -- See https://github.com/yesodweb/persistent/issues/1611#issuecomment-3613251095 for
     -- more info
-    dubiouslyRemoveReferences oldCol =
+    pickColumnReference (oldCol, oldReferences) =
         case List.find (\c -> cName c == cName oldCol) newcols of
-            Just new
-                | isNothing (cReference new) ->
-                    oldCol{cReference = Nothing}
-            _ ->
-                -- otherwise no-op, `getAlters` will handle dropping this for us.
+            Just new -> fromMaybe oldCol $ do
+                -- Note that if this do block evaluates to Nothing, it means
+                -- we'll return a Column that has cReference = Nothing -
+                -- effectively, we are telling the migrator that this particular
+                -- column has no FK constraints in the DB.
+
+                -- If the persistent models don't define a FK constraint, ignore
+                -- any FK constraints that might exist in the DB (this is
+                -- arguably a bug, but it's a pre-existing one)
+                newRef <- cReference new
+
+                -- If the persistent models _do_ define an FK constraint but
+                -- there's no matching FK constraint in the DB, we don't have
+                -- to do anything else here: `getAlters` should handle adding
+                -- the FK constraint for us
+                oldRef <-
+                    List.find
+                        (\oldRef -> crConstraintName oldRef == crConstraintName newRef)
+                        oldReferences
+
+                -- Finally, if the persistent models define an FK constraint and
+                -- an FK constraint of that name exists in the DB, return it, so
+                -- that `getAlters` can check that the constraint is set up
+                -- correctly
+                pure $ oldCol{cReference = Just oldRef}
+            Nothing ->
+                -- We have a column that exists in the DB but not in the
+                -- EntityDef. We can no-op here, since `getAlters` will handle
+                -- dropping this for us.
                 oldCol
 
 -- | Indicates whether a Postgres Column is safe to drop.
@@ -755,6 +805,11 @@ equivalentRef (Just cr1) (Just cr2) =
     eqCascade _ _ = False
 equivalentRef _ _ = False
 
+-- | Generate the default foreign key constraint name for a given source table and
+-- source column name. Note that this function should generally not be used
+-- except as an argument to postgresMkColumns, because if you use it in other contexts,
+-- you're likely to miss nonstandard constraint names declared in the persistent
+-- models files via `constraint=`
 refName :: EntityNameDB -> FieldNameDB -> ConstraintNameDB
 refName (EntityNameDB table) (FieldNameDB column) =
     let
