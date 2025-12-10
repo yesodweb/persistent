@@ -19,6 +19,7 @@ import PgInit
 
 import Data.Foldable (traverse_)
 import qualified Data.Map as Map
+import qualified Data.Set as Set
 import Data.Proxy
 import qualified Data.Text as T
 import Database.Persist.Postgresql.Internal.Migration
@@ -185,7 +186,7 @@ spec = describe "MigrationSpec" $ do
 
         let
             expected =
-                ( SchemaState
+                SchemaState
                     ( Map.fromList
                         [
                             ( EntityNameDB{unEntityNameDB = "admin_users"}
@@ -206,7 +207,7 @@ spec = describe "MigrationSpec" $ do
                                                         , cMaxLen = Nothing
                                                         , cReference = Nothing
                                                         }
-                                                    ,
+                                                    , Set.fromList
                                                         [ ColumnReference
                                                             { crTableName = EntityNameDB{unEntityNameDB = "users"}
                                                             , crConstraintName =
@@ -230,7 +231,7 @@ spec = describe "MigrationSpec" $ do
                                                         , cMaxLen = Nothing
                                                         , cReference = Nothing
                                                         }
-                                                    ,
+                                                    , Set.fromList
                                                         [ ColumnReference
                                                             { crTableName = EntityNameDB{unEntityNameDB = "users"}
                                                             , crConstraintName =
@@ -272,7 +273,7 @@ spec = describe "MigrationSpec" $ do
                                                         , cMaxLen = Nothing
                                                         , cReference = Nothing
                                                         }
-                                                    , []
+                                                    , Set.fromList []
                                                     )
                                                 )
                                             ,
@@ -288,7 +289,7 @@ spec = describe "MigrationSpec" $ do
                                                         , cMaxLen = Nothing
                                                         , cReference = Nothing
                                                         }
-                                                    , []
+                                                    , Set.fromList []
                                                     )
                                                 )
                                             ,
@@ -304,7 +305,7 @@ spec = describe "MigrationSpec" $ do
                                                         , cMaxLen = Nothing
                                                         , cReference = Nothing
                                                         }
-                                                    ,
+                                                    , Set.fromList
                                                         [ ColumnReference
                                                             { crTableName = EntityNameDB{unEntityNameDB = "users"}
                                                             , crConstraintName =
@@ -345,7 +346,7 @@ spec = describe "MigrationSpec" $ do
                                                         , cMaxLen = Nothing
                                                         , cReference = Nothing
                                                         }
-                                                    , []
+                                                    , Set.fromList []
                                                     )
                                                 )
                                             ,
@@ -361,7 +362,7 @@ spec = describe "MigrationSpec" $ do
                                                         , cMaxLen = Nothing
                                                         , cReference = Nothing
                                                         }
-                                                    , []
+                                                    , Set.fromList []
                                                     )
                                                 )
                                             ,
@@ -377,7 +378,7 @@ spec = describe "MigrationSpec" $ do
                                                         , cMaxLen = Nothing
                                                         , cReference = Nothing
                                                         }
-                                                    ,
+                                                    , Set.fromList
                                                         [ ColumnReference
                                                             { crTableName = EntityNameDB{unEntityNameDB = "users"}
                                                             , crConstraintName =
@@ -425,7 +426,7 @@ spec = describe "MigrationSpec" $ do
                                                         , cMaxLen = Nothing
                                                         , cReference = Nothing
                                                         }
-                                                    , []
+                                                    , Set.fromList []
                                                     )
                                                 )
                                             ,
@@ -441,7 +442,7 @@ spec = describe "MigrationSpec" $ do
                                                         , cMaxLen = Nothing
                                                         , cReference = Nothing
                                                         }
-                                                    ,
+                                                    , Set.fromList
                                                         [ ColumnReference
                                                             { crTableName = EntityNameDB{unEntityNameDB = "users"}
                                                             , crConstraintName =
@@ -465,7 +466,7 @@ spec = describe "MigrationSpec" $ do
                                                         , cMaxLen = Nothing
                                                         , cReference = Nothing
                                                         }
-                                                    ,
+                                                    , Set.fromList
                                                         [ ColumnReference
                                                             { crTableName = EntityNameDB{unEntityNameDB = "users"}
                                                             , crConstraintName =
@@ -500,7 +501,7 @@ spec = describe "MigrationSpec" $ do
                                                         , cMaxLen = Nothing
                                                         , cReference = Nothing
                                                         }
-                                                    , []
+                                                    , Set.fromList []
                                                     )
                                                 )
                                             ,
@@ -516,7 +517,7 @@ spec = describe "MigrationSpec" $ do
                                                         , cMaxLen = Nothing
                                                         , cReference = Nothing
                                                         }
-                                                    , []
+                                                    , Set.fromList []
                                                     )
                                                 )
                                             ,
@@ -532,7 +533,7 @@ spec = describe "MigrationSpec" $ do
                                                         , cMaxLen = Nothing
                                                         , cReference = Nothing
                                                         }
-                                                    , []
+                                                    , Set.fromList []
                                                     )
                                                 )
                                             ]
@@ -542,7 +543,6 @@ spec = describe "MigrationSpec" $ do
                             )
                         ]
                     )
-                )
 
         actual `shouldBe` Right expected
 

@@ -12,7 +12,7 @@ cabal-version:      >=1.10
 build-type:         Simple
 homepage:           http://www.yesodweb.com/book/persistent
 bug-reports:        https://github.com/yesodweb/persistent/issues
-extra-source-files: ChangeLog.md
+extra-source-files: ChangeLog.md sql/*.sql
 
 library
   build-depends:
@@ -23,6 +23,7 @@ library
     , bytestring          >=0.10
     , conduit             >=1.2.12
     , containers          >=0.5
+    , file-embed          >=0.0.16
     , monad-logger        >=0.3.25
     , mtl
     , persistent          >=2.18   && <3

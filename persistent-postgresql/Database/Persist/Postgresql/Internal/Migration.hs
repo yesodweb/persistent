@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE ViewPatterns #-}
 
@@ -16,11 +17,13 @@ import Data.Acquire (with)
 import Data.Conduit
 import qualified Data.Conduit.List as CL
 import Data.Either (partitionEithers)
+import Data.FileEmbed (embedFileRelative)
 import Data.List as List
 import qualified Data.List.NonEmpty as NEL
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe
+import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -97,7 +100,7 @@ data EntitySchemaState
 
 -- | Information about an existing table in the database
 data ExistingEntitySchemaState = ExistingEntitySchemaState
-    { essColumns :: Map FieldNameDB (Column, [ColumnReference])
+    { essColumns :: Map FieldNameDB (Column, (Set ColumnReference))
     -- ^ The columns in this entity, together with the set of foreign key
     -- constraints that they are subject to. Usually the ColumnReference list
     -- will contain 0-1 elements, but in the event that there are multiple FK
@@ -141,7 +144,7 @@ collectSchemaState getStmt entityNames = runExceptT $ do
                                 ( cName c
                                 ,
                                     ( c
-                                    , fromMaybe [] $
+                                    , fromMaybe Set.empty $
                                         Map.lookup (cName c) =<< Map.lookup entityNameDB foreignKeyReferences
                                     )
                                 )
@@ -441,7 +444,7 @@ getConstraints getStmt entityNames = do
 getForeignKeyReferences
     :: (Text -> IO Statement)
     -> [EntityNameDB]
-    -> ExceptT Text IO (Map EntityNameDB (Map FieldNameDB [ColumnReference]))
+    -> ExceptT Text IO (Map EntityNameDB (Map FieldNameDB (Set ColumnReference)))
 getForeignKeyReferences getStmt entityNames = do
     results <-
         liftIO $
@@ -451,37 +454,14 @@ getForeignKeyReferences getStmt entityNames = do
                 [PersistArray (map (PersistText . unEntityNameDB) entityNames)]
                 processForeignKeyReference
     case partitionEithers results of
-        ([], xs) -> pure $ Map.unionsWith (Map.unionWith (<>)) xs
+        ([], xs) -> pure $ Map.unionsWith (Map.unionWith Set.union) xs
         (errs, _) -> throwError (T.intercalate "\n" errs)
   where
-    -- TODO: should this filter by schema?
-    getForeignKeyReferencesSql =
-        T.concat
-            [ "SELECT DISTINCT "
-            , "kcu.table_name, "
-            , "kcu.column_name, "
-            , "ccu.table_name, "
-            , "tc.constraint_name, "
-            , "rc.update_rule, "
-            , "rc.delete_rule "
-            , "FROM information_schema.constraint_column_usage ccu "
-            , "INNER JOIN information_schema.key_column_usage kcu "
-            , "  ON ccu.constraint_name = kcu.constraint_name "
-            , "INNER JOIN information_schema.table_constraints tc "
-            , "  ON tc.constraint_name = kcu.constraint_name "
-            , "LEFT JOIN information_schema.referential_constraints AS rc"
-            , "  ON rc.constraint_name = ccu.constraint_name "
-            , "WHERE tc.constraint_type='FOREIGN KEY' "
-            , "AND kcu.ordinal_position=1 "
-            , "AND kcu.table_name=ANY (?) "
-            , -- Define an explicit ordering just to be sure that in the event we
-              -- have bugs here, they can be reproduced consistently
-              "ORDER BY 1, 2, 3, 4"
-            ]
+    getForeignKeyReferencesSql = T.decodeUtf8 $(embedFileRelative "sql/getForeignKeyReferences.sql")
 
     processForeignKeyReference
         :: [PersistValue]
-        -> Either Text (Map EntityNameDB (Map FieldNameDB [ColumnReference]))
+        -> Either Text (Map EntityNameDB (Map FieldNameDB (Set ColumnReference)))
     processForeignKeyReference resultRow = do
         ( sourceTableName
             , sourceColumnName
@@ -491,10 +471,11 @@ getForeignKeyReferences getStmt entityNames = do
             , delRule
             ) <-
             case resultRow of
-                [ PersistText srcTable
-                    , PersistText srcColumn
+                [ PersistText constrName
+                    , PersistText srcTable
                     , PersistText refTable
-                    , PersistText constraint
+                    , PersistText srcColumn
+                    , PersistText _refColumn
                     , PersistText updRule
                     , PersistText delRule
                     ] ->
@@ -502,7 +483,7 @@ getForeignKeyReferences getStmt entityNames = do
                             ( EntityNameDB srcTable
                             , FieldNameDB srcColumn
                             , EntityNameDB refTable
-                            , ConstraintNameDB constraint
+                            , ConstraintNameDB constrName
                             , updRule
                             , delRule
                             )
@@ -525,20 +506,23 @@ getForeignKeyReferences getStmt entityNames = do
                     }
 
         pure $
-            Map.singleton sourceTableName (Map.singleton sourceColumnName [columnRef])
+            Map.singleton
+                sourceTableName
+                (Map.singleton sourceColumnName (Set.singleton columnRef))
 
+-- Parse a cascade action as represented in pg_constraint
 parseCascade :: Text -> Either Text CascadeAction
 parseCascade txt =
     case txt of
-        "NO ACTION" ->
+        "a" ->
             Right NoAction
-        "CASCADE" ->
+        "c" ->
             Right Cascade
-        "SET NULL" ->
+        "n" ->
             Right SetNull
-        "SET DEFAULT" ->
+        "d" ->
             Right SetDefault
-        "RESTRICT" ->
+        "r" ->
             Right Restrict
         _ ->
             Left $ "Unexpected value in parseCascade: " <> txt
