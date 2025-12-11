@@ -60,6 +60,14 @@ AdminUser sql=admin_users
 
     promotedByUserId UserId
     UniquePromotedByUserId promotedByUserId
+
+FKParent sql=migration_fk_parent
+
+FKChildV1 sql=migration_fk_child
+
+-- Simulate creating a new FK field on an existing table
+FKChildV2 sql=migration_fk_child
+    parentId FKParentId
 |]
 
 userEntityDef :: EntityDef
@@ -77,6 +85,17 @@ password2EntityDef = entityDef (Proxy :: Proxy Password2)
 adminUserEntityDef :: EntityDef
 adminUserEntityDef = entityDef (Proxy :: Proxy AdminUser)
 
+fkParentEntityDef :: EntityDef
+fkParentEntityDef = entityDef (Proxy :: Proxy FKParent)
+
+fkChildV1EntityDef :: EntityDef
+fkChildV1EntityDef = entityDef (Proxy :: Proxy FKChildV1)
+
+fkChildV2EntityDef :: EntityDef
+fkChildV2EntityDef = entityDef (Proxy :: Proxy FKChildV2)
+
+-- Note that FKChild is deliberately omitted here because we have two
+-- versions of it
 allEntityDefs :: [EntityDef]
 allEntityDefs =
     [ userEntityDef
@@ -84,8 +103,10 @@ allEntityDefs =
     , passwordEntityDef
     , password2EntityDef
     , adminUserEntityDef
+    , fkParentEntityDef
     ]
 
+-- Note that this function migrates to the schema expected by FKChildV1
 migrateManually :: (HasCallStack, MonadIO m) => SqlPersistT m ()
 migrateManually = do
     cleanDB
@@ -150,6 +171,8 @@ migrateManually = do
             , "  ADD CONSTRAINT unique_promoted_by_user_id"
             , "  UNIQUE(promoted_by_user_id);"
             ]
+    rawEx "CREATE TABLE migration_fk_parent(id int8 primary key);"
+    rawEx "CREATE TABLE migration_fk_child(id int8 primary key);"
     rawEx "CREATE TABLE ignored(id int8 primary key);"
 
 cleanDB :: (HasCallStack, MonadIO m) => SqlPersistT m ()
@@ -162,6 +185,8 @@ cleanDB = do
     rawEx "DROP TABLE IF EXISTS ignored;"
     rawEx "DROP TABLE IF EXISTS admin_users;"
     rawEx "DROP TABLE IF EXISTS users;"
+    rawEx "DROP TABLE IF EXISTS migration_fk_child;"
+    rawEx "DROP TABLE IF EXISTS migration_fk_parent;"
 
 spec :: Spec
 spec = describe "MigrationSpec" $ do
@@ -582,3 +607,27 @@ spec = describe "MigrationSpec" $ do
                 result2 <-
                     liftIO $ migrateEntitiesStructured getter allEntityDefs allEntityDefs
                 result2 `shouldBe` Right []
+
+    it "suggests FK constraints for new fields first time" $ runConnAssert $ do
+        migrateManually
+
+        getter <- getStmtGetter
+        result <-
+            liftIO $
+                migrateEntitiesStructured
+                    getter
+                    (fkChildV2EntityDef : allEntityDefs)
+                    [fkChildV2EntityDef]
+
+        cleanDB
+
+        case result of
+            Right [] ->
+                pure ()
+            Left err ->
+                expectationFailure $ show err
+            Right alters ->
+                map (snd . showAlterDb) alters
+                    `shouldBe` [ "ALTER TABLE \"migration_fk_child\" ADD COLUMN \"parent_id\" INT8 NOT NULL"
+                               , "ALTER TABLE \"migration_fk_child\" ADD CONSTRAINT \"migration_fk_child_parent_id_fkey\" FOREIGN KEY(\"parent_id\") REFERENCES \"migration_fk_parent\"(\"id\") ON DELETE RESTRICT  ON UPDATE RESTRICT"
+                               ]

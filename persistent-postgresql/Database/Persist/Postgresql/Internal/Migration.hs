@@ -1097,42 +1097,33 @@ findAlters
     -> EntityDef
     -- ^ The entity definition for the entity that we're working on.
     -> Column
-    -- ^ The column that we're searching for potential alterations for.
+    -- ^ The column that we're searching for potential alterations for, derived
+    -- from the Persistent EntityDef. That is: this is how we _want_ the column
+    -- to look, and not necessarily how it actually looks in the database right
+    -- now.
     -> [Column]
+    -- ^ The columns for this table, as they currently exist in the database.
     -> ([AlterColumn], [Column])
 findAlters defs edef col@(Column name isNull sqltype def _gen _defConstraintName _maxLen ref) cols =
     case List.find (\c -> cName c == name) cols of
         Nothing ->
-            ([AddColumn col], cols)
+            ([AddColumn col] ++ refAdd ref, cols)
         Just
-            (Column _oldName isNull' sqltype' def' _gen' _defConstraintName' _maxLen' ref') ->
+            (Column oldName isNull' sqltype' def' _gen' _defConstraintName' _maxLen' ref') ->
                 let
                     refDrop Nothing = []
                     refDrop (Just ColumnReference{crConstraintName = cname}) =
                         [DropReference cname]
 
-                    refAdd Nothing = []
-                    refAdd (Just colRef) =
-                        case find ((== crTableName colRef) . getEntityDBName) defs of
-                            Just refdef
-                                | Just _oldName /= fmap fieldDB (getEntityIdField edef) ->
-                                    [ AddReference
-                                        (crTableName colRef)
-                                        (crConstraintName colRef)
-                                        (name NEL.:| [])
-                                        (NEL.toList $ Util.dbIdColumnsEsc escapeF refdef)
-                                        (crFieldCascade colRef)
-                                    ]
-                            Just _ -> []
-                            Nothing ->
-                                error $
-                                    "could not find the entityDef for reftable["
-                                        ++ show (crTableName colRef)
-                                        ++ "]"
                     modRef =
                         if equivalentRef ref ref'
                             then []
-                            else refDrop ref' ++ refAdd ref
+                            else
+                                refDrop ref'
+                                    ++ ( do
+                                            guard $ Just oldName /= fmap fieldDB (getEntityIdField edef)
+                                            refAdd ref
+                                       )
                     modNull = case (isNull, isNull') of
                         (True, False) -> do
                             guard $ Just name /= fmap fieldDB (getEntityIdField edef)
@@ -1174,3 +1165,20 @@ findAlters defs edef col@(Column name isNull sqltype def _gen _defConstraintName
                     ( modRef ++ modDef ++ modNull ++ modType ++ dropSafe
                     , filter (\c -> cName c /= name) cols
                     )
+  where
+    refAdd Nothing = []
+    refAdd (Just colRef) =
+        case find ((== crTableName colRef) . getEntityDBName) defs of
+            Just refdef ->
+                [ AddReference
+                    (crTableName colRef)
+                    (crConstraintName colRef)
+                    (name NEL.:| [])
+                    (NEL.toList $ Util.dbIdColumnsEsc escapeF refdef)
+                    (crFieldCascade colRef)
+                ]
+            Nothing ->
+                error $
+                    "could not find the entityDef for reftable["
+                        ++ show (crTableName colRef)
+                        ++ "]"
