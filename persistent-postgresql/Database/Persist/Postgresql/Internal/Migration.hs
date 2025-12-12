@@ -1104,61 +1104,61 @@ findAlters
     -> [Column]
     -- ^ The columns for this table, as they currently exist in the database.
     -> ([AlterColumn], [Column])
-findAlters defs edef col@(Column name isNull sqltype def _gen _defConstraintName _maxLen ref) cols =
-    case List.find (\c -> cName c == name) cols of
+findAlters defs edef newCol oldCols =
+    case List.find (\c -> cName c == cName newCol) oldCols of
         Nothing ->
-            ([AddColumn col] ++ refAdd ref, cols)
+            ([AddColumn newCol] ++ refAdd (cReference newCol), oldCols)
         Just
-            (Column _oldName isNull' sqltype' def' _gen' _defConstraintName' _maxLen' ref') ->
+            oldCol ->
                 let
                     refDrop Nothing = []
                     refDrop (Just ColumnReference{crConstraintName = cname}) =
                         [DropReference cname]
 
                     modRef =
-                        if equivalentRef ref ref'
+                        if equivalentRef (cReference oldCol) (cReference newCol)
                             then []
-                            else refDrop ref' ++ refAdd ref
-                    modNull = case (isNull, isNull') of
+                            else refDrop (cReference oldCol) ++ refAdd (cReference newCol)
+                    modNull = case (cNull newCol, cNull oldCol) of
                         (True, False) -> do
-                            guard $ Just name /= fmap fieldDB (getEntityIdField edef)
-                            pure (IsNull col)
+                            guard $ Just (cName newCol) /= fmap fieldDB (getEntityIdField edef)
+                            pure (IsNull newCol)
                         (False, True) ->
                             let
-                                up = case def of
+                                up = case cDefault newCol of
                                     Nothing -> id
-                                    Just s -> (:) (UpdateNullToValue col s)
+                                    Just s -> (:) (UpdateNullToValue newCol s)
                              in
-                                up [NotNull col]
+                                up [NotNull newCol]
                         _ -> []
                     modType
-                        | sqlTypeEq sqltype sqltype' = []
+                        | sqlTypeEq (cSqlType newCol) (cSqlType oldCol) = []
                         -- When converting from Persistent pre-2.0 databases, we
                         -- need to make sure that TIMESTAMP WITHOUT TIME ZONE is
                         -- treated as UTC.
-                        | sqltype == SqlDayTime && sqltype' == SqlOther "timestamp" =
-                            [ ChangeType col sqltype $
+                        | cSqlType newCol == SqlDayTime && cSqlType oldCol == SqlOther "timestamp" =
+                            [ ChangeType newCol (cSqlType newCol) $
                                 T.concat
                                     [ " USING "
-                                    , escapeF name
+                                    , escapeF (cName newCol)
                                     , " AT TIME ZONE 'UTC'"
                                     ]
                             ]
-                        | otherwise = [ChangeType col sqltype ""]
+                        | otherwise = [ChangeType newCol (cSqlType newCol) ""]
                     modDef =
-                        if def == def'
-                            || isJust (T.stripPrefix "nextval" =<< def')
+                        if cDefault newCol == cDefault oldCol
+                            || isJust (T.stripPrefix "nextval" =<< cDefault oldCol)
                             then []
-                            else case def of
-                                Nothing -> [NoDefault col]
-                                Just s -> [Default col s]
+                            else case cDefault newCol of
+                                Nothing -> [NoDefault newCol]
+                                Just s -> [Default newCol s]
                     dropSafe =
-                        if safeToRemove edef name
-                            then error "wtf" [Drop col (SafeToRemove True)]
+                        if safeToRemove edef (cName newCol)
+                            then error "wtf" [Drop newCol (SafeToRemove True)]
                             else []
                  in
                     ( modRef ++ modDef ++ modNull ++ modType ++ dropSafe
-                    , filter (\c -> cName c /= name) cols
+                    , filter (\c -> cName c /= cName newCol) oldCols
                     )
   where
     refAdd Nothing = []
@@ -1168,7 +1168,7 @@ findAlters defs edef col@(Column name isNull sqltype def _gen _defConstraintName
                 [ AddReference
                     (crTableName colRef)
                     (crConstraintName colRef)
-                    (name NEL.:| [])
+                    (cName newCol NEL.:| [])
                     (NEL.toList $ Util.dbIdColumnsEsc escapeF refdef)
                     (crFieldCascade colRef)
                 ]
