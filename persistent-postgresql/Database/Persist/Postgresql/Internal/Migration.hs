@@ -1109,7 +1109,7 @@ findAlters defs edef col@(Column name isNull sqltype def _gen _defConstraintName
         Nothing ->
             ([AddColumn col] ++ refAdd ref, cols)
         Just
-            (Column oldName isNull' sqltype' def' _gen' _defConstraintName' _maxLen' ref') ->
+            (Column _oldName isNull' sqltype' def' _gen' _defConstraintName' _maxLen' ref') ->
                 let
                     refDrop Nothing = []
                     refDrop (Just ColumnReference{crConstraintName = cname}) =
@@ -1118,12 +1118,7 @@ findAlters defs edef col@(Column name isNull sqltype def _gen _defConstraintName
                     modRef =
                         if equivalentRef ref ref'
                             then []
-                            else
-                                refDrop ref'
-                                    ++ ( do
-                                            guard $ Just oldName /= fmap fieldDB (getEntityIdField edef)
-                                            refAdd ref
-                                       )
+                            else refDrop ref' ++ refAdd ref
                     modNull = case (isNull, isNull') of
                         (True, False) -> do
                             guard $ Just name /= fmap fieldDB (getEntityIdField edef)
