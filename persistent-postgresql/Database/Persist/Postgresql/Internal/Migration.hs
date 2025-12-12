@@ -1162,6 +1162,10 @@ findAlters defs edef newCol oldCols =
                     )
   where
     refAdd Nothing = []
+    -- This check works around a bug where persistent will sometimes
+    -- generate an erroneous ForeignRef for ID fields.
+    -- See: https://github.com/yesodweb/persistent/issues/1615
+    refAdd _ | fmap fieldDB (getEntityIdField edef) == Just (cName newCol) = []
     refAdd (Just colRef) =
         case find ((== crTableName colRef) . getEntityDBName) defs of
             Just refdef ->

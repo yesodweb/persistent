@@ -68,6 +68,9 @@ FKChildV1 sql=migration_fk_child
 -- Simulate creating a new FK field on an existing table
 FKChildV2 sql=migration_fk_child
     parentId FKParentId
+
+ExplicitPrimaryKey sql=explicit_primary_key
+    Id Text
 |]
 
 userEntityDef :: EntityDef
@@ -94,6 +97,9 @@ fkChildV1EntityDef = entityDef (Proxy :: Proxy FKChildV1)
 fkChildV2EntityDef :: EntityDef
 fkChildV2EntityDef = entityDef (Proxy :: Proxy FKChildV2)
 
+explicitPrimaryKeyEntityDef :: EntityDef
+explicitPrimaryKeyEntityDef = entityDef (Proxy :: Proxy ExplicitPrimaryKey)
+
 -- Note that FKChild is deliberately omitted here because we have two
 -- versions of it
 allEntityDefs :: [EntityDef]
@@ -104,6 +110,7 @@ allEntityDefs =
     , password2EntityDef
     , adminUserEntityDef
     , fkParentEntityDef
+    , explicitPrimaryKeyEntityDef
     ]
 
 -- Note that this function migrates to the schema expected by FKChildV1
@@ -173,6 +180,7 @@ migrateManually = do
             ]
     rawEx "CREATE TABLE migration_fk_parent(id int8 primary key);"
     rawEx "CREATE TABLE migration_fk_child(id int8 primary key);"
+    rawEx "CREATE TABLE explicit_primary_key(id text primary key);"
     rawEx "CREATE TABLE ignored(id int8 primary key);"
 
 cleanDB :: (HasCallStack, MonadIO m) => SqlPersistT m ()
@@ -187,6 +195,7 @@ cleanDB = do
     rawEx "DROP TABLE IF EXISTS users;"
     rawEx "DROP TABLE IF EXISTS migration_fk_child;"
     rawEx "DROP TABLE IF EXISTS migration_fk_parent;"
+    rawEx "DROP TABLE IF EXISTS explicit_primary_key;"
 
 spec :: Spec
 spec = describe "MigrationSpec" $ do
