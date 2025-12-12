@@ -1,5 +1,10 @@
 # Changelog for persistent-postgresql
 
+# 2.14.2.0
+
+* [#1614](https://github.com/yesodweb/persistent/pull/1614)
+  * Generate migrations to create foreign key constraints while adding new foreign key columns (previously you had to generate migrations twice to create foreign key constraints)
+
 # 2.14.1.0
 
 * [#1612](https://github.com/yesodweb/persistent/pull/1612)
