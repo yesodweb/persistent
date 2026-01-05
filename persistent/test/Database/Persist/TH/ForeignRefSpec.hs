@@ -81,6 +81,14 @@ ChildImplicit
     name Text
     parent ParentImplicitId OnDeleteCascade OnUpdateCascade
 
+ChildImplicitUnspecified
+    name Text
+    parent ParentImplicitId
+
+ChildImplicitNoAction
+    name Text
+    parent ParentImplicitId OnDeleteNoAction OnUpdateNoAction
+
 ParentExplicit
     name Text
     Primary name
@@ -88,6 +96,14 @@ ParentExplicit
 ChildExplicit
     name Text
     Foreign ParentExplicit OnDeleteCascade OnUpdateCascade fkparent name
+
+ChildExplicitNoAction
+    name Text
+    Foreign ParentExplicit OnDeleteNoAction OnUpdateNoAction fkparent name
+
+ChildExplicitUnspecified
+    name Text
+    Foreign ParentExplicit fkparent name
 |]
 
 spec :: Spec
@@ -113,6 +129,106 @@ spec = describe "ForeignRefSpec" $ do
             foreignPrimarySourceFk_name_target (ForeignPrimarySource "asdf")
                 `shouldBe` ForeignPrimaryKey "asdf"
 
+    describe "Unspecified" $ do
+        describe "Explicit" $ do
+            let
+                parentDef =
+                    entityDef $ Proxy @ParentExplicit
+                childDef =
+                    entityDef $ Proxy @ChildExplicitUnspecified
+                childForeigns =
+                    entityForeigns childDef
+            it "should have a single foreign reference defined" $ do
+                case entityForeigns childDef of
+                    [ForeignDef{..}] ->
+                        foreignFieldCascade
+                            `shouldBe` FieldCascade
+                                { fcOnUpdate = Nothing
+                                , fcOnDelete = Nothing
+                                }
+                    as ->
+                        expectationFailure . mconcat $
+                            [ "(Explicit) Expected one foreign reference on childDef, "
+                            , "got: "
+                            , show as
+                            ]
+
+        describe "Implicit" $ do
+            let
+                parentDef =
+                    entityDef $ Proxy @ParentImplicit
+                childDef =
+                    entityDef $ Proxy @ChildImplicitUnspecified
+                childFields =
+                    entityFields childDef
+            describe "ChildImplicitUnspecified" $ do
+                case childFields of
+                    [nameField, parentIdField] -> do
+                        it "parentId has reference" $ do
+                            fieldReference parentIdField
+                                `shouldBe` ForeignRef (EntityNameHS "ParentImplicit")
+                            fieldCascade parentIdField
+                                `shouldBe` FieldCascade
+                                    { fcOnUpdate = Nothing
+                                    , fcOnDelete = Nothing
+                                    }
+                    as ->
+                        error . mconcat $
+                            [ "(Implicit) Expected one foreign reference on childDef, "
+                            , "got: "
+                            , show as
+                            ]
+
+    describe "NoAction" $ do
+        describe "Explicit" $ do
+            let
+                parentDef =
+                    entityDef $ Proxy @ParentExplicit
+                childDef =
+                    entityDef $ Proxy @ChildExplicitNoAction
+                childForeigns =
+                    entityForeigns childDef
+            it "should have a single foreign reference defined" $ do
+                case entityForeigns childDef of
+                    [ForeignDef{..}] ->
+                        foreignFieldCascade
+                            `shouldBe` FieldCascade
+                                { fcOnUpdate = Just NoAction
+                                , fcOnDelete = Just NoAction
+                                }
+                    as ->
+                        expectationFailure . mconcat $
+                            [ "(Explicit) Expected one foreign reference on childDef, "
+                            , "got: "
+                            , show as
+                            ]
+
+        describe "Implicit" $ do
+            let
+                parentDef =
+                    entityDef $ Proxy @ParentImplicit
+                childDef =
+                    entityDef $ Proxy @ChildImplicitNoAction
+                childFields =
+                    entityFields childDef
+            describe "ChildImplicitNoAction" $ do
+                case childFields of
+                    [nameField, parentIdField] -> do
+                        it "parentId has reference" $ do
+                            fieldReference parentIdField
+                                `shouldBe` ForeignRef (EntityNameHS "ParentImplicit")
+                            fieldCascade parentIdField
+                                `shouldBe` FieldCascade
+                                    { fcOnUpdate = Just NoAction
+                                    , fcOnDelete = Just NoAction
+                                    }
+                    as ->
+                        error . mconcat $
+                            [ "(Implicit) Expected one foreign reference on childDef, "
+                            , "got: "
+                            , show as
+                            ]
+
     describe "Cascade" $ do
         describe "Explicit" $ do
             let
@@ -124,8 +240,12 @@ spec = describe "ForeignRefSpec" $ do
                     entityForeigns childDef
             it "should have a single foreign reference defined" $ do
                 case entityForeigns childDef of
-                    [a] ->
-                        pure ()
+                    [ForeignDef{..}] ->
+                        foreignFieldCascade
+                            `shouldBe` FieldCascade
+                                { fcOnUpdate = Just Cascade
+                                , fcOnDelete = Just Cascade
+                                }
                     as ->
                         expectationFailure . mconcat $
                             [ "(Explicit) Expected one foreign reference on childDef, "
@@ -169,6 +289,11 @@ spec = describe "ForeignRefSpec" $ do
                         it "parentId has reference" $ do
                             fieldReference parentIdField
                                 `shouldBe` ForeignRef (EntityNameHS "ParentImplicit")
+                            fieldCascade parentIdField
+                                `shouldBe` FieldCascade
+                                    { fcOnUpdate = Just Cascade
+                                    , fcOnDelete = Just Cascade
+                                    }
                     as ->
                         error . mconcat $
                             [ "(Implicit) Expected one foreign reference on childDef, "

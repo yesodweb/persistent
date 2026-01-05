@@ -45,6 +45,7 @@ import qualified MaybeFieldDefsTest
 import qualified MigrationColumnLengthTest
 import qualified MigrationOnlyTest
 import qualified MigrationReferenceSpec
+import qualified MigrationSpec
 import qualified MigrationTest
 import qualified MpsCustomPrefixTest
 import qualified MpsNoPrefixTest
@@ -151,6 +152,7 @@ main = do
     hspec $ do
         ImplicitUuidSpec.spec
         MigrationReferenceSpec.spec
+        MigrationSpec.spec
         RenameTest.specsWith runConnAssert
         DataTypeTest.specsWith
             runConnAssert

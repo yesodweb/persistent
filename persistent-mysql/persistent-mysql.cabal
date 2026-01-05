@@ -1,5 +1,5 @@
 name:               persistent-mysql
-version:            2.13.1.5
+version:            2.13.1.6
 license:            MIT
 license-file:       LICENSE
 author:             Felipe Lessa <felipe.lessa@gmail.com>, Michael Snoyman
@@ -40,7 +40,7 @@ library
     , monad-logger
     , mysql          >=0.2.1  && <0.3
     , mysql-simple   >=0.4.7  && <0.5
-    , persistent     >=2.13.3 && <3
+    , persistent     >=2.18   && <3
     , resource-pool
     , resourcet      >=1.1
     , text           >=1.2

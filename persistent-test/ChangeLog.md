@@ -1,5 +1,9 @@
 ## Unreleased changes
 
+# 2.13.2.1
+* [#1610](https://github.com/yesodweb/persistent/pull/1610)
+  * Added `NoAction` as a `CascadeAction`
+
 # 2.13.2.0
 * [#1601](https://github.com/yesodweb/persistent/pull/1601)
   * Adjust test data to avoid deprecated entity definition syntax

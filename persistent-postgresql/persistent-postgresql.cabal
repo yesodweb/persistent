@@ -1,5 +1,5 @@
 name:               persistent-postgresql
-version:            2.13.7.0
+version:            2.14.2.0
 license:            MIT
 license-file:       LICENSE
 author:             Felipe Lessa, Michael Snoyman <michael@snoyman.com>
@@ -12,34 +12,39 @@ cabal-version:      >=1.10
 build-type:         Simple
 homepage:           http://www.yesodweb.com/book/persistent
 bug-reports:        https://github.com/yesodweb/persistent/issues
-extra-source-files: ChangeLog.md
+extra-source-files:
+  ChangeLog.md
+  sql/*.sql
 
 library
   build-depends:
-      aeson               >=1.0
+      aeson                       >=1.0
     , attoparsec
-    , base                >=4.9     && <5
+    , base                        >=4.9     && <5
     , blaze-builder
-    , bytestring          >=0.10
-    , conduit             >=1.2.12
-    , containers          >=0.5
-    , monad-logger        >=0.3.25
+    , bytestring                  >=0.10
+    , conduit                     >=1.2.12
+    , containers                  >=0.5
+    , file-embed                  >=0.0.16
+    , monad-logger                >=0.3.25
     , mtl
-    , persistent          >=2.13.3  && <3
-    , postgresql-libpq    >=0.9.4.2 && <0.12
-    , postgresql-simple   >=0.6.1   && <0.8
+    , persistent                  >=2.18    && <3
+    , postgresql-libpq            >=0.9.4.2 && <0.12
+    , postgresql-simple           >=0.6.1   && <0.8
+    , postgresql-simple-interval  >=1       && <1.1
     , resource-pool
-    , resourcet           >=1.1.9
+    , resourcet                   >=1.1.9
     , string-conversions
-    , text                >=1.2
-    , time                >=1.6
-    , transformers        >=0.5
+    , text                        >=1.2
+    , time                        >=1.6
+    , transformers                >=0.5
     , unliftio-core
     , vault
 
   exposed-modules:
     Database.Persist.Postgresql
     Database.Persist.Postgresql.Internal
+    Database.Persist.Postgresql.Internal.Migration
     Database.Persist.Postgresql.JSON
 
   ghc-options:      -Wall
@@ -60,6 +65,7 @@ test-suite test
     ImplicitUuidSpec
     JSONTest
     MigrationReferenceSpec
+    MigrationSpec
     PgInit
     PgIntervalTest
     UpsertWhere
@@ -67,11 +73,11 @@ test-suite test
   ghc-options:      -Wall
   build-depends:
       aeson
-    , base                       >=4.9 && <5
+    , base                        >=4.9 && <5
     , bytestring
     , containers
     , fast-logger
-    , hspec                      >=2.4
+    , hspec                       >=2.4
     , hspec-expectations
     , hspec-expectations-lifted
     , http-api-data
@@ -82,6 +88,7 @@ test-suite test
     , persistent-postgresql
     , persistent-qq
     , persistent-test
+    , postgresql-simple-interval
     , QuickCheck
     , quickcheck-instances
     , resourcet
