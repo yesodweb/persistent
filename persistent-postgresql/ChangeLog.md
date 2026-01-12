@@ -1,5 +1,10 @@
 # Changelog for persistent-postgresql
 
+# 2.14.3.0
+
+* [#1616](https://github.com/yesodweb/persistent/pull/1616)
+  * Allow overriding the default cascade option for foreign keys. 
+
 # 2.14.2.0
 
 * [#1614](https://github.com/yesodweb/persistent/pull/1614)

@@ -1,6 +1,8 @@
 # Changelog for persistent
 
-# Unreleased
+# 2.18.1.0
+* [#1616](https://github.com/yesodweb/persistent/pull/1616)
+  * Allow overriding the default cascade option for foreign keys. 
 * [#1608](https://github.com/yesodweb/persistent/pull/1608)
   * Improves documentation on getBy with nullable fields
   * Updates the warning text present when you try to make a Unique field that is nullable

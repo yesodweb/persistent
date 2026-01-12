@@ -64,22 +64,19 @@ setBackendSpecificForeignKeyName
 setBackendSpecificForeignKeyName func bso =
     bso{backendSpecificForeignKeyName = Just func}
 
--- | If the override is defined, then this returns a function that accepts an
--- entity name and field name and provides the 'ConstraintNameDB' for the
--- foreign key constraint.
+-- | If the override is defined, then this specifies what cascade action
+-- should be used if there is none defined for the column.
 --
--- An abstract accessor for the 'BackendSpecificOverrides'
---
--- @since 2.13.0.0
+-- @since 2.18.1.0
 getBackendSpecificForeignKeyCascadeDefault
     :: BackendSpecificOverrides
     -> CascadeAction
 getBackendSpecificForeignKeyCascadeDefault =
     backendSpecificForeignKeyCascadeDefault
 
--- | Set the backend's foreign key generation function to this value.
+-- | Set the backend's default cascade action.
 --
--- @since 2.13.0.0
+-- @since 2.18.1.0
 setBackendSpecificForeignKeyCascadeDefault
     :: CascadeAction
     -> BackendSpecificOverrides
