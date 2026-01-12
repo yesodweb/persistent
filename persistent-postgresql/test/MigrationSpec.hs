@@ -664,8 +664,7 @@ spec = describe "MigrationSpec" $ do
 
         let
             overrideWithDefault =
-                ( setBackendSpecificForeignKeyCascadeDefault Cascade emptyBackendSpecificOverrides
-                )
+                setBackendSpecificForeignKeyCascadeDefault Cascade emptyBackendSpecificOverrides
         result <-
             liftIO $
                 migrateEntitiesStructured
