@@ -67,7 +67,7 @@ FKChildV1 sql=migration_fk_child
 
 -- Simulate creating a new FK field on an existing table
 FKChildV2 sql=migration_fk_child
-    parentId FKParentId OnUpdateNoAction
+    parentId FKParentId
 
 ExplicitPrimaryKey sql=explicit_primary_key
     Id Text
@@ -654,7 +654,7 @@ spec = describe "MigrationSpec" $ do
             Right alters ->
                 map (snd . showAlterDb) alters
                     `shouldBe` [ "ALTER TABLE \"migration_fk_child\" ADD COLUMN \"parent_id\" INT8 NOT NULL"
-                               , "ALTER TABLE \"migration_fk_child\" ADD CONSTRAINT \"migration_fk_child_parent_id_fkey\" FOREIGN KEY(\"parent_id\") REFERENCES \"migration_fk_parent\"(\"id\") ON DELETE RESTRICT  ON UPDATE NO ACTION"
+                               , "ALTER TABLE \"migration_fk_child\" ADD CONSTRAINT \"migration_fk_child_parent_id_fkey\" FOREIGN KEY(\"parent_id\") REFERENCES \"migration_fk_parent\"(\"id\") ON DELETE RESTRICT  ON UPDATE RESTRICT"
                                ]
 
     it "Uses overrides for empty cascade action" $ runConnAssert $ do
@@ -684,5 +684,5 @@ spec = describe "MigrationSpec" $ do
             Right alters ->
                 map (snd . showAlterDb) alters
                     `shouldBe` [ "ALTER TABLE \"migration_fk_child\" ADD COLUMN \"parent_id\" INT8 NOT NULL"
-                               , "ALTER TABLE \"migration_fk_child\" ADD CONSTRAINT \"migration_fk_child_parent_id_fkey\" FOREIGN KEY(\"parent_id\") REFERENCES \"migration_fk_parent\"(\"id\") ON DELETE CASCADE  ON UPDATE NO ACTION"
+                               , "ALTER TABLE \"migration_fk_child\" ADD CONSTRAINT \"migration_fk_child_parent_id_fkey\" FOREIGN KEY(\"parent_id\") REFERENCES \"migration_fk_parent\"(\"id\") ON DELETE CASCADE  ON UPDATE CASCADE"
                                ]
