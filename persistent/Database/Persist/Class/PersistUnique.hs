@@ -57,6 +57,8 @@ import Database.Persist.Types
 class (PersistStoreRead backend) => PersistUniqueRead backend where
     -- | Get a record by unique key, if available. Returns also the identifier.
     --
+    -- If your unique key contains a nullable field, then, by default, getBy will not match if any of the fields are NULL.
+    --
     -- === __Example usage__
     --
     -- With <#schema-persist-unique-1 schema-1> and <#dataset-persist-unique-1 dataset-1>:

@@ -1,9 +1,14 @@
 # Changelog for persistent
 
+# Unreleased
+* [#1608](https://github.com/yesodweb/persistent/pull/1608)
+  * Improves documentation on getBy with nullable fields
+  * Updates the warning text present when you try to make a Unique field that is nullable
+
 # 2.18.0.0
 
 * [#1610](https://github.com/yesodweb/persistent/pull/1610)
-  * Added `NoAction` as a `CascadeAction` 
+  * Added `NoAction` as a `CascadeAction`
 
 # 2.17.1.0
 

@@ -1524,7 +1524,8 @@ mkUnique mps entityMap entDef (UniqueDef constr _ fields attrs) =
             , "column in question.  If you understand this feature of SQL and still "
             , "intend to add a uniqueness constraint here,    *** Use a \"!force\" "
             , "attribute on the end of the line that defines your uniqueness "
-            , "constraint in order to disable this check. ***"
+            , "constraint in order to disable this check. ***\n"
+            , "By default, this means using `getBy`, `insertBy`, or anything that fetches by unique key will NOT match if any of the fields are NULL."
             ]
 
 -- | This function renders a Template Haskell 'Type' for an 'UnboundFieldDef'.
