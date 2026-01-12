@@ -1,5 +1,19 @@
 # Changelog for persistent
 
+# Unreleased
+* [#1609](https://github.com/yesodweb/persistent/pull/1609)
+  * Add support for `!nullsNotDistinct` attribute on unique constraints.
+    When used, nullable fields in unique constraints no longer produce a compile-time error,
+    and `getBy`/`existsBy`/`deleteBy` queries use `IS NOT DISTINCT FROM` for NULL comparison.
+* [#1608](https://github.com/yesodweb/persistent/pull/1608)
+  * Improves documentation on getBy with nullable fields
+  * Updates the warning text present when you try to make a Unique field that is nullable
+
+# 2.18.0.0
+
+* [#1610](https://github.com/yesodweb/persistent/pull/1610)
+  * Added `NoAction` as a `CascadeAction`
+
 # 2.17.1.0
 
 * [#1601](https://github.com/yesodweb/persistent/pull/1601)

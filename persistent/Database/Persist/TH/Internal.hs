@@ -1527,7 +1527,8 @@ mkUnique mps entityMap entDef (UniqueDef constr _ fields attrs) =
             , "column in question.  If you understand this feature of SQL and still "
             , "intend to add a uniqueness constraint here, you can either: "
             , "   *** Use \"!force\" to allow NULLs with standard SQL NULL semantics, OR"
-            , "   *** Use \"!nullsNotDistinct\" (PostgreSQL 15+) to treat NULLs as equal. ***"
+            , "   *** Use \"!nullsNotDistinct\" (PostgreSQL 15+) to treat NULLs as equal. ***\n"
+            , "By default, this means using `getBy`, `insertBy`, or anything that fetches by unique key will NOT match if any of the fields are NULL."
             ]
 
 -- | This function renders a Template Haskell 'Type' for an 'UnboundFieldDef'.
