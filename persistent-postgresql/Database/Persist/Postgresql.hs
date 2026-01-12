@@ -506,7 +506,7 @@ createBackend logFunc serverVersion smap conn =
                                 , connStmtMap = smap
                                 , connInsertSql = insertSql'
                                 , connClose = PG.close conn
-                                , connMigrateSql = migrate'
+                                , connMigrateSql = migrate' emptyBackendSpecificOverrides
                                 , connBegin = \_ mIsolation -> case mIsolation of
                                     Nothing -> PG.begin conn
                                     Just iso ->
@@ -683,11 +683,14 @@ withStmt' conn query vals =
                             Ok v -> return v
 
 migrate'
-    :: [EntityDef]
+    :: BackendSpecificOverrides
+    -> [EntityDef]
     -> (Text -> IO Statement)
     -> EntityDef
     -> IO (Either [Text] CautiousMigration)
-migrate' allDefs getter entity = fmap (fmap $ map showAlterDb) $ migrateStructured allDefs getter entity
+migrate' overrides allDefs getter entity =
+    fmap (fmap $ map showAlterDb) $
+        migrateStructured overrides allDefs getter entity
 
 -- | Get the SQL string for the table that a PersistEntity represents.
 -- Useful for raw SQL queries.
@@ -821,15 +824,16 @@ defaultPostgresConfHooks =
         }
 
 mockMigrate
-    :: [EntityDef]
+    :: BackendSpecificOverrides
+    -> [EntityDef]
     -> (Text -> IO Statement)
     -> EntityDef
     -> IO (Either [Text] [(Bool, Text)])
-mockMigrate allDefs _ entity =
+mockMigrate overrides allDefs _ entity =
     fmap (fmap $ map showAlterDb) $
         return $
             Right $
-                mockMigrateStructured allDefs entity
+                mockMigrateStructured overrides allDefs entity
 
 -- | Mock a migration even when the database is not present.
 -- This function performs the same functionality of 'printMigration'
@@ -852,7 +856,7 @@ mockMigration mig = do
                     , connInsertSql = undefined
                     , connStmtMap = smap
                     , connClose = undefined
-                    , connMigrateSql = mockMigrate
+                    , connMigrateSql = mockMigrate emptyBackendSpecificOverrides
                     , connBegin = undefined
                     , connCommit = undefined
                     , connRollback = undefined

@@ -9,7 +9,7 @@
 -- Then, you'll use the operations
 module Database.Persist.Sql
     ( -- * 'RawSql' and 'PersistFieldSql'
-      module Database.Persist.Sql.Class
+        module Database.Persist.Sql.Class
 
       -- * Running actions
 
@@ -61,6 +61,8 @@ module Database.Persist.Sql
     , emptyBackendSpecificOverrides
     , getBackendSpecificForeignKeyName
     , setBackendSpecificForeignKeyName
+    , getBackendSpecificForeignKeyCascadeDefault
+    , setBackendSpecificForeignKeyCascadeDefault
     , defaultAttribute
 
       -- * Internal
