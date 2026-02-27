@@ -1,5 +1,5 @@
 module Database.Persist.Redis.Parser
-    ( redisToPerisistValues
+    ( redisToPersistValues
     , toValue
     ) where
 
@@ -157,5 +157,5 @@ toValue = L.toStrict . encode . BinPersistValue
 castOne :: B.ByteString -> PersistValue
 castOne = unBinPersistValue . Q.decode . L.fromStrict
 
-redisToPerisistValues :: [(B.ByteString, B.ByteString)] -> [PersistValue]
-redisToPerisistValues = map (castOne . snd)
+redisToPersistValues :: [(B.ByteString, B.ByteString)] -> [PersistValue]
+redisToPersistValues = map (castOne . snd)

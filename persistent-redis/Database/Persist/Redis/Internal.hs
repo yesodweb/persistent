@@ -33,7 +33,7 @@ mkEntity
     => Key val -> [(B.ByteString, B.ByteString)] -> m (Entity val)
 mkEntity key fields = do
     let
-        values = redisToPerisistValues fields
+        values = redisToPersistValues fields
     let
         v = fromPersistValues values
     case v of
