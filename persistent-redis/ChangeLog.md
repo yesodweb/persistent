@@ -1,3 +1,8 @@
+## Unreleased
+
+* [#1621](https://github.com/yesodweb/persistent/pull/1621)
+    * Fix typo in function name
+
 ### 2.13.0.2
 
 * [#1536](https://github.com/yesodweb/persistent/pull/1536)
