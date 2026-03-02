@@ -20,7 +20,7 @@
           (final: prev: {
             project = final.haskell-nix.project' {
               src = ./.;
-              compiler-nix-name = "ghc966";
+              compiler-nix-name = "ghc967";
               projectFileName = "cabal.project";
               shell = {
                 tools = {

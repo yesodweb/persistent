@@ -47,7 +47,6 @@ module Database.Persist.Class.PersistEntity
     ) where
 
 import Data.Functor.Apply (Apply)
-import Data.Functor.Constant
 
 import Data.Aeson
     ( FromJSON (..)
@@ -176,7 +175,7 @@ class
     -- @since 2.14.0.0
     tabulateEntityA
         :: (Applicative f)
-        => (forall a. EntityField record a -> f a)
+        => (forall a. PersistField a => EntityField record a -> f a)
         -- ^ A function that builds a fragment of a record in an
         -- 'Applicative' context.
         -> f (Entity record)
@@ -188,7 +187,7 @@ class
     -- @since 2.17.0.0
     tabulateEntityApply
         :: (Apply f)
-        => (forall a. EntityField record a -> f a)
+        => (forall a. PersistField a => EntityField record a -> f a)
         -> f (Entity record)
 
     -- | Unique keys besides the 'Key'.
@@ -266,7 +265,7 @@ instance (PersistEntity record) => PathMultiPiece (ViaPersistEntity record) wher
 -- @since 2.14.0.0
 tabulateEntity
     :: (PersistEntity record)
-    => (forall a. EntityField record a -> a)
+    => (forall a. PersistField a => EntityField record a -> a)
     -> Entity record
 tabulateEntity fromField =
     runIdentity (tabulateEntityA (Identity . fromField))
