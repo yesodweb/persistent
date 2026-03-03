@@ -27,6 +27,7 @@ module Database.Persist.Class.PersistEntity
     , ViaPersistEntity (..)
     , recordName
     , entityValues
+    , assignAll
     , keyValueEntityToJSON
     , keyValueEntityFromJSON
     , entityIdToJSON
@@ -71,6 +72,9 @@ import qualified Data.Aeson.KeyMap as AM
 import qualified Data.HashMap.Strict as AM
 #endif
 
+import Control.Applicative
+import Control.Monad
+import Control.Monad.Trans.Writer.CPS
 import Data.Kind (Type)
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Maybe (isJust)
@@ -82,6 +86,7 @@ import qualified Data.Text.Lazy.Builder as TB
 import GHC.Generics
 import GHC.OverloadedLabels
 import GHC.Records
+import GHC.Stack
 import GHC.TypeLits
 
 import Database.Persist.Class.PersistField
@@ -175,7 +180,7 @@ class
     -- @since 2.14.0.0
     tabulateEntityA
         :: (Applicative f)
-        => (forall a. PersistField a => EntityField record a -> f a)
+        => (forall a. (PersistField a) => EntityField record a -> f a)
         -- ^ A function that builds a fragment of a record in an
         -- 'Applicative' context.
         -> f (Entity record)
@@ -187,7 +192,7 @@ class
     -- @since 2.17.0.0
     tabulateEntityApply
         :: (Apply f)
-        => (forall a. PersistField a => EntityField record a -> f a)
+        => (forall a. (PersistField a) => EntityField record a -> f a)
         -> f (Entity record)
 
     -- | Unique keys besides the 'Key'.
@@ -207,7 +212,10 @@ class
     fieldLens
         :: EntityField record field
         -> ( forall f
-              . (Functor f) => (field -> f field) -> Entity record -> f (Entity record)
+              . (Functor f)
+             => (field -> f field)
+             -> Entity record
+             -> f (Entity record)
            )
 
     -- | Extract a @'Key' record@ from a @record@ value. Currently, this is
@@ -265,7 +273,7 @@ instance (PersistEntity record) => PathMultiPiece (ViaPersistEntity record) wher
 -- @since 2.14.0.0
 tabulateEntity
     :: (PersistEntity record)
-    => (forall a. PersistField a => EntityField record a -> a)
+    => (forall a. (PersistField a) => EntityField record a -> a)
     -> Entity record
 tabulateEntity fromField =
     runIdentity (tabulateEntityA (Identity . fromField))
@@ -275,9 +283,7 @@ type family BackendSpecificUpdate backend record
 -- Moved over from Database.Persist.Class.PersistUnique
 
 -- | Textual representation of the record
-recordName
-    :: (PersistEntity record)
-    => record -> Text
+recordName :: (PersistEntity record) => record -> Text
 recordName = unEntityNameHS . entityHaskell . entityDef . Just
 
 -- | Updating a database entity.
@@ -391,6 +397,28 @@ entityValues (Entity k record) =
   where
     ent = entityDef $ Just record
 
+-- | Create a list with an @Update field value Assign@ for every @field@ and
+-- @value@ in record, except its 'Key'.
+-- This is useful in combination with @upsert@.
+-- The implementation assumes 'tabulateEntityA' is not strict in the 'entityKey'
+-- of 'Entity' (and the default implementation indeed isn't).
+-- @since 2.13.2.0
+assignAll
+    :: forall record. (PersistEntity record, HasCallStack) => record -> [Update record]
+assignAll r = snd $ runWriter $ tabulateEntityA $ \field ->
+    let
+        fieldVal = getConst $ fieldLens field Const fakeEntity
+     in
+        fieldVal
+            <$ when
+                ( fieldHaskell (persistFieldDef field)
+                    /= fieldHaskell (persistFieldDef @record persistIdField)
+                )
+                (tell [Update field fieldVal Assign])
+  where
+    -- slightly hacky. The entity key is filtered out above and never used.
+    fakeEntity = Entity (error "assignAll: tabulateEntityA was strict in the Entity's key") r
+
 -- | Predefined @toJSON@. The resulting JSON looks like
 -- @{"key": 1, "value": {"name": ...}}@.
 --
@@ -402,7 +430,8 @@ entityValues (Entity k record) =
 -- @
 keyValueEntityToJSON
     :: (PersistEntity record, ToJSON record)
-    => Entity record -> Value
+    => Entity record
+    -> Value
 keyValueEntityToJSON (Entity key value) =
     object
         [ "key" .= key
@@ -420,7 +449,8 @@ keyValueEntityToJSON (Entity key value) =
 -- @
 keyValueEntityFromJSON
     :: (PersistEntity record, FromJSON record)
-    => Value -> Parser (Entity record)
+    => Value
+    -> Parser (Entity record)
 keyValueEntityFromJSON (Object o) =
     Entity
         <$> o .: "key"

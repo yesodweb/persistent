@@ -5,11 +5,11 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 -- Pattern match 'PersistDbSpecific'
 {-# OPTIONS_GHC -fno-warn-deprecations #-}
 
@@ -29,7 +29,6 @@ module Database.Persist.MySQL
       -- * @ON DUPLICATE KEY UPDATE@ Functionality
     , insertOnDuplicateKeyUpdate
     , insertManyOnDuplicateKeyUpdate
-    , assignAll
     , HandleUpdateCollision
     , copyField
     , copyUnlessNull
@@ -43,7 +42,6 @@ import qualified Blaze.ByteString.Builder.ByteString as BBS
 import qualified Blaze.ByteString.Builder.Char8 as BBB
 
 import Control.Arrow
-import Control.Applicative
 import Control.Monad
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.IO.Unlift (MonadUnliftIO)
@@ -1495,32 +1493,6 @@ insertOnDuplicateKeyUpdate
 insertOnDuplicateKeyUpdate record =
     insertManyOnDuplicateKeyUpdate [record] []
 
--- | Create a list with an @Update field value Assign@ for every @field@ and
--- @value@ in record, except its 'Key'.
--- This is useful in combination with @insertOnDuplicateKeyUpdate@.
--- @since 2.13.2.0
-assignAll
-    :: forall record
-     . ( PersistEntityBackend record ~ SqlBackend
-       , PersistEntity record
-       , ToBackendKey SqlBackend record
-       )
-    => record
-    -> [Update record]
-assignAll r = snd $ runWriter $ tabulateEntityA $ \field ->
-    let
-        fieldVal = getConst $ fieldLens field Const fakeEntity
-     in
-        fieldVal
-            <$ when
-                ( fieldHaskell (persistFieldDef field)
-                    /= fieldHaskell (persistFieldDef @record persistIdField)
-                )
-                (tell [Update field fieldVal Assign])
-  where
-    -- slightly hacky. The entity key is filtered out above and never used.
-    fakeEntity = Entity (toSqlKey 0) r
-
 -- | This type is used to determine how to update rows using MySQL's
 -- @INSERT ... ON DUPLICATE KEY UPDATE@ functionality, exposed via
 -- 'insertManyOnDuplicateKeyUpdate' in this library.
@@ -1585,14 +1557,14 @@ copyField = CopyField
 -- | Create a list with a @copyField field@ for every @field@ and @value@ in
 -- record, except its @Key@.
 -- This is useful in combination with @insertManyOnDuplicateKeyUpdate@.
+-- The implementation assumes the tabulateEntityA implementation is not strict in
+-- the returned field value (and the default implementation indeed isn't).
 -- @since 2.13.2.0
 copyAll
     :: forall record
      . (PersistEntity record, HasCallStack)
     => [HandleUpdateCollision record]
 copyAll = snd $ runWriter $ tabulateEntityA $ \field ->
-    -- This assumes the tabulateEntityA implementation is not strict in the
-    -- returned field value (and the default implementation indeed isn't).
     error "copyAll: field value was used"
         <$ when
             ( fieldHaskell (persistFieldDef field)
