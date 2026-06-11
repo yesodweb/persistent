@@ -746,6 +746,15 @@ getAlters defs def (c1, u1) (c2, u2) =
                 let
                     old' = filter (\(x, _) -> x /= name) old
                  in
+                    -- NOTE: we only compare the columns, not the attributes
+                    -- (such as @!nullsNotDistinct@). The @old@ side is derived
+                    -- from introspecting the live database, which does not carry
+                    -- persistent's attribute information, so there is nothing to
+                    -- compare against here. As a consequence, toggling
+                    -- @!nullsNotDistinct@ on a constraint whose columns are
+                    -- otherwise unchanged will NOT be detected as a migration.
+                    -- Such a change must be applied manually (or by dropping and
+                    -- recreating the constraint).
                     if sort cols == sort ocols
                         then getAltersU news old'
                         else

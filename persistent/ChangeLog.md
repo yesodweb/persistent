@@ -4,7 +4,10 @@
 * [#1609](https://github.com/yesodweb/persistent/pull/1609)
   * Add support for `!nullsNotDistinct` attribute on unique constraints.
     When used, nullable fields in unique constraints no longer produce a compile-time error,
-    and `getBy`/`existsBy`/`deleteBy` queries use `IS NOT DISTINCT FROM` for NULL comparison.
+    and `getBy`/`existsBy`/`deleteBy` queries use `IS NOT DISTINCT FROM` for NULL comparison
+    (PostgreSQL only). The `IS NOT DISTINCT FROM` behavior requires PostgreSQL 15+; on other
+    backends `!nullsNotDistinct` only relaxes the nullable-field check (behaving like `!force`)
+    and lookups keep the standard NULL-is-distinct semantics.
 
 # 2.18.1.0
 * [#1616](https://github.com/yesodweb/persistent/pull/1616)

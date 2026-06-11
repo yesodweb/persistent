@@ -77,6 +77,13 @@ class (PersistStoreRead backend) => PersistUniqueRead backend where
     -- @existsBy@, and @deleteBy@ to use @IS NOT DISTINCT FROM@ for NULL comparisons,
     -- allowing them to match NULL values.
     --
+    -- Note that @!nullsNotDistinct@ is only meaningful on PostgreSQL 15+. On other
+    -- backends the attribute is accepted (so that the nullable field is allowed in
+    -- the constraint, just like @!force@), but a plain @UNIQUE@ constraint is
+    -- generated and lookups keep the standard NULL-is-distinct semantics — i.e. it
+    -- behaves like @!force@ there. Prefer @!force@ on non-PostgreSQL backends to
+    -- make that intent explicit.
+    --
     -- === __Example usage__
     --
     -- With <#schema-persist-unique-1 schema-1> and <#dataset-persist-unique-1 dataset-1>:

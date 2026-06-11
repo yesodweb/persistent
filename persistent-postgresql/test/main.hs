@@ -127,7 +127,7 @@ main = do
             , EmbedOrderTest.embedOrderMigrate
             , LargeNumberTest.numberMigrate
             , UniqueTest.uniqueMigrate
-            , NullsNotDistinctTest.nullsNotDistinctMigrate
+            , NullsNotDistinctTest.standardUniqueMigrate
             , MaxLenTest.maxlenMigrate
             , MaybeFieldDefsTest.maybeFieldDefMigrate
             , TypeLitFieldDefsTest.typeLitFieldDefsMigrate
@@ -148,6 +148,12 @@ main = do
             , UpsertWhere.upsertWhereMigrate
             , ImplicitUuidSpec.implicitUuidMigrate
             ]
+        -- UNIQUE NULLS NOT DISTINCT is only valid on PostgreSQL 15+, so only run
+        -- that migration when the server supports it. The corresponding tests are
+        -- version-gated and mark themselves pending otherwise.
+        supportsNullsNotDistinct <- NullsNotDistinctTest.isPostgres15OrHigher
+        when supportsNullsNotDistinct $
+            setup NullsNotDistinctTest.nullsNotDistinctMigrate
         PersistentTest.cleanDB
         ForeignKey.cleanDB
 
