@@ -61,6 +61,8 @@ module Database.Persist.Sql
     , emptyBackendSpecificOverrides
     , getBackendSpecificForeignKeyName
     , setBackendSpecificForeignKeyName
+    , getBackendSpecificForeignKeyCascadeDefault
+    , setBackendSpecificForeignKeyCascadeDefault
     , defaultAttribute
 
       -- * Internal

@@ -585,7 +585,12 @@ spec = describe "MigrationSpec" $ do
 
         getter <- getStmtGetter
         result <-
-            liftIO $ migrateEntitiesStructured getter allEntityDefs allEntityDefs
+            liftIO $
+                migrateEntitiesStructured
+                    emptyBackendSpecificOverrides
+                    getter
+                    allEntityDefs
+                    allEntityDefs
 
         cleanDB
 
@@ -602,7 +607,12 @@ spec = describe "MigrationSpec" $ do
 
         getter <- getStmtGetter
         result <-
-            liftIO $ migrateEntitiesStructured getter allEntityDefs allEntityDefs
+            liftIO $
+                migrateEntitiesStructured
+                    emptyBackendSpecificOverrides
+                    getter
+                    allEntityDefs
+                    allEntityDefs
 
         cleanDB
 
@@ -614,7 +624,12 @@ spec = describe "MigrationSpec" $ do
             Right alters -> do
                 traverse_ (flip rawExecute [] . snd . showAlterDb) alters
                 result2 <-
-                    liftIO $ migrateEntitiesStructured getter allEntityDefs allEntityDefs
+                    liftIO $
+                        migrateEntitiesStructured
+                            emptyBackendSpecificOverrides
+                            getter
+                            allEntityDefs
+                            allEntityDefs
                 result2 `shouldBe` Right []
 
     it "suggests FK constraints for new fields first time" $ runConnAssert $ do
@@ -624,6 +639,7 @@ spec = describe "MigrationSpec" $ do
         result <-
             liftIO $
                 migrateEntitiesStructured
+                    emptyBackendSpecificOverrides
                     getter
                     (fkChildV2EntityDef : allEntityDefs)
                     [fkChildV2EntityDef]
@@ -639,4 +655,33 @@ spec = describe "MigrationSpec" $ do
                 map (snd . showAlterDb) alters
                     `shouldBe` [ "ALTER TABLE \"migration_fk_child\" ADD COLUMN \"parent_id\" INT8 NOT NULL"
                                , "ALTER TABLE \"migration_fk_child\" ADD CONSTRAINT \"migration_fk_child_parent_id_fkey\" FOREIGN KEY(\"parent_id\") REFERENCES \"migration_fk_parent\"(\"id\") ON DELETE RESTRICT  ON UPDATE RESTRICT"
+                               ]
+
+    it "Uses overrides for empty cascade action" $ runConnAssert $ do
+        migrateManually
+
+        getter <- getStmtGetter
+
+        let
+            overrideWithDefault =
+                setBackendSpecificForeignKeyCascadeDefault Cascade emptyBackendSpecificOverrides
+        result <-
+            liftIO $
+                migrateEntitiesStructured
+                    overrideWithDefault
+                    getter
+                    (fkChildV2EntityDef : allEntityDefs)
+                    [fkChildV2EntityDef]
+
+        cleanDB
+
+        case result of
+            Right [] ->
+                pure ()
+            Left err ->
+                expectationFailure $ show err
+            Right alters ->
+                map (snd . showAlterDb) alters
+                    `shouldBe` [ "ALTER TABLE \"migration_fk_child\" ADD COLUMN \"parent_id\" INT8 NOT NULL"
+                               , "ALTER TABLE \"migration_fk_child\" ADD CONSTRAINT \"migration_fk_child_parent_id_fkey\" FOREIGN KEY(\"parent_id\") REFERENCES \"migration_fk_parent\"(\"id\") ON DELETE CASCADE  ON UPDATE CASCADE"
                                ]

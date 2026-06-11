@@ -39,12 +39,13 @@ import qualified Database.Persist.Sql.Util as Util
 --
 -- @since 2.17.1.0
 migrateStructured
-    :: [EntityDef]
+    :: BackendSpecificOverrides
+    -> [EntityDef]
     -> (Text -> IO Statement)
     -> EntityDef
     -> IO (Either [Text] [AlterDB])
-migrateStructured allDefs getter entity =
-    migrateEntitiesStructured getter allDefs [entity]
+migrateStructured overrides allDefs getter entity =
+    migrateEntitiesStructured overrides getter allDefs [entity]
 
 -- | Returns a structured representation of all of the DB changes required to
 -- migrate the listed entities from their current state in the database to the
@@ -54,15 +55,16 @@ migrateStructured allDefs getter entity =
 --
 -- @since 2.14.1.0
 migrateEntitiesStructured
-    :: (Text -> IO Statement)
+    :: BackendSpecificOverrides
+    -> (Text -> IO Statement)
     -> [EntityDef]
     -> [EntityDef]
     -> IO (Either [Text] [AlterDB])
-migrateEntitiesStructured getStmt allDefs defsToMigrate = do
+migrateEntitiesStructured overrides getStmt allDefs defsToMigrate = do
     r <- collectSchemaState getStmt (map getEntityDBName defsToMigrate)
     pure $ case r of
         Right schemaState ->
-            migrateEntitiesFromSchemaState schemaState allDefs defsToMigrate
+            migrateEntitiesFromSchemaState overrides schemaState allDefs defsToMigrate
         Left err ->
             Left [err]
 
@@ -73,11 +75,12 @@ migrateEntitiesStructured getStmt allDefs defsToMigrate = do
 --
 -- @since 2.17.1.0
 mockMigrateStructured
-    :: [EntityDef]
+    :: BackendSpecificOverrides
+    -> [EntityDef]
     -> EntityDef
     -> [AlterDB]
-mockMigrateStructured allDefs entity =
-    migrateEntityFromSchemaState EntityDoesNotExist allDefs entity
+mockMigrateStructured overrides allDefs entity =
+    migrateEntityFromSchemaState overrides EntityDoesNotExist allDefs entity
 
 -- | In order to ensure that generating migrations is fast and avoids N+1
 -- queries, we split it into two phases. The first phase involves querying the
@@ -532,11 +535,12 @@ mapLeft _ (Right x) = Right x
 mapLeft f (Left x) = Left (f x)
 
 migrateEntitiesFromSchemaState
-    :: SchemaState
+    :: BackendSpecificOverrides
+    -> SchemaState
     -> [EntityDef]
     -> [EntityDef]
     -> Either [Text] [AlterDB]
-migrateEntitiesFromSchemaState (SchemaState schemaStateMap) allDefs defsToMigrate =
+migrateEntitiesFromSchemaState overrides (SchemaState schemaStateMap) allDefs defsToMigrate =
     let
         go :: EntityDef -> Either Text [AlterDB]
         go entity = do
@@ -544,7 +548,7 @@ migrateEntitiesFromSchemaState (SchemaState schemaStateMap) allDefs defsToMigrat
                 name = getEntityDBName entity
             case Map.lookup name schemaStateMap of
                 Just entityState ->
-                    Right $ migrateEntityFromSchemaState entityState allDefs entity
+                    Right $ migrateEntityFromSchemaState overrides entityState allDefs entity
                 Nothing ->
                     Left $ T.pack $ "No entry for entity in schemaState: " <> show name
      in
@@ -553,11 +557,12 @@ migrateEntitiesFromSchemaState (SchemaState schemaStateMap) allDefs defsToMigrat
             (errs, _) -> Left errs
 
 migrateEntityFromSchemaState
-    :: EntitySchemaState
+    :: BackendSpecificOverrides
+    -> EntitySchemaState
     -> [EntityDef]
     -> EntityDef
     -> [AlterDB]
-migrateEntityFromSchemaState schemaState allDefs entity =
+migrateEntityFromSchemaState overrides schemaState allDefs entity =
     case schemaState of
         EntityDoesNotExist ->
             (addTable newcols entity) : uniques ++ references ++ foreignsAlt
@@ -577,7 +582,7 @@ migrateEntityFromSchemaState schemaState allDefs entity =
                 acs' ++ ats'
   where
     name = getEntityDBName entity
-    (newcols', udefs, fdefs) = postgresMkColumns allDefs entity
+    (newcols', udefs, fdefs) = postgresMkColumns overrides allDefs entity
     newcols = filter (not . safeToRemove entity . cName) newcols'
     udspair = map udToPair udefs
 
@@ -822,10 +827,13 @@ refName (EntityNameDB table) (FieldNameDB column) =
         | otherwise = shortenNames overhead (x, y - 1)
 
 postgresMkColumns
-    :: [EntityDef] -> EntityDef -> ([Column], [UniqueDef], [ForeignDef])
-postgresMkColumns allDefs t =
+    :: BackendSpecificOverrides
+    -> [EntityDef]
+    -> EntityDef
+    -> ([Column], [UniqueDef], [ForeignDef])
+postgresMkColumns overrides allDefs t =
     mkColumns allDefs t $
-        setBackendSpecificForeignKeyName refName emptyBackendSpecificOverrides
+        setBackendSpecificForeignKeyName refName overrides
 
 -- | Check if a column name is listed as the "safe to remove" in the entity
 -- list.

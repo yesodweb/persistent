@@ -7,6 +7,11 @@
     This generates `UNIQUE NULLS NOT DISTINCT` constraints for PostgreSQL 15+,
     which treats NULL values as equal for uniqueness checks.
 
+# 2.14.3.0
+
+* [#1616](https://github.com/yesodweb/persistent/pull/1616)
+  * Allow overriding the default cascade option for foreign keys. 
+
 # 2.14.2.0
 
 * [#1614](https://github.com/yesodweb/persistent/pull/1614)

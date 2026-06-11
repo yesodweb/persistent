@@ -10,6 +10,8 @@ module Database.Persist.Sql.Internal
     , BackendSpecificOverrides (..)
     , getBackendSpecificForeignKeyName
     , setBackendSpecificForeignKeyName
+    , getBackendSpecificForeignKeyCascadeDefault
+    , setBackendSpecificForeignKeyCascadeDefault
     , emptyBackendSpecificOverrides
     ) where
 
@@ -36,6 +38,7 @@ import Database.Persist.Types
 data BackendSpecificOverrides = BackendSpecificOverrides
     { backendSpecificForeignKeyName
         :: Maybe (EntityNameDB -> FieldNameDB -> ConstraintNameDB)
+    , backendSpecificForeignKeyCascadeDefault :: CascadeAction
     }
 
 -- | If the override is defined, then this returns a function that accepts an
@@ -61,6 +64,26 @@ setBackendSpecificForeignKeyName
 setBackendSpecificForeignKeyName func bso =
     bso{backendSpecificForeignKeyName = Just func}
 
+-- | If the override is defined, then this specifies what cascade action
+-- should be used if there is none defined for the column.
+--
+-- @since 2.18.1.0
+getBackendSpecificForeignKeyCascadeDefault
+    :: BackendSpecificOverrides
+    -> CascadeAction
+getBackendSpecificForeignKeyCascadeDefault =
+    backendSpecificForeignKeyCascadeDefault
+
+-- | Set the backend's default cascade action.
+--
+-- @since 2.18.1.0
+setBackendSpecificForeignKeyCascadeDefault
+    :: CascadeAction
+    -> BackendSpecificOverrides
+    -> BackendSpecificOverrides
+setBackendSpecificForeignKeyCascadeDefault action bso =
+    bso{backendSpecificForeignKeyCascadeDefault = action}
+
 findMaybe :: (a -> Maybe b) -> [a] -> Maybe b
 findMaybe p = listToMaybe . mapMaybe p
 
@@ -68,7 +91,7 @@ findMaybe p = listToMaybe . mapMaybe p
 --
 -- @since 2.11
 emptyBackendSpecificOverrides :: BackendSpecificOverrides
-emptyBackendSpecificOverrides = BackendSpecificOverrides Nothing
+emptyBackendSpecificOverrides = BackendSpecificOverrides Nothing Restrict
 
 defaultAttribute :: [FieldAttr] -> Maybe Text
 defaultAttribute = findMaybe $ \case
@@ -171,9 +194,11 @@ mkColumns allDefs t overrides =
     -- explicitly makes migrations run smoother.
     overrideNothings (FieldCascade{fcOnUpdate = upd, fcOnDelete = del}) =
         FieldCascade
-            { fcOnUpdate = upd <|> Just Restrict
-            , fcOnDelete = del <|> Just Restrict
+            { fcOnUpdate = upd <|> Just defaultAction
+            , fcOnDelete = del <|> Just defaultAction
             }
+      where
+        defaultAction = (backendSpecificForeignKeyCascadeDefault overrides)
 
     ref
         :: FieldNameDB
