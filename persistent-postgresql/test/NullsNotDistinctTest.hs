@@ -142,11 +142,11 @@ specs = describe "NULLS NOT DISTINCT support" $ do
             -- Both inserts run in the same transaction so the constraint
             -- violation propagates out of runDb for shouldThrow to catch.
             ( runDb $ do
-                    cleanStandard
-                    _ <- insert $ StandardUnique "user1" (Just "test@example.com")
-                    _ <- insert $ StandardUnique "user1" (Just "test@example.com")
-                    return ()
-                )
+                cleanStandard
+                _ <- insert $ StandardUnique "user1" (Just "test@example.com")
+                _ <- insert $ StandardUnique "user1" (Just "test@example.com")
+                return ()
+            )
                 `Hspec.shouldThrow` Hspec.anyException
 
         it
@@ -188,11 +188,11 @@ specs = describe "NULLS NOT DISTINCT support" $ do
                         -- Same name and email twice; the second insert must violate
                         -- the unique constraint. Both run in one transaction.
                         ( runDb $ do
-                                cleanNND
-                                _ <- insert $ NullsNotDistinctUnique "user1" Nothing
-                                _ <- insert $ NullsNotDistinctUnique "user1" Nothing
-                                return ()
-                            )
+                            cleanNND
+                            _ <- insert $ NullsNotDistinctUnique "user1" Nothing
+                            _ <- insert $ NullsNotDistinctUnique "user1" Nothing
+                            return ()
+                        )
                             `Hspec.shouldThrow` Hspec.anyException
 
                     it "NULLS NOT DISTINCT with multiple nullable fields" $ do
