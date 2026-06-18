@@ -20,6 +20,12 @@ allow-newer:
     , bytestring-lexing:base
     , postgresql-simple-interval:persistent
 
+-- megaparsec 9.8.0 uses an unqualified `foldl'`, which is only re-exported from
+-- Prelude as of base-4.20 (GHC 9.10). On older GHCs it fails to compile with
+-- "Variable not in scope: foldl'". Pin to < 9.8 there; newer GHCs build it fine.
+if impl(ghc < 9.10)
+    constraints: megaparsec < 9.8
+
 source-repository-package
     type: git
     location: https://github.com/parsonsmatt/mysql
