@@ -68,10 +68,6 @@ jobs:
           cabal-version: ${{ matrix.cabal }}
       - name: Check MySQL connection
         run: mysql -utest -ptest -h127.0.0.1 --port=33306 test -e "SELECT 1;"
-      - name: Start MongoDB
-        uses: supercharge/mongodb-github-action@1.8.0
-        with:
-          mongodb-version: '5.0'
       - name: Start Redis
         uses: shogo82148/actions-setup-redis@v1
       - run: sudo apt-get update && sudo apt-get install -y libpcre3-dev
@@ -87,6 +83,30 @@ jobs:
             ${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('cabal.project.freeze') }}
             ${{ runner.os }}-${{ matrix.ghc }}-
       - run: cabal v2-build all --disable-optimization $CONFIG
+      # Start MongoDB *after* the heavy build, immediately before the tests that
+      # need it. Unlike postgres/mysql (declared as health-gated `services`),
+      # MongoDB is started by an action step with no readiness gate, and the
+      # test harness connects once with no retry. Starting it before the ~10m
+      # build left a long window where the container could be resource-starved
+      # and become unreachable, producing flaky "Connection refused" failures
+      # in the persistent-mongoDB suite.
+      - name: Start MongoDB
+        uses: supercharge/mongodb-github-action@1.12.0
+        with:
+          mongodb-version: '5.0'
+      - name: Wait for MongoDB to accept connections
+        run: |
+          for i in $(seq 1 30); do
+            if (exec 3<>/dev/tcp/127.0.0.1/27017) 2>/dev/null; then
+              exec 3>&- 3<&-
+              echo "MongoDB is accepting connections on 127.0.0.1:27017"
+              exit 0
+            fi
+            echo "Waiting for MongoDB... ($i/30)"
+            sleep 2
+          done
+          echo "MongoDB did not become reachable in time" >&2
+          exit 1
       - run: cabal v2-test all --disable-optimization $CONFIG --test-options "--fail-on-focus"
       - run: cabal v2-bench all --disable-optimization $CONFIG
       - run: cabal v2-sdist all
