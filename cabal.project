@@ -20,6 +20,16 @@ allow-newer:
     , bytestring-lexing:base
     , postgresql-simple-interval:persistent
 
+-- megaparsec 9.8.0 breaks the build in two ways:
+--   * On GHC < 9.10 it fails to compile ("Variable not in scope: foldl'"),
+--     because it relies on `foldl'` being re-exported from Prelude, which only
+--     happens as of base-4.20 (GHC 9.10).
+--   * On GHC >= 9.10 it compiles but changes how parse errors are rendered
+--     (the `^` caret under the offending token), which breaks the expected
+--     strings in Database.Persist.Quasi's test suite.
+-- Pin to < 9.8 across the whole matrix until the suite is updated upstream.
+constraints: megaparsec < 9.8
+
 source-repository-package
     type: git
     location: https://github.com/parsonsmatt/mysql
