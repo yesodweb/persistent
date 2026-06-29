@@ -586,8 +586,8 @@ migrateEntityFromSchemaState overrides schemaState allDefs entity =
     newcols = filter (not . safeToRemove entity . cName) newcols'
     udspair = map udToPair udefs
 
-    uniques = flip concatMap udspair $ \(uname, ucols) ->
-        [AlterTable name $ AddUniqueConstraint uname ucols]
+    uniques = flip concatMap udspair $ \(uname, ucols, uattrs) ->
+        [AlterTable name $ AddUniqueConstraint uname ucols uattrs]
     references =
         mapMaybe
             ( \Column{cName, cReference} ->
@@ -673,7 +673,7 @@ data AlterColumn
 --
 -- @since 2.17.1.0
 data AlterTable
-    = AddUniqueConstraint ConstraintNameDB [FieldNameDB]
+    = AddUniqueConstraint ConstraintNameDB [FieldNameDB] [Attr]
     | DropConstraint ConstraintNameDB
     deriving (Show, Eq)
 
@@ -718,7 +718,7 @@ mayDefault def = case def of
 getAlters
     :: [EntityDef]
     -> EntityDef
-    -> ([Column], [(ConstraintNameDB, [FieldNameDB])])
+    -> ([Column], [(ConstraintNameDB, [FieldNameDB], [Attr])])
     -> ([Column], [(ConstraintNameDB, [FieldNameDB])])
     -> ([AlterColumn], [AlterTable])
 getAlters defs def (c1, u1) (c2, u2) =
@@ -733,24 +733,33 @@ getAlters defs def (c1, u1) (c2, u2) =
             alters ++ getAltersC news old'
 
     getAltersU
-        :: [(ConstraintNameDB, [FieldNameDB])]
+        :: [(ConstraintNameDB, [FieldNameDB], [Attr])]
         -> [(ConstraintNameDB, [FieldNameDB])]
         -> [AlterTable]
     getAltersU [] old =
         map DropConstraint $ filter (not . isManual) $ map fst old
-    getAltersU ((name, cols) : news) old =
+    getAltersU ((name, cols, attrs) : news) old =
         case lookup name old of
             Nothing ->
-                AddUniqueConstraint name cols : getAltersU news old
+                AddUniqueConstraint name cols attrs : getAltersU news old
             Just ocols ->
                 let
                     old' = filter (\(x, _) -> x /= name) old
                  in
+                    -- NOTE: we only compare the columns, not the attributes
+                    -- (such as @!nullsNotDistinct@). The @old@ side is derived
+                    -- from introspecting the live database, which does not carry
+                    -- persistent's attribute information, so there is nothing to
+                    -- compare against here. As a consequence, toggling
+                    -- @!nullsNotDistinct@ on a constraint whose columns are
+                    -- otherwise unchanged will NOT be detected as a migration.
+                    -- Such a change must be applied manually (or by dropping and
+                    -- recreating the constraint).
                     if sort cols == sort ocols
                         then getAltersU news old'
                         else
                             DropConstraint name
-                                : AddUniqueConstraint name cols
+                                : AddUniqueConstraint name cols attrs
                                 : getAltersU news old'
 
     -- Don't drop constraints which were manually added.
@@ -850,8 +859,8 @@ safeToRemove def (FieldNameDB colName) =
             _ ->
                 []
 
-udToPair :: UniqueDef -> (ConstraintNameDB, [FieldNameDB])
-udToPair ud = (uniqueDBName ud, map snd $ NEL.toList $ uniqueFields ud)
+udToPair :: UniqueDef -> (ConstraintNameDB, [FieldNameDB], [Attr])
+udToPair ud = (uniqueDBName ud, map snd $ NEL.toList $ uniqueFields ud, uniqueAttrs ud)
 
 -- | Get the references to be added to a table for the given column.
 getAddReference
@@ -957,13 +966,15 @@ showAlterDb (AlterColumn t ac) =
 showAlterDb (AlterTable t at) = (False, showAlterTable t at)
 
 showAlterTable :: EntityNameDB -> AlterTable -> Text
-showAlterTable table (AddUniqueConstraint cname cols) =
+showAlterTable table (AddUniqueConstraint cname cols attrs) =
     T.concat
         [ "ALTER TABLE "
         , escapeE table
         , " ADD CONSTRAINT "
         , escapeC cname
-        , " UNIQUE("
+        , " UNIQUE"
+        , if "!nullsNotDistinct" `elem` attrs then " NULLS NOT DISTINCT" else ""
+        , "("
         , T.intercalate "," $ map escapeF cols
         , ")"
         ]

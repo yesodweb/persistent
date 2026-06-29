@@ -66,6 +66,7 @@ test-suite test
     JSONTest
     MigrationReferenceSpec
     MigrationSpec
+    NullsNotDistinctTest
     PgInit
     PgIntervalTest
     UpsertWhere

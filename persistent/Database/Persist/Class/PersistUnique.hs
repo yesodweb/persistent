@@ -57,7 +57,32 @@ import Database.Persist.Types
 class (PersistStoreRead backend) => PersistUniqueRead backend where
     -- | Get a record by unique key, if available. Returns also the identifier.
     --
-    -- If your unique key contains a nullable field, then, by default, getBy will not match if any of the fields are NULL.
+    -- === __Nullable Fields in Unique Constraints__
+    --
+    -- If your unique key contains a nullable field, then, by default, @getBy@ will
+    -- not match if any of the fields are NULL. This is because standard SQL uses
+    -- @column = ?@ which never matches NULL values.
+    --
+    -- To enable matching NULL values in unique constraints, use the
+    -- @!nullsNotDistinct@ attribute (PostgreSQL 15+ only):
+    --
+    -- @
+    -- User
+    --     name Text
+    --     email Text Maybe
+    --     UniqueUserEmail name email !nullsNotDistinct
+    -- @
+    --
+    -- This generates a @UNIQUE NULLS NOT DISTINCT@ constraint and causes @getBy@,
+    -- @existsBy@, and @deleteBy@ to use @IS NOT DISTINCT FROM@ for NULL comparisons,
+    -- allowing them to match NULL values.
+    --
+    -- Note that @!nullsNotDistinct@ is only meaningful on PostgreSQL 15+. On other
+    -- backends the attribute is accepted (so that the nullable field is allowed in
+    -- the constraint, just like @!force@), but a plain @UNIQUE@ constraint is
+    -- generated and lookups keep the standard NULL-is-distinct semantics — i.e. it
+    -- behaves like @!force@ there. Prefer @!force@ on non-PostgreSQL backends to
+    -- make that intent explicit.
     --
     -- === __Example usage__
     --

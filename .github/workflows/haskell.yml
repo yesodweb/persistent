@@ -11,7 +11,9 @@ jobs:
   build:
     services:
       postgres:
-        image: postgres:12-alpine
+        # Use a PostgreSQL version that supports UNIQUE NULLS NOT DISTINCT (15+),
+        # so the NullsNotDistinctTest suite actually exercises the feature.
+        image: postgres:16-alpine
         env:
           POSTGRES_USER: perstest
           POSTGRES_PASSWORD: perstest

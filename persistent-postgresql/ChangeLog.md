@@ -1,5 +1,12 @@
 # Changelog for persistent-postgresql
 
+# Unreleased
+
+* [#1609](https://github.com/yesodweb/persistent/pull/1609)
+  * Add support for `!nullsNotDistinct` attribute on unique constraints.
+    This generates `UNIQUE NULLS NOT DISTINCT` constraints for PostgreSQL 15+,
+    which treats NULL values as equal for uniqueness checks.
+
 # 2.14.3.0
 
 * [#1616](https://github.com/yesodweb/persistent/pull/1616)

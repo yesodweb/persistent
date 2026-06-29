@@ -701,7 +701,7 @@ data PersistUpdate
     | BackendSpecificUpdate T.Text
     deriving (Read, Show, Lift)
 
--- | A 'FieldDef' represents the inormation that @persistent@ knows about
+-- | A 'FieldDef' represents the information that @persistent@ knows about
 -- a field of a datatype. This includes information used to parse the field
 -- out of the database and what the field corresponds to.
 data FieldDef = FieldDef

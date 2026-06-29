@@ -1498,9 +1498,12 @@ mkUnique mps entityMap entDef (UniqueDef constr _ fields attrs) =
             fields
 
     force = "!force" `elem` attrs
+    nullsNotDistinct = "!nullsNotDistinct" `elem` attrs
+    -- If !nullsNotDistinct is specified, it implies !force since it explicitly handles NULL semantics
+    allowNullable = force || nullsNotDistinct
 
     go :: (UnboundFieldDef, IsNullable) -> (Strict, Type)
-    go (_, Nullable _) | not force = error nullErrMsg
+    go (_, Nullable _) | not allowNullable = error nullErrMsg
     go (fd, y) = (notStrict, maybeIdType mps entityMap fd Nothing (Just y))
 
     lookup3 :: Text -> [UnboundFieldDef] -> (UnboundFieldDef, IsNullable)
@@ -1522,9 +1525,9 @@ mkUnique mps entityMap entDef (UniqueDef constr _ fields attrs) =
             , "values to be equal for the purposes of an uniqueness constraint, "
             , "allowing insertion of more than one row with a NULL value for the "
             , "column in question.  If you understand this feature of SQL and still "
-            , "intend to add a uniqueness constraint here,    *** Use a \"!force\" "
-            , "attribute on the end of the line that defines your uniqueness "
-            , "constraint in order to disable this check. ***\n"
+            , "intend to add a uniqueness constraint here, you can either: "
+            , "   *** Use \"!force\" to allow NULLs with standard SQL NULL semantics, OR"
+            , "   *** Use \"!nullsNotDistinct\" (PostgreSQL 15+) to treat NULLs as equal. ***\n"
             , "By default, this means using `getBy`, `insertBy`, or anything that fetches by unique key will NOT match if any of the fields are NULL."
             ]
 
