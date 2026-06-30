@@ -5,7 +5,8 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE ViewPatterns #-}
@@ -33,6 +34,7 @@ module Database.Persist.MySQL
     , copyUnlessNull
     , copyUnlessEmpty
     , copyUnlessEq
+    , copyAll
     , openMySQLConn
     ) where
 
@@ -47,15 +49,13 @@ import Control.Monad.Logger (MonadLoggerIO, runNoLoggingT)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT, runExceptT)
 import Control.Monad.Trans.Reader (ReaderT, runReaderT)
-import Control.Monad.Trans.Writer (runWriterT)
+import Control.Monad.Trans.Writer (runWriter, runWriterT, tell)
 import Data.IORef (newIORef)
-import Data.Proxy (Proxy (..))
 
 import Data.Acquire (Acquire, mkAcquire, with)
 import Data.Aeson
 import Data.Aeson.Types (modifyFailure)
 import Data.ByteString (ByteString)
-import qualified Data.ByteString.Lazy as BSL
 import Data.Conduit
 import qualified Data.Conduit.List as CL
 import Data.Either (partitionEithers)
@@ -66,7 +66,6 @@ import Data.List (find, groupBy, intercalate, sort)
 import qualified Data.List.NonEmpty as NEL
 import qualified Data.Map as Map
 import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
-import Data.Monoid ((<>))
 import qualified Data.Monoid as Monoid
 import Data.Pool (Pool)
 import Data.Text (Text, pack)
@@ -80,7 +79,6 @@ import Database.Persist.Sql
 import Database.Persist.Sql.Types.Internal (makeIsolationLevelStatement)
 import qualified Database.Persist.Sql.Util as Util
 import Database.Persist.SqlBackend
-import Database.Persist.SqlBackend.StatementCache
 
 import qualified Database.MySQL.Base as MySQLBase
 import qualified Database.MySQL.Base.Types as MySQLBase
@@ -1555,6 +1553,24 @@ copyUnlessEq = CopyUnlessEq
 copyField
     :: (PersistField typ) => EntityField record typ -> HandleUpdateCollision record
 copyField = CopyField
+
+-- | Create a list with a @copyField field@ for every @field@ and @value@ in
+-- record, except its @Key@.
+-- This is useful in combination with @insertManyOnDuplicateKeyUpdate@.
+-- The implementation assumes the tabulateEntityA implementation is not strict in
+-- the returned field value (and the default implementation indeed isn't).
+-- @since 2.13.2.0
+copyAll
+    :: forall record
+     . (PersistEntity record, HasCallStack)
+    => [HandleUpdateCollision record]
+copyAll = snd $ runWriter $ tabulateEntityA $ \field ->
+    error "copyAll: field value was used"
+        <$ when
+            ( fieldHaskell (persistFieldDef field)
+                /= fieldHaskell (persistFieldDef @record persistIdField)
+            )
+            (tell [copyField field])
 
 -- | Do a bulk insert on the given records in the first parameter. In the event
 -- that a key conflicts with a record currently in the database, the second and
