@@ -263,7 +263,7 @@ createPipe hostname port = DB.connect (DB.Host hostname port)
 createReplicatSet :: (DB.ReplicaSetName, [DB.Host]) -> Database -> Maybe MongoAuth -> IO Connection
 createReplicatSet rsSeed dbname mAuth = do
     pipe <- DB.openReplicaSet rsSeed >>= DB.primary
-    testAccess pipe dbname mAuth
+    testAccess pipe mAuth
     return $ Connection pipe dbname
 
 createRsPool :: (Trans.MonadIO m) => Database -> ReplicaSetConfig
@@ -280,17 +280,17 @@ createRsPool dbname (ReplicaSetConfig rsName rsHosts) mAuth connectionPoolSize s
                           connectionIdleTime
                           stripeSize
 
-testAccess :: DB.Pipe -> Database -> Maybe MongoAuth -> IO ()
-testAccess pipe dbname mAuth = do
+testAccess :: DB.Pipe -> Maybe MongoAuth -> IO ()
+testAccess pipe mAuth = do
     _ <- case mAuth of
-      Just (MongoAuth user pass) -> DB.access pipe DB.UnconfirmedWrites dbname (DB.auth user pass)
+      Just (MongoAuth dbname user pass) -> DB.access pipe DB.UnconfirmedWrites dbname (DB.auth user pass)
       Nothing -> return undefined
     return ()
 
 createConnection :: Database -> HostName -> DB.PortID -> Maybe MongoAuth -> IO Connection
 createConnection dbname hostname port mAuth = do
     pipe <- createPipe hostname port
-    testAccess pipe dbname mAuth
+    testAccess pipe mAuth
     return $ Connection pipe dbname
 
 createMongoDBPool :: (Trans.MonadIO m) => Database -> HostName -> DB.PortID
@@ -1109,7 +1109,7 @@ dummyFromUnique _ = error "dummyFromUnique"
 dummyFromFilts :: [Filter v] -> v
 dummyFromFilts _ = error "dummyFromFilts"
 
-data MongoAuth = MongoAuth DB.Username DB.Password deriving Show
+data MongoAuth = MongoAuth Database DB.Username DB.Password deriving Show
 
 -- | Information required to connect to a mongo database
 data MongoConf = MongoConf
@@ -1189,7 +1189,7 @@ instance FromJSON MongoConf where
           , mgPort = port
           , mgAuth =
               case (mUser, mPass) of
-                (Just user, Just pass) -> Just (MongoAuth user pass)
+                (Just user, Just pass) -> Just (MongoAuth db user pass)
                 _ -> Nothing
           , mgPoolStripes = poolStripes
           , mgStripeConnections = stripeConnections

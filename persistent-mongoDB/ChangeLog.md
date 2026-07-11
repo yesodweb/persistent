@@ -1,5 +1,8 @@
 # Changelog for persistent-mongoDB
 
+## 2.14.0.0
+* MongoDB authentication now allows specifying which database to authenticate against, which may be different from the database that one normally needs to access.
+
 ## 2.13.1.0
 
 * Restore update write concern behavior with MongoDB Driver for MongoDB >= 6.0 [#1550](https://github.com/yesodweb/persistent/pull/1550)
