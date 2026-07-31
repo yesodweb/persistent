@@ -1766,6 +1766,35 @@ putManySql' (filter isFieldNotGenerated -> fields) ent n = q
             , Util.commaSeparated updates
             ]
 
+-- | Generate the default foreign key constraint name for a given source table and
+-- source column name, truncated to fit MySQL's 64 character identifier limit.
+--
+-- MySQL, unlike Postgres, does not silently truncate identifiers that are too long;
+-- it raises an error instead (\"Identifier name ... is too long\"). Without this,
+-- persistent would suggest foreign key constraint names that MySQL simply refuses to
+-- create. This mirrors the truncation approach @persistent-postgresql@ already uses
+-- for the same underlying problem, just with MySQL's 64 character limit instead of
+-- Postgres' 63.
+refName :: EntityNameDB -> FieldNameDB -> ConstraintNameDB
+refName (EntityNameDB table) (FieldNameDB column) =
+    let
+        overhead = T.length $ T.concat ["_", "_fkey"]
+        (fromTable, fromColumn) = shortenNames overhead (T.length table, T.length column)
+     in
+        ConstraintNameDB $
+            T.concat [T.take fromTable table, "_", T.take fromColumn column, "_fkey"]
+  where
+    maximumIdentifierLength :: Int
+    maximumIdentifierLength = 64
+
+    shortenNames :: Int -> (Int, Int) -> (Int, Int)
+    shortenNames overhead (x, y)
+        | x + y + overhead <= maximumIdentifierLength = (x, y)
+        | x > y = shortenNames overhead (x - 1, y)
+        | otherwise = shortenNames overhead (x, y - 1)
+
 mysqlMkColumns
     :: [EntityDef] -> EntityDef -> ([Column], [UniqueDef], [ForeignDef])
-mysqlMkColumns allDefs t = mkColumns allDefs t emptyBackendSpecificOverrides
+mysqlMkColumns allDefs t =
+    mkColumns allDefs t $
+        setBackendSpecificForeignKeyName refName emptyBackendSpecificOverrides

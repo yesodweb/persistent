@@ -158,8 +158,8 @@ main = do
             , CustomPrimaryKeyReferenceTest.migration
             , MigrationColumnLengthTest.migration
             , TransactionLevelTest.migration
-            , -- , LongIdentifierTest.migration
-              ForeignKey.compositeMigrate
+            , LongIdentifierTest.migration
+            , ForeignKey.compositeMigrate
             ]
         PersistentTest.cleanDB
         ForeignKey.cleanDB
@@ -237,10 +237,7 @@ main = do
         MigrationIdempotencyTest.specsWith db
         MigrationTest.specsWith db
         CustomConstraintTest.specs db
-        -- TODO: implement automatic truncation for too long foreign keys, so we can run this test.
-        xdescribe
-            "The migration for this test currently fails because of MySQL's 64 character limit for identifiers. See https://github.com/yesodweb/persistent/issues/1000 for details"
-            $ LongIdentifierTest.specsWith db
+        LongIdentifierTest.specsWith db
         GeneratedColumnTestSQL.specsWith db
         JSONTest.specs
 
