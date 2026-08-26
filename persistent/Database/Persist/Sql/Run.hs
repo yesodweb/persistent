@@ -284,12 +284,13 @@ createSqlPoolWithConfig mkConn config = do
     -- uninterruptibly, and no longer swallows its exceptions.
     let
         loggedClose :: backend -> IO ()
-        loggedClose backend = UE.uninterruptibleMask_ $
-            close' backend `UE.catchAny` \e -> do
-                runLoggingT
-                    (logError $ T.pack $ "Error closing database connection in pool: " ++ show e)
-                    logFunc
-                UE.throwIO e
+        loggedClose backend =
+            UE.uninterruptibleMask_ $
+                close' backend `UE.catchAny` \e -> do
+                    runLoggingT
+                        (logError $ T.pack $ "Error closing database connection in pool: " ++ show e)
+                        logFunc
+                    UE.throwIO e
     liftIO $
         createPool
             (mkConn logFunc)
