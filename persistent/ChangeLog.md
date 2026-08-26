@@ -1,5 +1,9 @@
 # Changelog for persistent
 
+# 2.18.1.1
+* [#1637](https://github.com/yesodweb/persistent/pull/1637)
+  * Fixes interruptible logging on connection closing inside `createSqlPoolWithConfig` since `resource-pool-0.5.x`.
+
 # 2.18.1.0
 * [#1616](https://github.com/yesodweb/persistent/pull/1616)
   * Allow overriding the default cascade option for foreign keys. 
