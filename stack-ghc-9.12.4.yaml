@@ -1,0 +1,19 @@
+snapshot: nightly-2026-08-27 # GHC 9.12.4
+
+packages:
+- ./persistent
+- ./persistent-sqlite
+- ./persistent-test
+# The README for persistent-mongoDB says that it is on 'hiatus':
+# - ./persistent-mongoDB
+# Warning: The Haskell mysql package (a dependency) does not support Windows, unpatched:
+- ./persistent-mysql
+- ./persistent-postgresql
+- ./persistent-redis
+- ./persistent-qq
+
+extra-deps:
+# nightly-2026-08-27 omits mysql (a dependency of persistent-mysql):
+- mysql-0.2.1@sha256:156061d432d29b3a56037e8a67e16589b1d370fb9ad0dd71a81ea2c4b0b195bb,2188
+# nightly-2026-08-27 omits mysql-simple (a dependency of persistent-mysql):
+- mysql-simple-0.4.9@sha256:ee6fa24892689aea655b61df76527c9c65cca8b8b44a70703119eee20c36443b,2781

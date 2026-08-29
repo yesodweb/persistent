@@ -1,4 +1,4 @@
-snapshot: lts-24.56 # GHC 9.10.3
+snapshot: lts-23.28 # GHC 9.8.4
 
 packages:
 - ./persistent
@@ -12,5 +12,5 @@ packages:
 - ./persistent-qq
 
 extra-deps:
-# lts-24.56 omits postgresql-simple-interval (a dependency of persistent-postgresql):
+# lts-23.28 omits postgresql-simple-interval (a dependency of persistent-postgresql):
 - postgresql-simple-interval-1.0.1.2@sha256:437e6a7b3a2985ebfffdb3312bb35043f25eefe592096439e209cf8ca9efa4cc,1922

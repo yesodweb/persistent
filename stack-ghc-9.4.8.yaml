@@ -1,0 +1,37 @@
+snapshot: lts-21.25 # GHC 9.4.8
+
+packages:
+- ./persistent
+- ./persistent-sqlite
+- ./persistent-test
+- ./persistent-mongoDB
+# Warning: the Haskell mysql package (a dependency) does not support Windows, unpatched:
+- ./persistent-mysql
+- ./persistent-postgresql
+- ./persistent-redis
+- ./persistent-qq
+
+allow-newer: true
+allow-newer-deps:
+# lts-21.25 specifies aeson-2.1.2.1 which has unnecessarily restrictive upper bounds on hashable and primitive:
+- aeson
+
+extra-deps:
+# lts-21.25 specifies file-embed-0.0.15.0 (persistent-postgresql requires >= 0.0.16):
+- file-embed-0.0.16.0@sha256:2e8983240c1faae020b4acef6d30f0281f5ec87c2f38736dc1dc5456355e22a5,1426
+# lts-21.25 specifies hashable-1.4.3.0 (scientific requires >= 1.4.4.0):
+- hashable-1.4.7.0@sha256:573f3ab242f75465a0d67ce9d84202650a1606575e6dbd6d31ffcf4767a9a379,6629
+# lts-21.25 omits os-string (a dependency of hashable):
+- os-string-2.0.11@sha256:c0663f5f428108680f4aae0f67b7b357c1bb5954281c7fbe941c50c58cd79f18,3618
+# lts-21.25 specifies postgresql-libpq-0.9.5.0:
+- postgresql-libpq-0.11.0.0@sha256:682d17c7bce588902dc01dc255328d8de4c633f98c7837eed8e5f1cc8b445af5,2717
+# lts-21.25 omits postgresql-libpq-configure:
+- postgresql-libpq-configure-0.11@sha256:019c5d83da0b4dc0b4487e0e868f2eed5efa25e0688f5cfc2ba8191a80e527aa,1309
+# lts-21.25 specifies postgresql-simple-0.6.5.1:
+- postgresql-simple-0.7.0.0@sha256:6ada584a2e6c8f8d6cb695ceddfb0600bfe3f320ccb6cec99ca1a2f0a38d6ded,4772
+# lts-21.25 omits postgresql-simple-interval (a dependency of persistent-postgresql):
+- postgresql-simple-interval-1.0.1.2@sha256:437e6a7b3a2985ebfffdb3312bb35043f25eefe592096439e209cf8ca9efa4cc,1922
+# lts-21.25 specifies primitive-0.8.0.0 (scientific requires >= 0.9.0.0):
+- primitive-0.9.1.0@sha256:756b222c715bc6ef5ba81fa69cdbaa20c5c53beb6f16f174b8bacc93a6d239f0,3258
+# lts-21.25 specifies scientific-0.3.7.0 (postgresql-simple-interval requires >= 0.3.8):
+- scientific-0.3.8.1@sha256:11b0c3bcc572f08ddcb13bfad94df85e0323f39915e74cae2d7a205c631b4d30,4390
