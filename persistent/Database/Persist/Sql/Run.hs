@@ -280,16 +280,18 @@ createSqlPoolWithConfig
     -> m (Pool backend)
 createSqlPoolWithConfig mkConn config = do
     logFunc <- askLoggerIO
-    -- Resource pool will swallow any exceptions from close. We want to log
-    -- them instead.
+    -- NOTE: resource-pool >= 0.5 no longer runs the pool's free action
+    -- uninterruptibly, and no longer swallows its exceptions.
+    -- - Sync exception will be caught and logged.
+    -- - Async exception will be propagated and also not interrupt closing.
     let
         loggedClose :: backend -> IO ()
         loggedClose backend =
-            close' backend `UE.catchAny` \e -> do
-                runLoggingT
-                    (logError $ T.pack $ "Error closing database connection in pool: " ++ show e)
-                    logFunc
-                UE.throwIO e
+            UE.uninterruptibleMask_ $
+                close' backend `UE.catchAny` \e ->
+                    runLoggingT
+                        (logError $ T.pack $ "Error closing database connection in pool: " ++ show e)
+                        logFunc
     liftIO $
         createPool
             (mkConn logFunc)
