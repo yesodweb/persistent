@@ -649,11 +649,11 @@
 -- derivePersistField "Employment"
 -- @
 --
--- @derivePersistField@ stores sum type values as strins in the database. While not as efficient as using integers, this approach simplifies adding and removing values from your enumeration.
+-- @derivePersistField@ stores sum type values as strings in the database. While not as efficient as using integers, this approach simplifies adding and removing values from your enumeration.
 --
 -- Due to the GHC Stage Restriction, the call to the Template Haskell function @derivePersistField@ must be in a separate module than where the generated code is used.
 --
--- Note: If you created a new module, make sure add it to the @exposed-modules@ section of your Cabal file.
+-- Note: If you created a new module, make sure to add it to the @exposed-modules@ section of your Cabal file.
 --
 -- Use the module by importing it into your @Model.hs@ file:
 --
